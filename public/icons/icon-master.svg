@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F5D572"/>
+      <stop offset="50%" stop-color="#D4AF37"/>
+      <stop offset="100%" stop-color="#A8871F"/>
+    </linearGradient>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1E1E22"/>
+      <stop offset="100%" stop-color="#0A0A0C"/>
+    </linearGradient>
+    <linearGradient id="steelGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#E8E8EC"/>
+      <stop offset="50%" stop-color="#B0B0B4"/>
+      <stop offset="100%" stop-color="#5E5E62"/>
+    </linearGradient>
+    <linearGradient id="steelHighlight" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#9A9A9E"/>
+      <stop offset="30%" stop-color="#E8E8EC"/>
+      <stop offset="60%" stop-color="#B0B0B4"/>
+      <stop offset="100%" stop-color="#7A7A7E"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Fondo grafito con bordes redondeados -->
+  <rect x="0" y="0" width="1024" height="1024" rx="220" fill="url(#bgGrad)"/>
+
+  <!-- Asa izquierda -->
+  <path d="M 145 380 Q 80 380, 80 445 Q 80 510, 145 510" 
+        fill="none" stroke="url(#steelGrad)" stroke-width="32" stroke-linecap="round"/>
+  
+  <!-- Asa derecha -->
+  <path d="M 879 380 Q 944 380, 944 445 Q 944 510, 879 510" 
+        fill="none" stroke="url(#steelGrad)" stroke-width="32" stroke-linecap="round"/>
+
+  <!-- Cuerpo de la olla (trapecio sutil) -->
+  <path d="M 145 350 L 879 350 L 855 770 Q 855 800, 825 800 L 199 800 Q 169 800, 169 770 Z" 
+        fill="url(#steelHighlight)"/>
+  
+  <!-- Sombra interior de la olla para dar volumen -->
+  <path d="M 145 350 L 879 350 L 855 770 Q 855 800, 825 800 L 199 800 Q 169 800, 169 770 Z" 
+        fill="none" stroke="#3A3A3E" stroke-width="3" opacity="0.6"/>
+
+  <!-- Borde superior de la olla -->
+  <rect x="135" y="330" width="754" height="42" rx="8" fill="url(#steelGrad)" stroke="#3A3A3E" stroke-width="2"/>
+  
+  <!-- Interior oscuro (boca de la olla) -->
+  <rect x="160" y="350" width="704" height="22" fill="#0A0A0C"/>
+  
+  <!-- Banda dorada decorativa en la olla -->
+  <rect x="155" y="395" width="714" height="10" fill="url(#goldGrad)" opacity="0.7"/>
+
+  <!-- Barras de gráfica DENTRO de la olla (sombras detrás) -->
+  <rect x="270" y="650" width="50" height="100" fill="url(#goldGrad)" opacity="0.45"/>
+  <rect x="380" y="600" width="50" height="150" fill="url(#goldGrad)" opacity="0.5"/>
+  <rect x="490" y="540" width="50" height="210" fill="url(#goldGrad)" opacity="0.55"/>
+  <rect x="600" y="480" width="50" height="270" fill="url(#goldGrad)" opacity="0.6"/>
+  <rect x="710" y="430" width="50" height="320" fill="url(#goldGrad)" opacity="0.65"/>
+
+  <!-- Flecha de crecimiento dorada (curva ascendente) -->
+  <path d="M 220 720 Q 320 680, 400 620 Q 480 560, 560 500 Q 640 440, 720 400" 
+        fill="none" stroke="url(#goldGrad)" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- Punta de flecha -->
+  <path d="M 695 405 L 770 380 L 750 460 Z" fill="url(#goldGrad)"/>
+
+  <!-- CP debajo de la olla -->
+  <text x="345" y="920" 
+        font-family="Georgia, 'Times New Roman', serif" 
+        font-size="170" 
+        font-weight="700" 
+        fill="url(#goldGrad)" 
+        letter-spacing="-6">CP</text>
+
+  <!-- Línea separadora dorada -->
+  <line x1="615" y1="895" x2="780" y2="895" stroke="url(#goldGrad)" stroke-width="3" opacity="0.7" stroke-linecap="round"/>
+
+  <!-- "PAE" debajo -->
+  <text x="615" y="935" 
+        font-family="'Helvetica Neue', Arial, sans-serif" 
+        font-size="42" 
+        font-weight="600" 
+        fill="#D4AF37" 
+        letter-spacing="12">PAE</text>
+
+</svg>
