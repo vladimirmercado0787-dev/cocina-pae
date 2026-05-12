@@ -21,6 +21,7 @@ import CalculadoraProduccion from './components/produccion/CalculadoraProduccion
 import InteligenciaOperativa from './components/inteligencia/InteligenciaOperativa'
 import VistaEmpleados from './components/empleados/VistaEmpleados'
 import VistaProveedores from './components/proveedores/VistaProveedores'
+import VistaCompras from './components/compras/VistaCompras'
 
 function App() {
   const [pasoActual, setPasoActual] = useState(1)
@@ -85,14 +86,12 @@ function App() {
     setVistaActual('dashboard')
   }
 
-  // === Cambiar de usuario (mantiene la empresa) ===
   function cambiarDeUsuario() {
     setUsuarioLogueado(null)
     setUsuarioSeleccionado(null)
     setVistaActual('seleccion_operador')
   }
 
-  // === Cerrar sesión TOTAL (vuelve a login de empresa) ===
   function cerrarSesionTotal() {
     setUsuarioLogueado(null)
     setUsuarioSeleccionado(null)
@@ -116,6 +115,9 @@ function App() {
     (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador')
 
   const puedeGestionarProveedores = usuarioLogueado && 
+    (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'secretaria')
+
+  const puedeGestionarCompras = usuarioLogueado && 
     (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'secretaria')
 
   function renderPasoWizard() {
@@ -155,6 +157,7 @@ function App() {
           onIrInteligencia={() => setVistaActual('inteligencia')}
           onIrDespacho={() => setVistaActual('despacho')}
           onIrProveedores={() => setVistaActual('proveedores')}
+          onIrCompras={() => setVistaActual('compras')}
         />
       )
     }
@@ -187,6 +190,11 @@ function App() {
           onIrProveedores={
             puedeGestionarProveedores
               ? () => setVistaActual('proveedores')
+              : null
+          }
+          onIrCompras={
+            puedeGestionarCompras
+              ? () => setVistaActual('compras')
               : null
           }
           onVerComoSecretaria={
@@ -222,6 +230,11 @@ function App() {
             ? () => setVistaActual('empleados')
             : null
         }
+        onIrCompras={
+          puedeGestionarCompras
+            ? () => setVistaActual('compras')
+            : null
+        }
         onVerComoSecretaria={
           usuarioLogueado.rol === 'propietario'
             ? () => setVistaActual('vista_secretaria_admin')
@@ -242,17 +255,14 @@ function App() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
       
-      {/* WIZARD (sólo si no ha terminado) */}
       {pasoActual < 7 && renderPasoWizard()}
       
-      {/* LOGIN DE EMPRESA */}
       {pasoActual === 7 && vistaActual === 'login_empresa' && (
         <LoginEmpresa 
           onLoginExitoso={loginEmpresaExitoso}
         />
       )}
       
-      {/* SELECCIÓN DE OPERADOR */}
       {pasoActual === 7 && vistaActual === 'seleccion_operador' && empresaLogueada && (
         <SeleccionOperador 
           empresaId={empresaLogueada.id}
@@ -260,7 +270,6 @@ function App() {
         />
       )}
       
-      {/* LOGIN PIN */}
       {pasoActual === 7 && vistaActual === 'login_pin' && usuarioSeleccionado && (
         <LoginPin 
           usuario={usuarioSeleccionado}
@@ -269,10 +278,8 @@ function App() {
         />
       )}
       
-      {/* DASHBOARD según rol */}
       {pasoActual === 7 && vistaActual === 'dashboard' && usuarioLogueado && renderVistaSegunRol()}
       
-      {/* Vista secretaria modo admin */}
       {pasoActual === 7 && vistaActual === 'vista_secretaria_admin' && usuarioLogueado && (
         <VistaSecretaria 
           usuario={usuarioLogueado}
@@ -284,12 +291,12 @@ function App() {
           onIrInteligencia={() => setVistaActual('inteligencia')}
           onIrDespacho={() => setVistaActual('despacho')}
           onIrProveedores={() => setVistaActual('proveedores')}
+          onIrCompras={() => setVistaActual('compras')}
           onVolverAlPanel={() => setVistaActual('dashboard')}
           modoAdmin={true}
         />
       )}
       
-      {/* Otras vistas */}
       {pasoActual === 7 && vistaActual === 'despacho' && usuarioLogueado && (
         <VistaDespachador 
           usuario={usuarioLogueado}
@@ -343,6 +350,13 @@ function App() {
       )}
       {pasoActual === 7 && vistaActual === 'proveedores' && usuarioLogueado && puedeGestionarProveedores && (
         <VistaProveedores 
+          usuario={usuarioLogueado}
+          empresaId={empresaActual?.id}
+          onVolver={() => setVistaActual('dashboard')}
+        />
+      )}
+      {pasoActual === 7 && vistaActual === 'compras' && usuarioLogueado && puedeGestionarCompras && (
+        <VistaCompras 
           usuario={usuarioLogueado}
           empresaId={empresaActual?.id}
           onVolver={() => setVistaActual('dashboard')}

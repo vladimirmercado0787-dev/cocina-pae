@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 
-function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario, onIrConfiguracion, onIrFactura, onIrCalculadora, onIrInteligencia, onIrDespacho, onIrEmpleados, onIrProveedores, onVerComoSecretaria }) {
+function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario, onIrConfiguracion, onIrFactura, onIrCalculadora, onIrInteligencia, onIrDespacho, onIrEmpleados, onIrProveedores, onIrCompras, onVerComoSecretaria }) {
   const [empresa, setEmpresa] = useState(null)
   const [escuelas, setEscuelas] = useState([])
   const [operaciones, setOperaciones] = useState([])
@@ -146,9 +146,17 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuar
             {onIrProveedores && (
               <button
                 onClick={onIrProveedores}
-                className="bg-amber-600 hover:bg-amber-700 text-white text-sm px-4 py-2 rounded-lg"
+                className="bg-amber-700 hover:bg-amber-800 text-white text-sm px-4 py-2 rounded-lg"
               >
                 🏭 Proveedores
+              </button>
+            )}
+            {onIrCompras && (
+              <button
+                onClick={onIrCompras}
+                className="bg-amber-500 hover:bg-amber-600 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md"
+              >
+                📦 Compras
               </button>
             )}
             {onIrCalculadora && (
@@ -178,7 +186,7 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuar
           </div>
         </div>
 
-        {/* 🆕 BOTONES DE SESIÓN: Cambiar usuario + Cerrar sesión */}
+        {/* BOTONES DE SESIÓN: Cambiar usuario + Cerrar sesión */}
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={onCambiarUsuario}
