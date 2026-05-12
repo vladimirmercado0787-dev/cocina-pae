@@ -7,6 +7,7 @@ import Paso4Recetas from './components/wizard/Paso4Recetas'
 import Paso5Personal from './components/wizard/Paso5Personal'
 import Paso6Finanzas from './components/wizard/Paso6Finanzas'
 import WizardCompletado from './components/wizard/WizardCompletado'
+import LoginEmpresa from './components/auth/LoginEmpresa'
 import SeleccionOperador from './components/auth/SeleccionOperador'
 import LoginPin from './components/auth/LoginPin'
 import DashboardDelDia from './components/dashboard/DashboardDelDia'
@@ -24,9 +25,10 @@ import VistaProveedores from './components/proveedores/VistaProveedores'
 function App() {
   const [pasoActual, setPasoActual] = useState(1)
   const [empresaActual, setEmpresaActual] = useState(null)
+  const [empresaLogueada, setEmpresaLogueada] = useState(null)  // ← NUEVO
   const [usuarioLogueado, setUsuarioLogueado] = useState(null)
   const [usuarioSeleccionado, setUsuarioSeleccionado] = useState(null)
-  const [vistaActual, setVistaActual] = useState('seleccion')
+  const [vistaActual, setVistaActual] = useState('login_empresa')  // ← cambió default
   const [cargando, setCargando] = useState(true)
 
   useEffect(() => {
@@ -51,7 +53,9 @@ function App() {
         .limit(1)
       
       if (usuarios && usuarios.length > 0) {
+        // Wizard completado → ir a login de empresa
         setPasoActual(7)
+        setVistaActual('login_empresa')
       }
     }
     
@@ -66,9 +70,17 @@ function App() {
     setPasoActual(pasoActual - 1)
   }
 
+  // === NUEVO: Login de empresa exitoso ===
+  function loginEmpresaExitoso(empresa) {
+    setEmpresaLogueada(empresa)
+    setEmpresaActual(empresa)
+    setVistaActual('seleccion_operador')
+  }
+
+  // === Selección de operador (segundo paso) ===
   function seleccionarUsuario(usuario) {
     setUsuarioSeleccionado(usuario)
-    setVistaActual('login')
+    setVistaActual('login_pin')
   }
 
   function loginExitoso(usuario) {
@@ -76,15 +88,24 @@ function App() {
     setVistaActual('dashboard')
   }
 
-  function cerrarSesion() {
+  // === Cerrar sesión SOLO de operador (vuelve al selector) ===
+  function cerrarSesionOperador() {
     setUsuarioLogueado(null)
     setUsuarioSeleccionado(null)
-    setVistaActual('seleccion')
+    setVistaActual('seleccion_operador')
+  }
+
+  // === Cerrar sesión TOTAL (vuelve a login de empresa) ===
+  function cerrarSesionTotal() {
+    setUsuarioLogueado(null)
+    setUsuarioSeleccionado(null)
+    setEmpresaLogueada(null)
+    setVistaActual('login_empresa')
   }
 
   function volverASeleccion() {
     setUsuarioSeleccionado(null)
-    setVistaActual('seleccion')
+    setVistaActual('seleccion_operador')
   }
 
   // === PERMISOS ===
@@ -99,11 +120,6 @@ function App() {
 
   const puedeGestionarProveedores = usuarioLogueado && 
     (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'secretaria')
-
-  // Admin/Propietario pueden "ver como secretaria"
-  const esAdminViendoSecretaria = usuarioLogueado && 
-    (usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'propietario') &&
-    vistaActual === 'vista_secretaria_admin'
 
   function renderPasoWizard() {
     if (pasoActual === 1) {
@@ -125,7 +141,7 @@ function App() {
       return <Paso6Finanzas onAvanzar={avanzarPaso} onRetroceder={retrocederPaso} empresaActual={empresaActual} />
     }
     if (pasoActual === 7) {
-      return <WizardCompletado empresaActual={empresaActual} onIrAlDashboard={() => setVistaActual('seleccion')} />
+      return <WizardCompletado empresaActual={empresaActual} onIrAlDashboard={() => setVistaActual('login_empresa')} />
     }
   }
 
@@ -135,7 +151,7 @@ function App() {
         <VistaSecretaria 
           usuario={usuarioLogueado}
           empresaId={empresaActual?.id}
-          onCerrarSesion={cerrarSesion}
+          onCerrarSesion={cerrarSesionTotal}
           onIrFactura={() => setVistaActual('factura')}
           onIrCalculadora={() => setVistaActual('calculadora')}
           onIrInteligencia={() => setVistaActual('inteligencia')}
@@ -150,7 +166,7 @@ function App() {
         <VistaAdministrador 
           usuario={usuarioLogueado}
           empresaId={empresaActual?.id}
-          onCerrarSesion={cerrarSesion}
+          onCerrarSesion={cerrarSesionTotal}
           onIrConfiguracion={() => setVistaActual('configuracion')}
           onIrFactura={() => setVistaActual('factura')}
           onIrCalculadora={() => setVistaActual('calculadora')}
@@ -187,7 +203,7 @@ function App() {
       <DashboardDelDia 
         usuario={usuarioLogueado}
         empresaId={empresaActual?.id}
-        onCerrarSesion={cerrarSesion}
+        onCerrarSesion={cerrarSesionTotal}
         onIrConfiguracion={() => setVistaActual('configuracion')}
         onIrCierre={() => setVistaActual('cierre')}
         onIrCalculadora={() => setVistaActual('calculadora')}
@@ -225,28 +241,43 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
+      
+      {/* WIZARD (sólo si no ha terminado) */}
       {pasoActual < 7 && renderPasoWizard()}
-      {pasoActual === 7 && vistaActual === 'seleccion' && (
+      
+      {/* LOGIN DE EMPRESA (después del wizard, antes de operador) */}
+      {pasoActual === 7 && vistaActual === 'login_empresa' && (
+        <LoginEmpresa 
+          onLoginExitoso={loginEmpresaExitoso}
+        />
+      )}
+      
+      {/* SELECCIÓN DE OPERADOR (después de login empresa) */}
+      {pasoActual === 7 && vistaActual === 'seleccion_operador' && empresaLogueada && (
         <SeleccionOperador 
-          empresaId={empresaActual?.id}
+          empresaId={empresaLogueada.id}
           onSeleccionar={seleccionarUsuario}
         />
       )}
-      {pasoActual === 7 && vistaActual === 'login' && usuarioSeleccionado && (
+      
+      {/* LOGIN PIN */}
+      {pasoActual === 7 && vistaActual === 'login_pin' && usuarioSeleccionado && (
         <LoginPin 
           usuario={usuarioSeleccionado}
           onLoginExitoso={loginExitoso}
           onCancelar={volverASeleccion}
         />
       )}
+      
+      {/* DASHBOARD según rol */}
       {pasoActual === 7 && vistaActual === 'dashboard' && usuarioLogueado && renderVistaSegunRol()}
       
-      {/* Admin/Propietario viendo "como secretaria" */}
+      {/* Vista secretaria modo admin */}
       {pasoActual === 7 && vistaActual === 'vista_secretaria_admin' && usuarioLogueado && (
         <VistaSecretaria 
           usuario={usuarioLogueado}
           empresaId={empresaActual?.id}
-          onCerrarSesion={cerrarSesion}
+          onCerrarSesion={cerrarSesionTotal}
           onIrFactura={() => setVistaActual('factura')}
           onIrCalculadora={() => setVistaActual('calculadora')}
           onIrInteligencia={() => setVistaActual('inteligencia')}
@@ -257,11 +288,12 @@ function App() {
         />
       )}
       
+      {/* Otras vistas */}
       {pasoActual === 7 && vistaActual === 'despacho' && usuarioLogueado && (
         <VistaDespachador 
           usuario={usuarioLogueado}
           empresaId={empresaActual?.id}
-          onCerrarSesion={cerrarSesion}
+          onCerrarSesion={cerrarSesionTotal}
           onVolver={() => setVistaActual('dashboard')}
         />
       )}

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
+import ModalEntregarYFirmar from './ModalEntregarYFirmar'
 
 const ESTADOS_DESPACHADOR = {
   pendiente:    { label: 'Pendiente',     color: 'bg-gray-100 text-gray-700', emoji: '⏳' },
@@ -16,6 +17,8 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onVolver }) {
   const [recetaHoy, setRecetaHoy] = useState(null)
   const [cargando, setCargando] = useState(true)
   const [horaActual, setHoraActual] = useState(new Date())
+  const [empresa, setEmpresa] = useState(null)
+  const [modalFirma, setModalFirma] = useState(null)
 
   useEffect(() => {
     const interval = setInterval(() => setHoraActual(new Date()), 60000)
@@ -28,6 +31,14 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onVolver }) {
 
   async function cargarDatos() {
     setCargando(true)
+
+    // Cargar datos de la empresa (para el conduce)
+    const { data: empresaData } = await supabase
+      .from('empresas')
+      .select('*')
+      .eq('id', empresaId)
+      .single()
+    setEmpresa(empresaData)
 
     const DIAS = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']
     const diaSemana = DIAS[new Date().getDay()]
@@ -73,24 +84,6 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onVolver }) {
         estado: 'despachando',
         despachado_por: usuario.id,
         hora_salida: operacion.hora_salida || new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', operacion.id)
-
-    if (!error) cargarDatos()
-  }
-
-  async function confirmarEntrega(operacion) {
-    const confirmar = window.confirm('¿Confirmar entrega y firma del director?')
-    if (!confirmar) return
-
-    const { error } = await supabase
-      .from('operaciones_dia')
-      .update({
-        estado: 'entregada',
-        director_firma: true,
-        entregado_por: usuario.id,
-        hora_entrega: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
       .eq('id', operacion.id)
@@ -267,10 +260,10 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onVolver }) {
 
                 {op?.estado === 'despachando' && (
                   <button
-                    onClick={() => confirmarEntrega(op)}
+                    onClick={() => setModalFirma({ operacion: op, escuela })}
                     className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl text-base"
                   >
-                    📍 Llegué - Confirmar entrega
+                    📍 Llegué - Mostrar conduce y firmar
                   </button>
                 )}
 
@@ -283,6 +276,11 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onVolver }) {
                       <p className="text-xs text-gray-500 mt-1">
                         {new Date(op.hora_entrega).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' })}
                         {op.director_firma && ' · ✍️ Director firmó'}
+                      </p>
+                    )}
+                    {op.firmado_por_nombre && (
+                      <p className="text-xs text-gray-600 mt-1">
+                        Recibido por: <strong>{op.firmado_por_nombre}</strong>
                       </p>
                     )}
                   </div>
@@ -300,6 +298,22 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onVolver }) {
           <p className="font-bold text-green-900">¡Todas las entregas completadas!</p>
           <p className="text-sm text-green-700 mt-1">Excelente trabajo {usuario.nombre.split(' ')[0]} 💪</p>
         </div>
+      )}
+
+      {/* MODAL DE FIRMA */}
+      {modalFirma && (
+        <ModalEntregarYFirmar
+          operacion={modalFirma.operacion}
+          escuela={modalFirma.escuela}
+          recetaHoy={recetaHoy}
+          empresa={empresa}
+          usuario={usuario}
+          onCerrar={() => setModalFirma(null)}
+          onGuardado={() => {
+            cargarDatos()
+            setModalFirma(null)
+          }}
+        />
       )}
 
     </div>

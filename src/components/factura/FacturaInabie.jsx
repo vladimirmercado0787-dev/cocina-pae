@@ -204,6 +204,7 @@ function FacturaMensual({ empresa, finanzas, escuelas, operaciones, mes, anio })
     const precioRacion = parseFloat(escuela.precio_racion || 0)
     const subtotal = totalRaciones * precioRacion
     const diasTrabajados = opsEscuela.length
+    const conducesFirmados = opsEscuela.filter(op => op.firma_imagen).length
 
     return {
       escuela,
@@ -211,11 +212,13 @@ function FacturaMensual({ empresa, finanzas, escuelas, operaciones, mes, anio })
       totalRaciones,
       precioRacion,
       subtotal,
+      conducesFirmados,
     }
   }).filter(item => item.totalRaciones > 0)
 
   const totalRacionesMes = resumenPorEscuela.reduce((sum, item) => sum + item.totalRaciones, 0)
   const totalFacturacion = resumenPorEscuela.reduce((sum, item) => sum + item.subtotal, 0)
+  const totalConducesFirmados = resumenPorEscuela.reduce((sum, item) => sum + item.conducesFirmados, 0)
   const anticipoPct = parseFloat(finanzas?.anticipo_porcentaje || 20)
   const anticipoMonto = totalFacturacion * (anticipoPct / 100)
   const pendienteCobrar = totalFacturacion - anticipoMonto
@@ -261,6 +264,7 @@ function FacturaMensual({ empresa, finanzas, escuelas, operaciones, mes, anio })
           <tr className="text-left">
             <th className="py-3 text-xs text-gray-600 font-semibold tracking-wider">ESCUELA</th>
             <th className="py-3 text-xs text-gray-600 font-semibold tracking-wider text-center">DÍAS</th>
+            <th className="py-3 text-xs text-gray-600 font-semibold tracking-wider text-center">FIRMADOS</th>
             <th className="py-3 text-xs text-gray-600 font-semibold tracking-wider text-right">RACIONES</th>
             <th className="py-3 text-xs text-gray-600 font-semibold tracking-wider text-right">PRECIO/RACIÓN</th>
             <th className="py-3 text-xs text-gray-600 font-semibold tracking-wider text-right">SUBTOTAL</th>
@@ -269,7 +273,7 @@ function FacturaMensual({ empresa, finanzas, escuelas, operaciones, mes, anio })
         <tbody>
           {resumenPorEscuela.length === 0 ? (
             <tr>
-              <td colSpan={5} className="py-8 text-center text-gray-400">
+              <td colSpan={6} className="py-8 text-center text-gray-400">
                 No hay operaciones registradas en {MESES[mes]} {anio}
               </td>
             </tr>
@@ -283,6 +287,13 @@ function FacturaMensual({ empresa, finanzas, escuelas, operaciones, mes, anio })
                   </p>
                 </td>
                 <td className="py-3 text-center text-sm">{item.diasTrabajados}</td>
+                <td className="py-3 text-center text-sm">
+                  {item.conducesFirmados > 0 ? (
+                    <span className="text-green-700 font-bold">✅ {item.conducesFirmados}</span>
+                  ) : (
+                    <span className="text-gray-400">—</span>
+                  )}
+                </td>
                 <td className="py-3 text-right text-sm font-mono">{item.totalRaciones.toLocaleString()}</td>
                 <td className="py-3 text-right text-sm font-mono">RD$ {item.precioRacion.toFixed(2)}</td>
                 <td className="py-3 text-right text-sm font-mono font-semibold">RD$ {item.subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -309,6 +320,12 @@ function FacturaMensual({ empresa, finanzas, escuelas, operaciones, mes, anio })
                 <span className="text-gray-600">Días operativos:</span>
                 <span className="font-bold">
                   {[...new Set(operaciones.map(op => op.fecha))].length}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Conduces firmados:</span>
+                <span className="font-bold text-green-700">
+                  ✅ {totalConducesFirmados} / {operaciones.length}
                 </span>
               </div>
             </div>
@@ -424,6 +441,11 @@ function ConducesDiarios({ empresa, finanzas, escuelas, operaciones, recetas, fe
                   <p className="text-sm text-gray-600 mt-1 capitalize">
                     {fechaTexto}
                   </p>
+                  {op.firma_imagen && (
+                    <div className="mt-2 inline-block bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded-full">
+                      ✅ FIRMADO DIGITALMENTE
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -512,11 +534,45 @@ function ConducesDiarios({ empresa, finanzas, escuelas, operaciones, recetas, fe
                 <p className="text-sm text-gray-900 mt-1 font-semibold">{empresa?.nombre}</p>
                 <p className="text-xs text-gray-500">RNC: {empresa?.rnc}</p>
               </div>
+              
+              {/* Sección RECIBIDO POR - con firma digital si existe */}
               <div className="text-center">
-                <div className="border-b-2 border-gray-400 mb-2 h-16"></div>
-                <p className="text-xs text-gray-600 font-semibold tracking-wider">RECIBIDO CONFORME (DIRECTOR/A)</p>
-                <p className="text-sm text-gray-900 mt-1 font-semibold">{escuela.director_nombre || '________________________'}</p>
-                <p className="text-xs text-gray-500">{escuela.nombre}</p>
+                {op.firma_imagen ? (
+                  // FIRMA DIGITAL CAPTURADA
+                  <>
+                    <div className="bg-green-50 border-2 border-green-300 rounded-lg mb-2 h-16 flex items-center justify-center overflow-hidden p-1">
+                      <img 
+                        src={op.firma_imagen} 
+                        alt="Firma del director" 
+                        className="max-h-full max-w-full object-contain"
+                      />
+                    </div>
+                    <p className="text-xs text-green-700 font-semibold tracking-wider">
+                      ✅ RECIBIDO Y FIRMADO DIGITALMENTE
+                    </p>
+                    <p className="text-sm text-gray-900 mt-1 font-semibold">
+                      {op.firmado_por_nombre || escuela.director_nombre}
+                    </p>
+                    <p className="text-xs text-gray-500">{escuela.nombre}</p>
+                    {op.firmado_en && (
+                      <p className="text-xs text-green-600 mt-1 font-medium">
+                        Firmado el {new Date(op.firmado_en).toLocaleDateString('es-DO', { 
+                          day: 'numeric', month: 'long', year: 'numeric' 
+                        })} a las {new Date(op.firmado_en).toLocaleTimeString('es-DO', { 
+                          hour: '2-digit', minute: '2-digit' 
+                        })}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  // SIN FIRMA (espacio para firma manual)
+                  <>
+                    <div className="border-b-2 border-gray-400 mb-2 h-16"></div>
+                    <p className="text-xs text-gray-600 font-semibold tracking-wider">RECIBIDO CONFORME (DIRECTOR/A)</p>
+                    <p className="text-sm text-gray-900 mt-1 font-semibold">{escuela.director_nombre || '________________________'}</p>
+                    <p className="text-xs text-gray-500">{escuela.nombre}</p>
+                  </>
+                )}
               </div>
             </div>
 
@@ -529,7 +585,11 @@ function ConducesDiarios({ empresa, finanzas, escuelas, operaciones, recetas, fe
               </div>
               <div className="text-center">
                 <div className="inline-block border-2 border-dashed border-gray-300 rounded-lg w-32 h-32 flex items-center justify-center text-gray-300 text-xs">
-                  Sello
+                  {op.firma_imagen ? (
+                    <span className="text-green-600 font-semibold">✓ Validado<br/>digitalmente</span>
+                  ) : (
+                    'Sello'
+                  )}
                 </div>
               </div>
             </div>
