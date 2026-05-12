@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 
-function VistaSecretaria({ usuario, empresaId, onCerrarSesion, onIrCalculadora, onIrInteligencia, onIrDespacho, onIrFactura, onIrProveedores, onVolverAlPanel, modoAdmin = false }) {
+function VistaSecretaria({ usuario, empresaId, onCerrarSesion, onCambiarUsuario, onIrCalculadora, onIrInteligencia, onIrDespacho, onIrFactura, onIrProveedores, onVolverAlPanel, modoAdmin = false }) {
   const [empresa, setEmpresa] = useState(null)
   const [escuelas, setEscuelas] = useState([])
   const [operaciones, setOperaciones] = useState([])
@@ -76,6 +76,14 @@ function VistaSecretaria({ usuario, empresaId, onCerrarSesion, onIrCalculadora, 
 
   const mesNombre = new Date().toLocaleDateString('es-DO', { month: 'long', year: 'numeric' })
 
+  // Confirmar cerrar sesión total
+  function confirmarCerrarSesion() {
+    const confirmar = window.confirm('¿Estás seguro de cerrar sesión? Tendrás que ingresar las credenciales de la empresa nuevamente.')
+    if (confirmar && onCerrarSesion) {
+      onCerrarSesion()
+    }
+  }
+
   const TABS = [
     { id: 'resumen', label: 'Resumen', emoji: '📊' },
     { id: 'facturacion', label: 'Facturación', emoji: '📄' },
@@ -125,7 +133,7 @@ function VistaSecretaria({ usuario, empresaId, onCerrarSesion, onIrCalculadora, 
 
       {/* HEADER ROSADO */}
       <div className="bg-gradient-to-br from-pink-600 to-rose-700 rounded-2xl p-6 mb-6 text-white">
-        <div className="flex justify-between items-start">
+        <div className="flex justify-between items-start mb-4">
           <div>
             <p className="text-pink-100 text-xs font-semibold tracking-wider">
               {tituloEncabezado}
@@ -170,16 +178,26 @@ function VistaSecretaria({ usuario, empresaId, onCerrarSesion, onIrCalculadora, 
                 📄 Factura INABIE
               </button>
             )}
-            {!modoAdmin && (
-              <button
-                onClick={onCerrarSesion}
-                className="bg-pink-800 hover:bg-pink-900 text-white text-sm px-4 py-2 rounded-lg"
-              >
-                Cerrar sesión
-              </button>
-            )}
           </div>
         </div>
+
+        {/* 🆕 BOTONES DE SESIÓN (solo si no es modo admin) */}
+        {!modoAdmin && (
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={onCambiarUsuario}
+              className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg font-semibold transition flex items-center justify-center gap-2"
+            >
+              🔄 Cambiar usuario
+            </button>
+            <button
+              onClick={confirmarCerrarSesion}
+              className="bg-red-600 hover:bg-red-700 text-white text-sm px-4 py-2 rounded-lg font-semibold transition flex items-center justify-center gap-2"
+            >
+              🚪 Cerrar sesión
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-2xl shadow-xl overflow-hidden mb-6">

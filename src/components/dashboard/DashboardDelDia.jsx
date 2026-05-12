@@ -24,7 +24,7 @@ const ESTADOS = {
   cerrada:      { label: 'Cerrada',      color: 'bg-purple-100 text-purple-800 border-purple-300', emoji: '🔒' }
 }
 
-function DashboardDelDia({ usuario, empresaId, onCerrarSesion, onIrConfiguracion, onIrCierre, onIrCalculadora, onIrInteligencia, onIrDespacho, onIrEmpleados }) {
+function DashboardDelDia({ usuario, empresaId, onCerrarSesion, onCambiarUsuario, onIrConfiguracion, onIrCierre, onIrCalculadora, onIrInteligencia, onIrDespacho, onIrEmpleados, onVerComoSecretaria }) {
   const [recetaHoy, setRecetaHoy] = useState(null)
   const [todasLasRecetas, setTodasLasRecetas] = useState([])
   const [escuelas, setEscuelas] = useState([])
@@ -109,6 +109,14 @@ function DashboardDelDia({ usuario, empresaId, onCerrarSesion, onIrConfiguracion
     }
 
     setCargando(false)
+  }
+
+  // Confirmar cerrar sesión total
+  function confirmarCerrarSesion() {
+    const confirmar = window.confirm('¿Estás seguro de cerrar sesión? Tendrás que ingresar las credenciales de la empresa nuevamente.')
+    if (confirmar && onCerrarSesion) {
+      onCerrarSesion()
+    }
   }
 
   async function iniciarDiaParaEscuela(escuela) {
@@ -286,7 +294,7 @@ function DashboardDelDia({ usuario, empresaId, onCerrarSesion, onIrConfiguracion
     <div className="w-full max-w-6xl">
       
       <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl p-6 mb-6 text-white">
-        <div className="flex justify-between items-start">
+        <div className="flex justify-between items-start mb-4">
           <div>
             <p className="text-blue-100 text-sm font-semibold tracking-wider">
               {fechaFormateada.toUpperCase()}
@@ -301,6 +309,14 @@ function DashboardDelDia({ usuario, empresaId, onCerrarSesion, onIrConfiguracion
           <div className="text-right">
             <p className="text-5xl font-bold">{horaFormateada}</p>
             <div className="flex gap-2 mt-2 justify-end flex-wrap">
+              {onVerComoSecretaria && (
+                <button
+                  onClick={onVerComoSecretaria}
+                  className="bg-pink-500 hover:bg-pink-600 text-white text-xs px-3 py-1 rounded-lg font-bold"
+                >
+                  📋 Ver como Secretaria
+                </button>
+              )}
               {onIrDespacho && (
                 <button
                   onClick={onIrDespacho}
@@ -349,14 +365,24 @@ function DashboardDelDia({ usuario, empresaId, onCerrarSesion, onIrConfiguracion
                   ⚙️ Configuración
                 </button>
               )}
-              <button
-                onClick={onCerrarSesion}
-                className="bg-blue-700 hover:bg-blue-900 text-white text-xs px-3 py-1 rounded-lg"
-              >
-                Cerrar sesión
-              </button>
             </div>
           </div>
+        </div>
+
+        {/* 🆕 BOTONES DE SESIÓN: Cambiar usuario + Cerrar sesión */}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={onCambiarUsuario}
+            className="bg-blue-500 hover:bg-blue-400 text-white text-sm px-4 py-2 rounded-lg font-semibold transition flex items-center justify-center gap-2"
+          >
+            🔄 Cambiar usuario
+          </button>
+          <button
+            onClick={confirmarCerrarSesion}
+            className="bg-red-600 hover:bg-red-700 text-white text-sm px-4 py-2 rounded-lg font-semibold transition flex items-center justify-center gap-2"
+          >
+            🚪 Cerrar sesión
+          </button>
         </div>
       </div>
 

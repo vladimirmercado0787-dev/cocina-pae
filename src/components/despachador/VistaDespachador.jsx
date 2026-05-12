@@ -11,7 +11,7 @@ const ESTADOS_DESPACHADOR = {
   cerrada:      { label: 'Cerrada',       color: 'bg-purple-100 text-purple-800', emoji: '🔒' }
 }
 
-function VistaDespachador({ usuario, empresaId, onCerrarSesion, onVolver }) {
+function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario, onVolver }) {
   const [escuelas, setEscuelas] = useState([])
   const [operaciones, setOperaciones] = useState([])
   const [recetaHoy, setRecetaHoy] = useState(null)
@@ -32,7 +32,6 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onVolver }) {
   async function cargarDatos() {
     setCargando(true)
 
-    // Cargar datos de la empresa (para el conduce)
     const { data: empresaData } = await supabase
       .from('empresas')
       .select('*')
@@ -95,6 +94,14 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onVolver }) {
     return operaciones.find(op => op.escuela_id === escuelaId)
   }
 
+  // Confirmar cerrar sesión total
+  function confirmarCerrarSesion() {
+    const confirmar = window.confirm('¿Estás seguro de cerrar sesión? Tendrás que ingresar las credenciales de la empresa nuevamente.')
+    if (confirmar && onCerrarSesion) {
+      onCerrarSesion()
+    }
+  }
+
   // Stats del despachador
   const entregadas = operaciones.filter(op => op.estado === 'entregada' || op.estado === 'cerrada').length
   const enCamino = operaciones.filter(op => op.estado === 'despachando').length
@@ -124,20 +131,30 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onVolver }) {
             <p className="text-3xl font-bold">{horaFormateada}</p>
           </div>
         </div>
-        <div className="flex gap-2 mt-2">
-          {onVolver && (
-            <button
-              onClick={onVolver}
-              className="flex-1 bg-orange-700 hover:bg-orange-900 text-white text-xs px-3 py-2 rounded-lg font-semibold"
-            >
-              ← Volver al dashboard
-            </button>
-          )}
+
+        {/* Botón volver (si aplica) */}
+        {onVolver && (
           <button
-            onClick={onCerrarSesion}
-            className="flex-1 bg-orange-700 hover:bg-orange-900 text-white text-xs px-3 py-2 rounded-lg"
+            onClick={onVolver}
+            className="w-full bg-orange-700 hover:bg-orange-900 text-white text-xs px-3 py-2 rounded-lg font-semibold mb-2"
           >
-            Cerrar sesión
+            ← Volver al dashboard
+          </button>
+        )}
+
+        {/* 🆕 BOTONES DE SESIÓN: Cambiar usuario + Cerrar sesión */}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={onCambiarUsuario}
+            className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-2 rounded-lg font-semibold transition flex items-center justify-center gap-1"
+          >
+            🔄 Cambiar usuario
+          </button>
+          <button
+            onClick={confirmarCerrarSesion}
+            className="bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-2 rounded-lg font-semibold transition flex items-center justify-center gap-1"
+          >
+            🚪 Cerrar sesión
           </button>
         </div>
       </div>

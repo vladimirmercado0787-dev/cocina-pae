@@ -25,10 +25,10 @@ import VistaProveedores from './components/proveedores/VistaProveedores'
 function App() {
   const [pasoActual, setPasoActual] = useState(1)
   const [empresaActual, setEmpresaActual] = useState(null)
-  const [empresaLogueada, setEmpresaLogueada] = useState(null)  // ← NUEVO
+  const [empresaLogueada, setEmpresaLogueada] = useState(null)
   const [usuarioLogueado, setUsuarioLogueado] = useState(null)
   const [usuarioSeleccionado, setUsuarioSeleccionado] = useState(null)
-  const [vistaActual, setVistaActual] = useState('login_empresa')  // ← cambió default
+  const [vistaActual, setVistaActual] = useState('login_empresa')
   const [cargando, setCargando] = useState(true)
 
   useEffect(() => {
@@ -53,7 +53,6 @@ function App() {
         .limit(1)
       
       if (usuarios && usuarios.length > 0) {
-        // Wizard completado → ir a login de empresa
         setPasoActual(7)
         setVistaActual('login_empresa')
       }
@@ -70,14 +69,12 @@ function App() {
     setPasoActual(pasoActual - 1)
   }
 
-  // === NUEVO: Login de empresa exitoso ===
   function loginEmpresaExitoso(empresa) {
     setEmpresaLogueada(empresa)
     setEmpresaActual(empresa)
     setVistaActual('seleccion_operador')
   }
 
-  // === Selección de operador (segundo paso) ===
   function seleccionarUsuario(usuario) {
     setUsuarioSeleccionado(usuario)
     setVistaActual('login_pin')
@@ -88,8 +85,8 @@ function App() {
     setVistaActual('dashboard')
   }
 
-  // === Cerrar sesión SOLO de operador (vuelve al selector) ===
-  function cerrarSesionOperador() {
+  // === Cambiar de usuario (mantiene la empresa) ===
+  function cambiarDeUsuario() {
     setUsuarioLogueado(null)
     setUsuarioSeleccionado(null)
     setVistaActual('seleccion_operador')
@@ -152,6 +149,7 @@ function App() {
           usuario={usuarioLogueado}
           empresaId={empresaActual?.id}
           onCerrarSesion={cerrarSesionTotal}
+          onCambiarUsuario={cambiarDeUsuario}
           onIrFactura={() => setVistaActual('factura')}
           onIrCalculadora={() => setVistaActual('calculadora')}
           onIrInteligencia={() => setVistaActual('inteligencia')}
@@ -167,6 +165,7 @@ function App() {
           usuario={usuarioLogueado}
           empresaId={empresaActual?.id}
           onCerrarSesion={cerrarSesionTotal}
+          onCambiarUsuario={cambiarDeUsuario}
           onIrConfiguracion={() => setVistaActual('configuracion')}
           onIrFactura={() => setVistaActual('factura')}
           onIrCalculadora={() => setVistaActual('calculadora')}
@@ -204,6 +203,7 @@ function App() {
         usuario={usuarioLogueado}
         empresaId={empresaActual?.id}
         onCerrarSesion={cerrarSesionTotal}
+        onCambiarUsuario={cambiarDeUsuario}
         onIrConfiguracion={() => setVistaActual('configuracion')}
         onIrCierre={() => setVistaActual('cierre')}
         onIrCalculadora={() => setVistaActual('calculadora')}
@@ -245,14 +245,14 @@ function App() {
       {/* WIZARD (sólo si no ha terminado) */}
       {pasoActual < 7 && renderPasoWizard()}
       
-      {/* LOGIN DE EMPRESA (después del wizard, antes de operador) */}
+      {/* LOGIN DE EMPRESA */}
       {pasoActual === 7 && vistaActual === 'login_empresa' && (
         <LoginEmpresa 
           onLoginExitoso={loginEmpresaExitoso}
         />
       )}
       
-      {/* SELECCIÓN DE OPERADOR (después de login empresa) */}
+      {/* SELECCIÓN DE OPERADOR */}
       {pasoActual === 7 && vistaActual === 'seleccion_operador' && empresaLogueada && (
         <SeleccionOperador 
           empresaId={empresaLogueada.id}
@@ -278,6 +278,7 @@ function App() {
           usuario={usuarioLogueado}
           empresaId={empresaActual?.id}
           onCerrarSesion={cerrarSesionTotal}
+          onCambiarUsuario={cambiarDeUsuario}
           onIrFactura={() => setVistaActual('factura')}
           onIrCalculadora={() => setVistaActual('calculadora')}
           onIrInteligencia={() => setVistaActual('inteligencia')}
@@ -294,6 +295,7 @@ function App() {
           usuario={usuarioLogueado}
           empresaId={empresaActual?.id}
           onCerrarSesion={cerrarSesionTotal}
+          onCambiarUsuario={cambiarDeUsuario}
           onVolver={() => setVistaActual('dashboard')}
         />
       )}

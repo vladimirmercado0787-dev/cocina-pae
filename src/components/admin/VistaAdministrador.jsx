@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 
-function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onIrConfiguracion, onIrFactura, onIrCalculadora, onIrInteligencia, onIrDespacho, onIrEmpleados, onIrProveedores, onVerComoSecretaria }) {
+function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario, onIrConfiguracion, onIrFactura, onIrCalculadora, onIrInteligencia, onIrDespacho, onIrEmpleados, onIrProveedores, onVerComoSecretaria }) {
   const [empresa, setEmpresa] = useState(null)
   const [escuelas, setEscuelas] = useState([])
   const [operaciones, setOperaciones] = useState([])
@@ -47,6 +47,14 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onIrConfigurac
     setCargando(false)
   }
 
+  // Confirmar cerrar sesión total
+  function confirmarCerrarSesion() {
+    const confirmar = window.confirm('¿Estás seguro de cerrar sesión? Tendrás que ingresar las credenciales de la empresa nuevamente.')
+    if (confirmar && onCerrarSesion) {
+      onCerrarSesion()
+    }
+  }
+
   const totalRacionesDia = escuelas.reduce((sum, e) => sum + (e.raciones_contractuales || 0), 0)
   const facturacionDiaria = escuelas.reduce((sum, e) => sum + ((e.raciones_contractuales || 0) * (parseFloat(e.precio_racion) || 0)), 0)
   const facturacionMensual = facturacionDiaria * 22
@@ -90,7 +98,7 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onIrConfigurac
     <div className="w-full max-w-5xl">
       
       <div className="bg-gradient-to-br from-green-600 to-green-800 rounded-2xl p-6 mb-6 text-white">
-        <div className="flex justify-between items-start">
+        <div className="flex justify-between items-start mb-4">
           <div>
             <p className="text-green-100 text-xs font-semibold tracking-wider">
               VISTA ADMINISTRADOR
@@ -102,7 +110,7 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onIrConfigurac
               {empresa?.nombre} · {mesNombre.charAt(0).toUpperCase() + mesNombre.slice(1)}
             </p>
           </div>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 flex-wrap justify-end">
             {onVerComoSecretaria && (
               <button
                 onClick={onVerComoSecretaria}
@@ -167,13 +175,23 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onIrConfigurac
                 ⚙️ Configuración
               </button>
             )}
-            <button
-              onClick={onCerrarSesion}
-              className="bg-green-700 hover:bg-green-900 text-white text-sm px-4 py-2 rounded-lg"
-            >
-              Cerrar sesión
-            </button>
           </div>
+        </div>
+
+        {/* 🆕 BOTONES DE SESIÓN: Cambiar usuario + Cerrar sesión */}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={onCambiarUsuario}
+            className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg font-semibold transition flex items-center justify-center gap-2"
+          >
+            🔄 Cambiar usuario
+          </button>
+          <button
+            onClick={confirmarCerrarSesion}
+            className="bg-red-600 hover:bg-red-700 text-white text-sm px-4 py-2 rounded-lg font-semibold transition flex items-center justify-center gap-2"
+          >
+            🚪 Cerrar sesión
+          </button>
         </div>
       </div>
 
