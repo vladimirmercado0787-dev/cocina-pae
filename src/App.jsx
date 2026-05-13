@@ -23,6 +23,7 @@ import VistaEmpleados from './components/empleados/VistaEmpleados'
 import VistaProveedores from './components/proveedores/VistaProveedores'
 import VistaCompras from './components/compras/VistaCompras'
 import VistaIngredientes from './components/ingredientes/VistaIngredientes'
+import VistaGastos from './components/gastos/VistaGastos'
 
 function App() {
   const [pasoActual, setPasoActual] = useState(1)
@@ -124,6 +125,9 @@ function App() {
   const puedeGestionarIngredientes = usuarioLogueado && 
     (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'secretaria' || usuarioLogueado.rol === 'jefa_cocina')
 
+  const puedeGestionarGastos = usuarioLogueado && 
+    (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'secretaria')
+
   function renderPasoWizard() {
     if (pasoActual === 1) {
       return <Paso1MiCocina onAvanzar={avanzarPaso} empresaActual={empresaActual} setEmpresaActual={setEmpresaActual} />
@@ -163,6 +167,7 @@ function App() {
           onIrProveedores={() => setVistaActual('proveedores')}
           onIrCompras={() => setVistaActual('compras')}
           onIrIngredientes={() => setVistaActual('ingredientes')}
+          onIrGastos={() => setVistaActual('gastos')}
         />
       )
     }
@@ -207,6 +212,11 @@ function App() {
               ? () => setVistaActual('ingredientes')
               : null
           }
+          onIrGastos={
+            puedeGestionarGastos
+              ? () => setVistaActual('gastos')
+              : null
+          }
           onVerComoSecretaria={
             usuarioLogueado.rol === 'administrador'
               ? () => setVistaActual('vista_secretaria_admin')
@@ -248,6 +258,11 @@ function App() {
         onIrIngredientes={
           puedeGestionarIngredientes
             ? () => setVistaActual('ingredientes')
+            : null
+        }
+        onIrGastos={
+          puedeGestionarGastos
+            ? () => setVistaActual('gastos')
             : null
         }
         onVerComoSecretaria={
@@ -308,6 +323,7 @@ function App() {
           onIrProveedores={() => setVistaActual('proveedores')}
           onIrCompras={() => setVistaActual('compras')}
           onIrIngredientes={() => setVistaActual('ingredientes')}
+          onIrGastos={() => setVistaActual('gastos')}
           onVolverAlPanel={() => setVistaActual('dashboard')}
           modoAdmin={true}
         />
@@ -380,6 +396,13 @@ function App() {
       )}
       {pasoActual === 7 && vistaActual === 'ingredientes' && usuarioLogueado && puedeGestionarIngredientes && (
         <VistaIngredientes 
+          usuario={usuarioLogueado}
+          empresaId={empresaActual?.id}
+          onVolver={() => setVistaActual('dashboard')}
+        />
+      )}
+      {pasoActual === 7 && vistaActual === 'gastos' && usuarioLogueado && puedeGestionarGastos && (
+        <VistaGastos 
           usuario={usuarioLogueado}
           empresaId={empresaActual?.id}
           onVolver={() => setVistaActual('dashboard')}

@@ -14,6 +14,7 @@ function DashboardDelDia({
   onIrEmpleados,
   onIrCompras,
   onIrIngredientes,
+  onIrGastos,
   onVerComoSecretaria 
 }) {
   const [empresa, setEmpresa] = useState(null)
@@ -132,6 +133,14 @@ function DashboardDelDia({
                 📦 Compras
               </button>
             )}
+            {onIrGastos && (
+              <button
+                onClick={onIrGastos}
+                className="bg-rose-600 hover:bg-rose-700 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md"
+              >
+                💸 Gastos
+              </button>
+            )}
             {onIrCalculadora && (
               <button
                 onClick={onIrCalculadora}
@@ -230,7 +239,7 @@ function DashboardDelDia({
                       </span>
                     )}
                   </div>
-                </div>
+                  </div>
               )
             })}
           </div>

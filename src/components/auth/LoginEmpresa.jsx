@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../../supabaseClient'
 import bcrypt from 'bcryptjs'
+import logoAndamio from '../../assets/brand/andamio-logo.png'
 
 function LoginEmpresa({ onLoginExitoso }) {
   const [usuario, setUsuario] = useState('')
@@ -21,7 +22,6 @@ function LoginEmpresa({ onLoginExitoso }) {
     setCargando(true)
     setError('')
 
-    // Buscar empresa por usuario (case-insensitive)
     const { data: empresas, error: errSupa } = await supabase
       .from('empresas')
       .select('*')
@@ -43,14 +43,11 @@ function LoginEmpresa({ onLoginExitoso }) {
 
     const empresa = empresas[0]
 
-    // Verificar contraseña
     let passwordCorrecta = false
 
-    // Caso especial: contraseña temporal sin hash (solo durante migración)
     if (empresa.password_hash === 'TEMPORAL_SIN_HASH') {
       passwordCorrecta = (password === 'temporal2026')
     } else if (empresa.password_hash) {
-      // Comparar con bcrypt
       try {
         passwordCorrecta = await bcrypt.compare(password, empresa.password_hash)
       } catch (err) {
@@ -65,7 +62,6 @@ function LoginEmpresa({ onLoginExitoso }) {
       return
     }
 
-    // ¡Login exitoso!
     setCargando(false)
     onLoginExitoso(empresa)
   }
@@ -73,17 +69,29 @@ function LoginEmpresa({ onLoginExitoso }) {
   return (
     <div className="w-full max-w-md">
       
-      {/* HEADER con logo */}
-      <div className="text-center mb-8">
-        <div className="w-24 h-24 mx-auto mb-4 rounded-3xl bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-600 flex items-center justify-center shadow-2xl">
-          <span className="text-4xl font-black text-white drop-shadow-lg">CP</span>
+      {/* HEADER con logo Andamio */}
+      <div className="text-center mb-6">
+        {/* Logo en contenedor oscuro elegante */}
+        <div className="inline-block bg-gradient-to-br from-slate-900 to-slate-800 rounded-3xl p-4 shadow-2xl mb-4 ring-1 ring-slate-700/50">
+          <img 
+            src={logoAndamio} 
+            alt="Andamio" 
+            className="h-32 w-auto object-contain"
+          />
         </div>
-        <h1 className="text-3xl font-bold text-gray-900">
-          Cocina PAE
-        </h1>
-        <p className="text-sm text-gray-600 mt-2">
-          Sistema de gestión para suplidores INABIE
-        </p>
+        
+        {/* Identificación del producto */}
+        <div className="mt-2">
+          <h1 className="text-3xl font-bold text-gray-900">
+            🍳 Cocina PAE
+          </h1>
+          <p className="text-sm text-gray-600 mt-1">
+            Sistema de gestión para suplidores INABIE
+          </p>
+          <p className="text-xs text-gray-400 mt-2 tracking-wider">
+            by <span className="font-bold text-slate-700">ANDAMIO</span>
+          </p>
+        </div>
       </div>
 
       {/* TARJETA DE LOGIN */}
@@ -197,10 +205,22 @@ function LoginEmpresa({ onLoginExitoso }) {
 
       </div>
 
-      {/* FOOTER */}
-      <div className="text-center mt-6 text-xs text-gray-400">
-        <p>Cocina PAE v1.0 · Mayo 2026</p>
-        <p className="mt-1">Sistema seguro con encriptación bcrypt 🔒</p>
+      {/* FOOTER PROFESIONAL */}
+      <div className="text-center mt-6 space-y-2">
+        <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
+          <div className="h-px bg-gray-300 flex-1 max-w-[60px]"></div>
+          <span className="font-bold tracking-widest">ANDAMIO</span>
+          <div className="h-px bg-gray-300 flex-1 max-w-[60px]"></div>
+        </div>
+        <p className="text-xs text-gray-500 italic">
+          Materializamos ideas · Construimos posibilidades
+        </p>
+        <p className="text-xs text-gray-400">
+          © 2026 Andamio · Cocina PAE v1.0
+        </p>
+        <p className="text-xs text-gray-400">
+          Sistema seguro con encriptación bcrypt 🔒
+        </p>
       </div>
 
     </div>
