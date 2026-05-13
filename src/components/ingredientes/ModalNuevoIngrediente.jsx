@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
+import { normalizarNombre, sonIguales } from '../../utils/normalizarTexto'
 
 const UNIDADES_COMUNES = [
   { id: 'lb', label: 'Libras (lb)' },
@@ -24,6 +25,7 @@ function ModalNuevoIngrediente({ empresaId, ingredienteEditando, onCerrar, onGua
   const [stockActual, setStockActual] = useState('')
   const [stockMinimo, setStockMinimo] = useState('')
   const [ultimoCosto, setUltimoCosto] = useState('')
+  const [todosIngredientes, setTodosIngredientes] = useState([])
 
   const [guardando, setGuardando] = useState(false)
   const [eliminando, setEliminando] = useState(false)
@@ -37,20 +39,45 @@ function ModalNuevoIngrediente({ empresaId, ingredienteEditando, onCerrar, onGua
       setStockMinimo(String(ingredienteEditando.stock_minimo || ''))
       setUltimoCosto(String(ingredienteEditando.ultimo_costo || ''))
     }
+    cargarTodosIngredientes()
   }, [ingredienteEditando])
+
+  async function cargarTodosIngredientes() {
+    const { data } = await supabase
+      .from('ingredientes')
+      .select('id, nombre')
+      .eq('empresa_id', empresaId)
+    setTodosIngredientes(data || [])
+  }
+
+  // Preview del nombre normalizado
+  const nombreNormalizado = normalizarNombre(nombre)
+
+  // Detección en vivo de duplicado
+  const duplicadoDetectado = nombre.trim() && todosIngredientes.find(i => {
+    // Si estamos editando, ignorar el propio ingrediente
+    if (esEdicion && i.id === ingredienteEditando.id) return false
+    return sonIguales(i.nombre, nombre)
+  })
 
   async function guardar() {
     setError('')
 
-    if (!nombre.trim()) {
+    if (!nombreNormalizado) {
       setError('El nombre es obligatorio')
+      return
+    }
+
+    // ✨ Validación de duplicados con normalización
+    if (duplicadoDetectado) {
+      setError(`Ya existe el ingrediente "${duplicadoDetectado.nombre}". Edítalo en vez de crear duplicado.`)
       return
     }
 
     setGuardando(true)
 
     const datos = {
-      nombre: nombre.trim(),
+      nombre: nombreNormalizado,  // ✨ Siempre guardar normalizado
       unidad_stock: unidad,
       stock_actual: parseFloat(stockActual) || 0,
       stock_minimo: parseFloat(stockMinimo) || 0,
@@ -104,6 +131,9 @@ function ModalNuevoIngrediente({ empresaId, ingredienteEditando, onCerrar, onGua
     onGuardado()
   }
 
+  // ¿El nombre va a cambiar al normalizar?
+  const cambiarAlNormalizar = nombre.trim() && nombre !== nombreNormalizado
+
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[95vh] overflow-hidden flex flex-col">
@@ -140,11 +170,26 @@ function ModalNuevoIngrediente({ empresaId, ingredienteEditando, onCerrar, onGua
               type="text"
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
+              onBlur={(e) => setNombre(normalizarNombre(e.target.value))}
               placeholder="Ej: Pollo, Arroz, Cebolla..."
               autoFocus={!esEdicion}
               disabled={guardando || eliminando}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
             />
+            
+            {/* Preview de normalización */}
+            {cambiarAlNormalizar && (
+              <p className="text-xs text-blue-700 mt-1 bg-blue-50 px-2 py-1 rounded">
+                💡 Se guardará como: <strong>{nombreNormalizado}</strong>
+              </p>
+            )}
+
+            {/* Alerta de duplicado */}
+            {duplicadoDetectado && (
+              <p className="text-xs text-orange-700 mt-1 bg-orange-50 border border-orange-200 px-2 py-1 rounded">
+                ⚠️ Ya existe: <strong>{duplicadoDetectado.nombre}</strong>. Edita el existente en vez de crear duplicado.
+              </p>
+            )}
           </div>
 
           <div>
@@ -263,7 +308,7 @@ function ModalNuevoIngrediente({ empresaId, ingredienteEditando, onCerrar, onGua
             </button>
             <button
               onClick={guardar}
-              disabled={guardando || eliminando || !nombre.trim()}
+              disabled={guardando || eliminando || !nombre.trim() || duplicadoDetectado}
               className="flex-1 px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold transition disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {guardando ? (
