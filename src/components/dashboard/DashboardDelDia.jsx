@@ -13,6 +13,7 @@ function DashboardDelDia({
   onIrDespacho, 
   onIrEmpleados,
   onIrCompras,
+  onIrIngredientes,
   onVerComoSecretaria 
 }) {
   const [empresa, setEmpresa] = useState(null)
@@ -69,7 +70,6 @@ function DashboardDelDia({
   return (
     <div className="w-full max-w-5xl">
       
-      {/* HEADER */}
       <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl p-6 mb-6 text-white">
         <div className="flex justify-between items-start mb-4">
           <div>
@@ -116,6 +116,14 @@ function DashboardDelDia({
                 👥 Empleados
               </button>
             )}
+            {onIrIngredientes && (
+              <button
+                onClick={onIrIngredientes}
+                className="bg-green-500 hover:bg-green-600 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md"
+              >
+                🥕 Ingredientes
+              </button>
+            )}
             {onIrCompras && (
               <button
                 onClick={onIrCompras}
@@ -151,7 +159,6 @@ function DashboardDelDia({
           </div>
         </div>
 
-        {/* BOTONES DE SESIÓN: Cambiar usuario + Cerrar sesión */}
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={onCambiarUsuario}
@@ -168,7 +175,6 @@ function DashboardDelDia({
         </div>
       </div>
 
-      {/* STATS DE HOY */}
       <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
         <p className="text-xs text-gray-500 font-semibold tracking-wider mb-4">
           📅 OPERACIONES DE HOY
@@ -191,7 +197,6 @@ function DashboardDelDia({
         </div>
       </div>
 
-      {/* OPERACIONES POR ESCUELA */}
       {escuelas.length > 0 && (
         <div className="bg-white rounded-2xl shadow-xl p-6">
           <p className="text-xs text-gray-500 font-semibold tracking-wider mb-4">

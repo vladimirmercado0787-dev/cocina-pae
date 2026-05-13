@@ -17,6 +17,7 @@ function VistaSecretaria({
   onIrDespacho, 
   onIrProveedores,
   onIrCompras,
+  onIrIngredientes,
   onVolverAlPanel,
   modoAdmin = false 
 }) {
@@ -149,6 +150,14 @@ function VistaSecretaria({
                 className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-4 py-2 rounded-lg"
               >
                 📄 Factura INABIE
+              </button>
+            )}
+            {onIrIngredientes && !modoAdmin && (
+              <button
+                onClick={onIrIngredientes}
+                className="bg-green-600 hover:bg-green-700 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md"
+              >
+                🥕 Ingredientes
               </button>
             )}
             {onIrProveedores && !modoAdmin && (

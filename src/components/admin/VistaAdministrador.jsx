@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 
-function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario, onIrConfiguracion, onIrFactura, onIrCalculadora, onIrInteligencia, onIrDespacho, onIrEmpleados, onIrProveedores, onIrCompras, onVerComoSecretaria }) {
+function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario, onIrConfiguracion, onIrFactura, onIrCalculadora, onIrInteligencia, onIrDespacho, onIrEmpleados, onIrProveedores, onIrCompras, onIrIngredientes, onVerComoSecretaria }) {
   const [empresa, setEmpresa] = useState(null)
   const [escuelas, setEscuelas] = useState([])
   const [operaciones, setOperaciones] = useState([])
@@ -47,7 +47,6 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuar
     setCargando(false)
   }
 
-  // Confirmar cerrar sesión total
   function confirmarCerrarSesion() {
     const confirmar = window.confirm('¿Estás seguro de cerrar sesión? Tendrás que ingresar las credenciales de la empresa nuevamente.')
     if (confirmar && onCerrarSesion) {
@@ -143,6 +142,14 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuar
                 👥 Empleados
               </button>
             )}
+            {onIrIngredientes && (
+              <button
+                onClick={onIrIngredientes}
+                className="bg-green-500 hover:bg-green-600 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md"
+              >
+                🥕 Ingredientes
+              </button>
+            )}
             {onIrProveedores && (
               <button
                 onClick={onIrProveedores}
@@ -186,7 +193,6 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuar
           </div>
         </div>
 
-        {/* BOTONES DE SESIÓN: Cambiar usuario + Cerrar sesión */}
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={onCambiarUsuario}
