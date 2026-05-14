@@ -283,7 +283,8 @@ function FacturaMensual({ empresa, finanzas, escuelas, operaciones, mes, anio })
                 <td className="py-3">
                   <p className="font-semibold text-gray-900 text-sm">{item.escuela.nombre}</p>
                   <p className="text-xs text-gray-500">
-                    {item.escuela.director_nombre && `Director: ${item.escuela.director_nombre}`}
+                    {item.escuela.codigo_centro && `Cód: ${item.escuela.codigo_centro}`}
+                    {item.escuela.regional_distrito && ` · ${item.escuela.regional_distrito}`}
                   </p>
                 </td>
                 <td className="py-3 text-center text-sm">{item.diasTrabajados}</td>
@@ -376,15 +377,12 @@ function FacturaMensual({ empresa, finanzas, escuelas, operaciones, mes, anio })
   )
 }
 
-// ============================================
-// CONDUCES DIARIOS (uno por escuela)
+/// ============================================
+// CONDUCES DIARIOS (uno por escuela) - FORMATO INABIE V1-PAE v2
 // ============================================
 function ConducesDiarios({ empresa, finanzas, escuelas, operaciones, recetas, fecha }) {
-  const fechaTexto = new Date(fecha + 'T12:00:00').toLocaleDateString('es-DO', { 
-    weekday: 'long', 
-    day: 'numeric', 
-    month: 'long', 
-    year: 'numeric' 
+  const fechaCorta = new Date(fecha + 'T12:00:00').toLocaleDateString('es-DO', {
+    day: '2-digit', month: '2-digit', year: 'numeric'
   })
 
   // Solo escuelas que tuvieron operación ese día
@@ -401,211 +399,276 @@ function ConducesDiarios({ empresa, finanzas, escuelas, operaciones, recetas, fe
       <div className="bg-white rounded-2xl shadow-xl p-12 text-center">
         <div className="text-6xl mb-4">📅</div>
         <h3 className="text-xl font-bold text-gray-900">Sin operaciones</h3>
-        <p className="text-gray-500 mt-2">No hay entregas registradas para {fechaTexto}.</p>
+        <p className="text-gray-500 mt-2">No hay entregas registradas para el {fechaCorta}.</p>
         <p className="text-sm text-gray-400 mt-4">Selecciona otra fecha o registra las operaciones del día.</p>
       </div>
     )
+  }
+
+  // Construir provincia/municipio
+  const formatearProvinciaMunicipio = (esc) => {
+    const partes = [esc.provincia, esc.municipio].filter(Boolean)
+    return partes.length > 0 ? partes.join(' / ').toUpperCase() : '—'
+  }
+
+  // Hora de recepción si firmó digitalmente
+  const formatearHoraRecepcion = (op) => {
+    if (!op.firmado_en) return null
+    return new Date(op.firmado_en).toLocaleTimeString('es-DO', {
+      hour: '2-digit', minute: '2-digit', hour12: true
+    })
+  }
+
+  // Fecha de recepción si firmó digitalmente
+  const formatearFechaRecepcion = (op) => {
+    if (!op.firmado_en) return null
+    return new Date(op.firmado_en).toLocaleDateString('es-DO', {
+      day: '2-digit', month: '2-digit', year: 'numeric'
+    })
   }
 
   return (
     <>
       {escuelasConOperacion.map((item, idx) => {
         const { escuela, op, receta } = item
-        const precioRacion = parseFloat(escuela.precio_racion || 0)
-        const subtotal = (op.raciones_planificadas || 0) * precioRacion
-        const numeroConduce = `${fecha.replace(/-/g, '')}-${escuela.id.slice(0, 4).toUpperCase()}`
-        const horaEntrega = op.hora_entrega 
-          ? new Date(op.hora_entrega).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' })
-          : '—'
+        const numeroConduce = op.numero_conduce || String(4000 + idx + 1).padStart(4, '0')
+        const horaRecepcion = formatearHoraRecepcion(op)
+        const fechaRecepcion = formatearFechaRecepcion(op)
+        const provinciaMunicipio = formatearProvinciaMunicipio(escuela)
+        const descripcionProducto = receta?.nombre || 'Ración alimenticia escolar'
 
         return (
-          <div 
-            key={escuela.id} 
-            className={`bg-white rounded-2xl shadow-xl p-8 print:shadow-none print:p-4 mb-6 ${idx < escuelasConOperacion.length - 1 ? 'page-break' : ''}`}
+          <div
+            key={escuela.id}
+            className={`bg-white rounded-2xl shadow-xl p-10 print:shadow-none print:p-6 mb-6 ${idx < escuelasConOperacion.length - 1 ? 'page-break' : ''}`}
           >
-            
-            {/* Encabezado */}
-            <div className="border-b-2 border-gray-900 pb-4 mb-6">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h1 className="text-2xl font-bold text-gray-900">{empresa?.nombre || 'Mi Cocina'}</h1>
-                  <p className="text-sm text-gray-600 mt-1">RNC: {empresa?.rnc || '—'}</p>
-                  <p className="text-sm text-gray-600">{empresa?.direccion || ''}</p>
-                  {empresa?.telefono && (
-                    <p className="text-sm text-gray-600">📞 {empresa.telefono}</p>
-                  )}
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-gray-500 font-semibold tracking-wider">CONDUCE DIARIO</p>
-                  <p className="text-xl font-bold text-gray-900">N° {numeroConduce}</p>
-                  <p className="text-sm text-gray-600 mt-1 capitalize">
-                    {fechaTexto}
-                  </p>
-                  {op.firma_imagen && (
-                    <div className="mt-2 inline-block bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded-full">
-                      ✅ FIRMADO DIGITALMENTE
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
 
-            {/* Datos de la escuela */}
-            <div className="bg-gray-50 rounded-xl p-4 mb-6">
-              <p className="text-xs text-gray-500 font-semibold tracking-wider mb-2">ENTREGADO A:</p>
-              <p className="font-bold text-gray-900 text-lg">{escuela.nombre}</p>
-              {escuela.direccion && (
-                <p className="text-sm text-gray-600 mt-1">📍 {escuela.direccion}</p>
+            {/* ENCABEZADO CENTRADO - Estilo INABIE oficial */}
+            <div className="text-center pb-4 mb-6 border-b-2 border-gray-900">
+              <h1 className="text-2xl font-black text-gray-900 tracking-tight uppercase">
+                {empresa?.nombre || 'Mi Cocina'}
+              </h1>
+              {empresa?.direccion && (
+                <p className="text-xs text-gray-700 mt-1 uppercase tracking-wide">
+                  {empresa.direccion}
+                </p>
               )}
-              {escuela.director_nombre && (
-                <p className="text-sm text-gray-600">
-                  👤 Director(a): <strong>{escuela.director_nombre}</strong>
-                  {escuela.director_telefono && ` · 📞 ${escuela.director_telefono}`}
+              {empresa?.telefono && (
+                <p className="text-xs text-gray-700 mt-0.5">
+                  Tel.: {empresa.telefono}
+                </p>
+              )}
+              {empresa?.rnc && (
+                <p className="text-xs text-gray-700 mt-0.5 font-semibold">
+                  RNC: {empresa.rnc}
                 </p>
               )}
             </div>
 
-            {/* Detalle de la entrega */}
-            <table className="w-full mb-6">
-              <thead className="border-b-2 border-gray-300">
-                <tr className="text-left">
-                  <th className="py-3 text-xs text-gray-600 font-semibold tracking-wider">DESCRIPCIÓN</th>
-                  <th className="py-3 text-xs text-gray-600 font-semibold tracking-wider text-right">CANTIDAD</th>
-                  <th className="py-3 text-xs text-gray-600 font-semibold tracking-wider text-right">P. UNITARIO</th>
-                  <th className="py-3 text-xs text-gray-600 font-semibold tracking-wider text-right">SUBTOTAL</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-b border-gray-200">
-                  <td className="py-4">
-                    <p className="font-semibold text-gray-900">
-                      {receta ? `${receta.emoji} ${receta.nombre}` : 'Ración alimenticia escolar'}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">Almuerzo escolar PAE</p>
-                  </td>
-                  <td className="py-4 text-right font-mono text-base font-semibold">
-                    {op.raciones_planificadas?.toLocaleString()} raciones
-                  </td>
-                  <td className="py-4 text-right font-mono">RD$ {precioRacion.toFixed(2)}</td>
-                  <td className="py-4 text-right font-mono text-base font-bold">
-                    RD$ {subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                  </td>
-                </tr>
-              </tbody>
-              <tfoot className="border-t-2 border-gray-900">
-                <tr>
-                  <td colSpan={3} className="py-4 text-right text-sm font-bold">TOTAL DEL DÍA:</td>
-                  <td className="py-4 text-right font-mono text-lg font-bold">
-                    RD$ {subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-
-            {/* Información operativa */}
-            <div className="grid grid-cols-3 gap-4 mb-8">
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center">
-                <p className="text-xs text-blue-700 font-semibold tracking-wider">INICIO COCINA</p>
-                <p className="text-sm font-bold text-blue-900 mt-1">
-                  {op.hora_inicio_preparacion 
-                    ? new Date(op.hora_inicio_preparacion).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' })
-                    : '—'}
-                </p>
-              </div>
-              <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 text-center">
-                <p className="text-xs text-orange-700 font-semibold tracking-wider">SALIDA</p>
-                <p className="text-sm font-bold text-orange-900 mt-1">
-                  {op.hora_salida 
-                    ? new Date(op.hora_salida).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' })
-                    : '—'}
-                </p>
-              </div>
-              <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-center">
-                <p className="text-xs text-green-700 font-semibold tracking-wider">ENTREGA</p>
-                <p className="text-sm font-bold text-green-900 mt-1">{horaEntrega}</p>
-              </div>
-            </div>
-
-            {/* Espacios de firma */}
-            <div className="grid grid-cols-2 gap-8 mt-12 mb-4">
-              <div className="text-center">
-                <div className="border-b-2 border-gray-400 mb-2 h-16"></div>
-                <p className="text-xs text-gray-600 font-semibold tracking-wider">ENTREGADO POR (SUPLIDOR)</p>
-                <p className="text-sm text-gray-900 mt-1 font-semibold">{empresa?.nombre}</p>
-                <p className="text-xs text-gray-500">RNC: {empresa?.rnc}</p>
-              </div>
+            {/* BLOQUE SUPERIOR: Datos del centro (izq) + Conduce no/Fecha (der) */}
+            <div className="grid grid-cols-3 gap-6 mb-6 text-sm">
               
-              {/* Sección RECIBIDO POR - con firma digital si existe */}
+              {/* Columna izquierda y central - Datos centro educativo (2/3) */}
+              <div className="col-span-2 space-y-2">
+                <CampoFormulario 
+                  label="Nombre Centro Educativo" 
+                  valor={escuela.nombre?.toUpperCase()} 
+                />
+                <CampoFormulario 
+                  label="Director del Centro" 
+                  valor={escuela.director_nombre?.toUpperCase()} 
+                />
+                <CampoFormulario 
+                  label="Dirección" 
+                  valor={[escuela.barrio_sector, escuela.direccion].filter(Boolean).join(' / ').toUpperCase() || '—'} 
+                />
+                <CampoFormulario 
+                  label="Provincia/Municipio" 
+                  valor={provinciaMunicipio} 
+                />
+              </div>
+
+              {/* Columna derecha - Datos oficiales */}
+              <div className="space-y-2">
+                <div className="bg-gradient-to-br from-indigo-50 to-blue-50 border-2 border-indigo-200 rounded-xl p-3 shadow-sm">
+                  <div className="text-center mb-2 pb-2 border-b border-indigo-200">
+                    <p className="text-[10px] text-indigo-600 font-bold tracking-widest">CONDUCE NO.</p>
+                    <p className="text-2xl font-black text-indigo-900 font-mono">{numeroConduce}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[10px] text-indigo-600 font-bold tracking-widest">FECHA</p>
+                    <p className="text-base font-bold text-indigo-900 font-mono">{fechaCorta}</p>
+                  </div>
+                </div>
+
+                <CampoFormulario 
+                  label="Cód. Centro" 
+                  valor={escuela.codigo_centro || '—'}
+                  mono
+                />
+                <CampoFormulario 
+                  label="Teléfono" 
+                  valor={escuela.director_telefono || '—'}
+                  mono
+                />
+                <CampoFormulario 
+                  label="Regional/Distrito" 
+                  valor={escuela.regional_distrito || '—'}
+                  mono
+                />
+              </div>
+            </div>
+
+            {/* TÍTULO DE TABLA estilo INABIE */}
+            <div className="text-center my-4">
+              <p className="text-sm font-bold text-gray-700 tracking-wide">
+                &laquo;&laquo;&laquo;&laquo; Detalle de las Raciones Entregadas y Recibidas &raquo;&raquo;&raquo;&raquo;
+              </p>
+            </div>
+
+            {/* TABLA DE RACIONES - Sin precios */}
+            <div className="flex items-center gap-3 mb-6">
+              <div className="bg-gray-900 text-white px-3 py-8 rounded-l-lg flex items-center justify-center">
+                <p className="text-xs font-bold tracking-widest [writing-mode:vertical-rl] rotate-180">
+                  RACIONES
+                </p>
+              </div>
+              <table className="flex-1 border-2 border-gray-300 rounded-r-lg overflow-hidden">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="text-left py-3 px-4 text-xs font-bold text-gray-700 tracking-wider border-r border-gray-300">
+                      Descripción del producto
+                    </th>
+                    <th className="text-center py-3 px-4 text-xs font-bold text-gray-700 tracking-wider w-32">
+                      Cantidad
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-t border-gray-300">
+                    <td className="py-4 px-4 text-base font-semibold text-gray-900 border-r border-gray-300">
+                      {descripcionProducto}
+                    </td>
+                    <td className="py-4 px-4 text-center text-xl font-black font-mono text-gray-900">
+                      {op.raciones_planificadas?.toLocaleString() || 0}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* OBSERVACIONES */}
+            <div className="mb-8">
+              <div className="flex items-baseline gap-2">
+                <p className="text-sm font-semibold text-gray-700 whitespace-nowrap">Observaciones:</p>
+                <div className="flex-1 border-b border-gray-400 min-h-[1.5rem] px-2 text-sm text-gray-700">
+                  {escuela.observaciones || op.observaciones || ''}
+                </div>
+              </div>
+            </div>
+
+            {/* SECCIÓN DE FIRMAS - 2 columnas */}
+            <div className="grid grid-cols-2 gap-12 mt-12">
+              
+              {/* FIRMA Y SELLO DEL SUPLIDOR (izquierda) */}
               <div className="text-center">
+                <div className="border-b-2 border-gray-900 mb-2 h-20 flex items-end justify-center pb-1">
+                  {/* Espacio para firma manuscrita del suplidor */}
+                </div>
+                <p className="text-xs font-bold text-gray-900 tracking-widest">
+                  FIRMA Y SELLO DEL SUPLIDOR
+                </p>
+                <p className="text-xs text-gray-600 mt-1">{empresa?.nombre}</p>
+              </div>
+
+              {/* RECIBIDO POR (derecha) */}
+              <div>
+                <p className="text-sm font-bold text-gray-900 mb-4">Recibido por:</p>
+                
                 {op.firma_imagen ? (
-                  // FIRMA DIGITAL CAPTURADA
-                  <>
-                    <div className="bg-green-50 border-2 border-green-300 rounded-lg mb-2 h-16 flex items-center justify-center overflow-hidden p-1">
+                  // CON FIRMA DIGITAL - se pre-llenan los campos
+                  <div className="space-y-3">
+                    <div className="bg-green-50 border-2 border-green-300 rounded-lg p-2 mb-3">
                       <img 
                         src={op.firma_imagen} 
-                        alt="Firma del director" 
-                        className="max-h-full max-w-full object-contain"
+                        alt="Firma digital" 
+                        className="max-h-16 mx-auto object-contain"
                       />
-                    </div>
-                    <p className="text-xs text-green-700 font-semibold tracking-wider">
-                      ✅ RECIBIDO Y FIRMADO DIGITALMENTE
-                    </p>
-                    <p className="text-sm text-gray-900 mt-1 font-semibold">
-                      {op.firmado_por_nombre || escuela.director_nombre}
-                    </p>
-                    <p className="text-xs text-gray-500">{escuela.nombre}</p>
-                    {op.firmado_en && (
-                      <p className="text-xs text-green-600 mt-1 font-medium">
-                        Firmado el {new Date(op.firmado_en).toLocaleDateString('es-DO', { 
-                          day: 'numeric', month: 'long', year: 'numeric' 
-                        })} a las {new Date(op.firmado_en).toLocaleTimeString('es-DO', { 
-                          hour: '2-digit', minute: '2-digit' 
-                        })}
+                      <p className="text-[10px] text-green-700 text-center font-bold tracking-wider mt-1">
+                        ✓ FIRMA DIGITAL VALIDADA
                       </p>
-                    )}
-                  </>
+                    </div>
+                    <CampoFormulario 
+                      label="Nombre" 
+                      valor={(op.firmado_por_nombre || escuela.director_nombre)?.toUpperCase()} 
+                    />
+                    <CampoFormulario 
+                      label="Fecha Recepción" 
+                      valor={fechaRecepcion}
+                      mono
+                    />
+                    <CampoFormulario 
+                      label="Hora Recepción" 
+                      valor={horaRecepcion}
+                      mono
+                    />
+                  </div>
                 ) : (
-                  // SIN FIRMA (espacio para firma manual)
-                  <>
-                    <div className="border-b-2 border-gray-400 mb-2 h-16"></div>
-                    <p className="text-xs text-gray-600 font-semibold tracking-wider">RECIBIDO CONFORME (DIRECTOR/A)</p>
-                    <p className="text-sm text-gray-900 mt-1 font-semibold">{escuela.director_nombre || '________________________'}</p>
-                    <p className="text-xs text-gray-500">{escuela.nombre}</p>
-                  </>
+                  // SIN FIRMA - líneas en blanco para llenar a mano
+                  <div className="space-y-3">
+                    <CampoFormulario label="Nombre" valor="" />
+                    <CampoFormulario label="Fecha Recepción" valor="" />
+                    <CampoFormulario label="Hora Recepción" valor="" />
+                  </div>
                 )}
               </div>
+
             </div>
 
-           {/* Sellos */}
-            <div className="grid grid-cols-2 gap-8 mt-8">
-              <div className="text-center">
-                <div className="inline-block border-2 border-dashed border-gray-300 rounded-lg w-32 h-32 flex items-center justify-center text-gray-300 text-xs">
-                  Sello
-                </div>
+            {/* Badge de firmado digitalmente (sutil, abajo) */}
+            {op.firma_imagen && (
+              <div className="mt-8 text-center">
+                <span className="inline-block bg-green-100 text-green-800 text-xs font-bold px-4 py-1.5 rounded-full">
+                  ✅ DOCUMENTO FIRMADO DIGITALMENTE
+                </span>
               </div>
-              <div className="text-center">
-                <div className="inline-block border-2 border-dashed border-gray-300 rounded-lg w-32 h-32 flex items-center justify-center text-gray-300 text-xs">
-                  {op.firma_imagen ? (
-                    <span className="text-green-600 font-semibold">✓ Validado<br/>digitalmente</span>
-                  ) : (
-                    'Sello'
-                  )}
-                </div>
-              </div>
-            </div>
+            )}
 
-            {/* Footer */}
-            <div className="mt-6 text-center text-xs text-gray-400 border-t border-gray-200 pt-3">
-              <p>Conduce {idx + 1} de {escuelasConOperacion.length} · Generado por Cocina PAE</p>
-              {finanzas?.usa_ecf && finanzas?.rnc_certificado_ecf && (
-                <p className="mt-1">🧾 e-CF · RNC: {finanzas.rnc_certificado_ecf}</p>
-              )}
+            {/* FOOTER estilo INABIE */}
+            <div className="mt-10 pt-3 border-t border-gray-300 flex justify-between items-center text-[10px] text-gray-500">
+              <p>
+                Preparado por: <span className="font-semibold">{empresa?.email || 'cocinapae@andamio.do'}</span>
+                <span className="mx-2">·</span>
+                Versión: <span className="font-semibold">V1-PAE</span>
+                <span className="mx-2">·</span>
+                Fecha de impresión: <span className="font-semibold">{new Date().toLocaleDateString('es-DO')}</span>
+              </p>
+              <p>
+                Página: <span className="font-bold">{idx + 1}</span>
+              </p>
             </div>
 
           </div>
         )
       })}
     </>
+  )
+}
+
+// ============================================
+// COMPONENTE AUXILIAR: Campo de formulario estilo INABIE
+// Label + línea con valor (o vacía para llenar a mano)
+// ============================================
+function CampoFormulario({ label, valor, mono = false }) {
+  return (
+    <div className="flex items-baseline gap-2">
+      <p className="text-xs font-semibold text-gray-700 whitespace-nowrap">
+        {label}:
+      </p>
+      <div className={`flex-1 border-b border-gray-400 px-1 text-sm text-gray-900 font-semibold min-h-[1.25rem] ${mono ? 'font-mono' : ''}`}>
+        {valor || ''}
+      </div>
+    </div>
   )
 }
 
