@@ -8,7 +8,8 @@ const ESTADOS_DESPACHADOR = {
   lista:        { label: 'Lista',          color: 'bg-blue-100 text-blue-800', emoji: '✅' },
   despachando:  { label: 'En camino',     color: 'bg-orange-100 text-orange-800', emoji: '🚚' },
   entregada:    { label: 'Entregada',     color: 'bg-green-100 text-green-800', emoji: '🎉' },
-  cerrada:      { label: 'Cerrada',       color: 'bg-purple-100 text-purple-800', emoji: '🔒' }
+  cerrada:      { label: 'Cerrada',       color: 'bg-purple-100 text-purple-800', emoji: '🔒' },
+  sin_clase:    { label: 'Sin clase',     color: 'bg-gray-200 text-gray-600', emoji: '🚫' }
 }
 
 function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario, onVolver }) {
@@ -19,6 +20,7 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario
   const [horaActual, setHoraActual] = useState(new Date())
   const [empresa, setEmpresa] = useState(null)
   const [modalFirma, setModalFirma] = useState(null)
+  const [procesando, setProcesando] = useState(false)
 
   useEffect(() => {
     const interval = setInterval(() => setHoraActual(new Date()), 60000)
@@ -71,6 +73,27 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario
     setCargando(false)
   }
 
+  // 🆕 Marcar operación como LISTA para despachar
+  async function marcarLista(operacion) {
+    setProcesando(true)
+    const { error } = await supabase
+      .from('operaciones_dia')
+      .update({
+        estado: 'lista',
+        hora_lista: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', operacion.id)
+
+    if (error) {
+      alert('Error al marcar como lista: ' + error.message)
+      setProcesando(false)
+      return
+    }
+    await cargarDatos()
+    setProcesando(false)
+  }
+
   async function marcarLlegada(operacion) {
     if (operacion.estado !== 'lista' && operacion.estado !== 'despachando') {
       alert('Esta escuela aún no está lista para entrega')
@@ -94,7 +117,6 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario
     return operaciones.find(op => op.escuela_id === escuelaId)
   }
 
-  // Confirmar cerrar sesión total
   function confirmarCerrarSesion() {
     const confirmar = window.confirm('¿Estás seguro de cerrar sesión? Tendrás que ingresar las credenciales de la empresa nuevamente.')
     if (confirmar && onCerrarSesion) {
@@ -102,10 +124,10 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario
     }
   }
 
-  // Stats del despachador
   const entregadas = operaciones.filter(op => op.estado === 'entregada' || op.estado === 'cerrada').length
   const enCamino = operaciones.filter(op => op.estado === 'despachando').length
-  const pendientes = escuelas.length - entregadas - enCamino
+  const sinClaseCount = operaciones.filter(op => op.estado === 'sin_clase').length
+  const pendientes = escuelas.length - entregadas - enCamino - sinClaseCount
 
   const horaFormateada = horaActual.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' })
 
@@ -132,7 +154,6 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario
           </div>
         </div>
 
-        {/* Botón volver (si aplica) */}
         {onVolver && (
           <button
             onClick={onVolver}
@@ -142,7 +163,6 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario
           </button>
         )}
 
-        {/* 🆕 BOTONES DE SESIÓN: Cambiar usuario + Cerrar sesión */}
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={onCambiarUsuario}
@@ -203,7 +223,6 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario
           return (
             <div key={escuela.id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
               
-              {/* Cabecera de la escuela */}
               <div className="p-4 border-b border-gray-100">
                 <div className="flex items-start gap-3">
                   <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-xl flex-shrink-0">
@@ -211,7 +230,7 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-bold text-gray-900 text-base">{escuela.nombre}</p>
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <span className="text-sm font-semibold text-blue-700">
                         {escuela.raciones_contractuales} raciones
                       </span>
@@ -222,7 +241,6 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario
                   </div>
                 </div>
 
-                {/* Director */}
                 {escuela.director_nombre && (
                   <div className="mt-3 flex items-center gap-2 text-xs text-gray-600">
                     <span>👤</span>
@@ -238,7 +256,6 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario
                   </div>
                 )}
 
-                {/* Dirección */}
                 {escuela.direccion && (
                   <div className="mt-2 flex items-center gap-2 text-xs text-gray-600">
                     <span>📍</span>
@@ -250,20 +267,30 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario
                     )}
                   </div>
                 )}
+
+                {op?.razon_no_clase && (
+                  <div className="mt-2 text-xs text-gray-600 italic bg-gray-50 rounded-lg px-2 py-1">
+                    📝 {op.razon_no_clase}
+                  </div>
+                )}
               </div>
 
               {/* Acciones según estado */}
               <div className="p-3 bg-gray-50">
                 {!op && (
                   <div className="text-center py-2 text-xs text-gray-500">
-                    Esperando que la cocina marque como lista
+                    Aún no se ha iniciado esta operación
                   </div>
                 )}
 
                 {op?.estado === 'preparando' && (
-                  <div className="text-center py-2 text-xs text-yellow-700 font-semibold bg-yellow-50 rounded-lg">
-                    🍳 Cocina aún preparando este pedido
-                  </div>
+                  <button
+                    onClick={() => marcarLista(op)}
+                    disabled={procesando}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl text-base disabled:opacity-50"
+                  >
+                    ✅ Marcar como Lista para Despachar
+                  </button>
                 )}
 
                 {op?.estado === 'lista' && (
@@ -302,13 +329,18 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario
                     )}
                   </div>
                 )}
+
+                {op?.estado === 'sin_clase' && (
+                  <div className="text-center py-2 text-xs text-gray-600 font-semibold bg-gray-100 rounded-lg">
+                    🚫 Sin clase hoy
+                  </div>
+                )}
               </div>
             </div>
           )
         })}
       </div>
 
-      {/* Footer motivacional */}
       {entregadas === escuelas.length && escuelas.length > 0 && (
         <div className="mt-4 bg-green-50 border border-green-300 rounded-2xl p-5 text-center">
           <div className="text-4xl mb-2">🏆</div>
@@ -317,7 +349,6 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario
         </div>
       )}
 
-      {/* MODAL DE FIRMA */}
       {modalFirma && (
         <ModalEntregarYFirmar
           operacion={modalFirma.operacion}
