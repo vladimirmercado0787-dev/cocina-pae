@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import ModalEntregarYFirmar from './ModalEntregarYFirmar'
+import ModalPesarYDespachar from './ModalPesarYDespachar'
 
 const ESTADOS_DESPACHADOR = {
   pendiente:    { label: 'Pendiente',     color: 'bg-gray-100 text-gray-700', emoji: '⏳' },
@@ -20,6 +21,7 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario
   const [horaActual, setHoraActual] = useState(new Date())
   const [empresa, setEmpresa] = useState(null)
   const [modalFirma, setModalFirma] = useState(null)
+  const [modalPesaje, setModalPesaje] = useState(null)
   const [procesando, setProcesando] = useState(false)
 
   useEffect(() => {
@@ -73,7 +75,6 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario
     setCargando(false)
   }
 
-  // 🆕 Marcar operación como LISTA para despachar
   async function marcarLista(operacion) {
     setProcesando(true)
     const { error } = await supabase
@@ -92,25 +93,6 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario
     }
     await cargarDatos()
     setProcesando(false)
-  }
-
-  async function marcarLlegada(operacion) {
-    if (operacion.estado !== 'lista' && operacion.estado !== 'despachando') {
-      alert('Esta escuela aún no está lista para entrega')
-      return
-    }
-
-    const { error } = await supabase
-      .from('operaciones_dia')
-      .update({
-        estado: 'despachando',
-        despachado_por: usuario.id,
-        hora_salida: operacion.hora_salida || new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', operacion.id)
-
-    if (!error) cargarDatos()
   }
 
   function getOperacion(escuelaId) {
@@ -138,7 +120,6 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario
   return (
     <div className="w-full max-w-md mx-auto">
       
-      {/* Header naranja del despachador */}
       <div className="bg-gradient-to-br from-orange-500 to-orange-700 rounded-2xl p-5 mb-4 text-white">
         <div className="flex justify-between items-start mb-3">
           <div>
@@ -179,7 +160,6 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario
         </div>
       </div>
 
-      {/* Stats compactas */}
       <div className="grid grid-cols-3 gap-2 mb-4">
         <div className="bg-white rounded-xl shadow-sm p-3 text-center">
           <p className="text-xs text-gray-500 font-semibold">PENDIENTES</p>
@@ -195,7 +175,6 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario
         </div>
       </div>
 
-      {/* Plato del día */}
       {recetaHoy && (
         <div className="bg-white rounded-xl shadow-sm p-4 mb-4">
           <p className="text-xs text-gray-500 font-semibold tracking-wider mb-1">
@@ -210,7 +189,6 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario
         </div>
       )}
 
-      {/* Lista de escuelas */}
       <div className="space-y-3">
         <p className="text-xs text-gray-500 font-semibold tracking-wider px-2">
           🏫 TUS ENTREGAS DE HOY
@@ -273,9 +251,14 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario
                     📝 {op.razon_no_clase}
                   </div>
                 )}
+
+                {op?.peso_cocido_lb && (
+                  <div className="mt-2 text-xs text-blue-700 font-semibold bg-blue-50 rounded-lg px-2 py-1">
+                    ⚖️ Pesaje cocido: {op.peso_cocido_lb} lb
+                  </div>
+                )}
               </div>
 
-              {/* Acciones según estado */}
               <div className="p-3 bg-gray-50">
                 {!op && (
                   <div className="text-center py-2 text-xs text-gray-500">
@@ -295,10 +278,10 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario
 
                 {op?.estado === 'lista' && (
                   <button
-                    onClick={() => marcarLlegada(op)}
+                    onClick={() => setModalPesaje({ operacion: op, escuela })}
                     className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 rounded-xl text-base"
                   >
-                    🚚 Salir hacia la escuela
+                    ⚖️ Pesar y Despachar
                   </button>
                 )}
 
@@ -349,6 +332,21 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario
         </div>
       )}
 
+      {/* Modal de pesaje y despacho */}
+      {modalPesaje && (
+        <ModalPesarYDespachar
+          operacion={modalPesaje.operacion}
+          escuela={modalPesaje.escuela}
+          usuario={usuario}
+          onCerrar={() => setModalPesaje(null)}
+          onGuardado={() => {
+            cargarDatos()
+            setModalPesaje(null)
+          }}
+        />
+      )}
+
+      {/* Modal de firma */}
       {modalFirma && (
         <ModalEntregarYFirmar
           operacion={modalFirma.operacion}
