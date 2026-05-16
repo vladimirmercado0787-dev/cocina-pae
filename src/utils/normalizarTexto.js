@@ -1,51 +1,81 @@
+// src/utils/normalizarTexto.js
+// Sistema anti-duplicado de 3 capas — Cocina PAE
+// Decisión 13-mayo-2026
+//
+// Estandariza nombres de ingredientes, categorías, etc:
+// - Trim espacios al inicio/fin
+// - Colapsa espacios múltiples a uno solo
+// - Convierte a Title Case (primera letra de cada palabra mayúscula)
+//
+// Funciones:
+// - normalizarNombre(texto): devuelve nombre limpio en Title Case
+// - sonIguales(nombre1, nombre2): compara dos nombres ignorando case, espacios y acentos
+// - quitarAcentos(texto): helper interno para comparación insensible a tildes
+
 /**
- * Normaliza un nombre para almacenamiento consistente.
- * - Quita espacios al inicio/final
+ * Quita acentos/tildes de un texto.
+ * "Habichuelas" → "Habichuelas"
+ * "Mañana" → "Manana"
+ * "Café" → "Cafe"
+ */
+function quitarAcentos(texto) {
+  if (!texto) return ''
+  return texto
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+}
+
+/**
+ * Normaliza un nombre para guardarlo en BD:
+ * - Trim espacios al inicio/fin
  * - Colapsa espacios múltiples a uno solo
- * - Aplica Title Case (Primera Letra Mayúscula)
- * 
+ * - Title Case (primera letra de cada palabra en mayúscula)
+ *
  * Ejemplos:
- *   "arroz blanco"      → "Arroz Blanco"
- *   "  POLLO  "         → "Pollo"
- *   "aceite vegetal"    → "Aceite Vegetal"
- *   "cebolla   morada"  → "Cebolla Morada"
+ *   "  habichuelas   rojas  " → "Habichuelas Rojas"
+ *   "ACEITE de oliva"         → "Aceite De Oliva"
+ *   "arroz"                   → "Arroz"
+ *   ""                        → ""
  */
 export function normalizarNombre(texto) {
-  if (!texto) return ''
-  
-  return texto
-    .trim()                              // Quita espacios al inicio/final
-    .replace(/\s+/g, ' ')                // Colapsa espacios múltiples
-    .toLowerCase()                       // Todo minúscula primero
-    .split(' ')                          // Divide en palabras
-    .map(palabra => 
-      palabra.charAt(0).toUpperCase() + palabra.slice(1)
-    )                                    // Capitaliza cada palabra
-    .join(' ')                           // Une de nuevo
+  if (!texto || typeof texto !== 'string') return ''
+
+  // Trim + colapsar espacios múltiples
+  const limpio = texto.trim().replace(/\s+/g, ' ')
+
+  if (!limpio) return ''
+
+  // Title Case: cada palabra con primera letra mayúscula
+  return limpio
+    .toLowerCase()
+    .split(' ')
+    .map(palabra => {
+      if (palabra.length === 0) return ''
+      return palabra.charAt(0).toUpperCase() + palabra.slice(1)
+    })
+    .join(' ')
 }
 
 /**
- * Compara dos nombres ignorando mayúsculas y espacios.
- * Útil para detectar duplicados similares.
- * 
+ * Compara dos nombres para detectar duplicados.
+ * Ignora:
+ *   - Diferencias de mayúscula/minúscula
+ *   - Espacios extras
+ *   - Acentos/tildes
+ *
  * Ejemplos:
- *   sonIguales("arroz blanco", "Arroz Blanco")    → true
- *   sonIguales("POLLO", " pollo ")                → true
- *   sonIguales("Arroz", "Arroz Blanco")           → false
+ *   sonIguales("Habichuelas", "  habichuelas  ")  → true
+ *   sonIguales("Café", "cafe")                    → true
+ *   sonIguales("Arroz", "Maíz")                   → false
+ *   sonIguales("", "Arroz")                       → false
  */
-export function sonIguales(textoA, textoB) {
-  if (!textoA || !textoB) return false
-  return normalizarNombre(textoA).toLowerCase() === normalizarNombre(textoB).toLowerCase()
-}
+export function sonIguales(nombre1, nombre2) {
+  if (!nombre1 || !nombre2) return false
 
-/**
- * Busca nombres similares en una lista.
- * Devuelve el array de items cuyos nombres son IGUALES (ignorando mayúsculas/espacios).
- */
-export function encontrarSimilares(textoBuscar, lista, campoNombre = 'nombre') {
-  if (!textoBuscar || !lista) return []
-  const normalizado = normalizarNombre(textoBuscar).toLowerCase()
-  return lista.filter(item => 
-    normalizarNombre(item[campoNombre] || '').toLowerCase() === normalizado
-  )
+  const norm1 = quitarAcentos(normalizarNombre(nombre1)).toLowerCase()
+  const norm2 = quitarAcentos(normalizarNombre(nombre2)).toLowerCase()
+
+  if (!norm1 || !norm2) return false
+
+  return norm1 === norm2
 }

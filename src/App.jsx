@@ -24,6 +24,7 @@ import VistaProveedores from './components/proveedores/VistaProveedores'
 import VistaCompras from './components/compras/VistaCompras'
 import VistaIngredientes from './components/ingredientes/VistaIngredientes'
 import VistaGastos from './components/gastos/VistaGastos'
+import VistaCatalogoRecetas from './components/catalogo/VistaCatalogoRecetas'
 
 function App() {
   const [pasoActual, setPasoActual] = useState(1)
@@ -168,6 +169,7 @@ function App() {
           onIrCompras={() => setVistaActual('compras')}
           onIrIngredientes={() => setVistaActual('ingredientes')}
           onIrGastos={() => setVistaActual('gastos')}
+          onIrCatalogo={() => setVistaActual('catalogo_recetas')}
         />
       )
     }
@@ -222,6 +224,7 @@ function App() {
               ? () => setVistaActual('vista_secretaria_admin')
               : null
           }
+          onIrCatalogo={() => setVistaActual('catalogo_recetas')}
         />
       )
     }
@@ -270,6 +273,7 @@ function App() {
             ? () => setVistaActual('vista_secretaria_admin')
             : null
         }
+        onIrCatalogo={() => setVistaActual('catalogo_recetas')}
       />
     )
   }
@@ -324,6 +328,7 @@ function App() {
           onIrCompras={() => setVistaActual('compras')}
           onIrIngredientes={() => setVistaActual('ingredientes')}
           onIrGastos={() => setVistaActual('gastos')}
+          onIrCatalogo={() => setVistaActual('catalogo_recetas')}
           onVolverAlPanel={() => setVistaActual('dashboard')}
           modoAdmin={true}
         />
@@ -405,6 +410,12 @@ function App() {
         <VistaGastos 
           usuario={usuarioLogueado}
           empresaId={empresaActual?.id}
+          onVolver={() => setVistaActual('dashboard')}
+        />
+      )}
+      {pasoActual === 7 && vistaActual === 'catalogo_recetas' && usuarioLogueado && (
+        <VistaCatalogoRecetas 
+          empresa_id={empresaActual?.id}
           onVolver={() => setVistaActual('dashboard')}
         />
       )}
