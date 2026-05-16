@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
+import ModalPesajeCrudo from '../pesaje/ModalPesajeCrudo'
 
 function DashboardDelDia({ 
   usuario, 
@@ -25,6 +26,8 @@ function DashboardDelDia({
   const [procesando, setProcesando] = useState(false)
   const [modalSinClase, setModalSinClase] = useState(null)
   const [razonSinClase, setRazonSinClase] = useState('')
+  const [yaSePesoHoy, setYaSePesoHoy] = useState(false)
+  const [modalPesajeAbierto, setModalPesajeAbierto] = useState(false)
 
   useEffect(() => {
     if (empresaId) cargarDatos()
@@ -48,6 +51,16 @@ function DashboardDelDia({
       .eq('empresa_id', empresaId)
       .eq('fecha', fechaHoy)
     setOperacionesHoy(opsData || [])
+
+    // 🆕 Detectar si ya se pesó hoy
+    const { count } = await supabase
+      .from('movimientos_inventario')
+      .select('id', { count: 'exact', head: true })
+      .eq('empresa_id', empresaId)
+      .eq('fecha', fechaHoy)
+      .eq('origen', 'consumo_operacion')
+
+    setYaSePesoHoy((count || 0) > 0)
 
     setCargando(false)
   }
@@ -133,7 +146,6 @@ function DashboardDelDia({
     setProcesando(false)
   }
 
-  // 🆕 Marcar como lista desde el dashboard
   async function marcarLista(operacion) {
     setProcesando(true)
     const { error } = await supabase
@@ -195,6 +207,13 @@ function DashboardDelDia({
     setProcesando(false)
   }
 
+  // 🆕 Después de aprobar pesaje
+  async function pesajeAprobado() {
+    setModalPesajeAbierto(false)
+    await cargarDatos()
+  }
+
+  // ─── CÁLCULOS PARA UI ────────────────────────────────────
   const totalRacionesHoy = operacionesHoy
     .filter(op => op.estado !== 'sin_clase')
     .reduce((sum, op) => sum + (op.raciones_planificadas || 0), 0)
@@ -214,6 +233,14 @@ function DashboardDelDia({
     return !op
   }).length
 
+  // 🆕 Lógica del botón de pesaje
+  const operacionesPreparando = operacionesHoy.filter(op => 
+    op.estado === 'preparando' || op.estado === 'lista' || op.estado === 'despachando' || op.estado === 'entregada' || op.estado === 'cerrada'
+  )
+  const todasDecididas = escuelasPendientesCount === 0
+  const hayEscuelasIniciadas = operacionesPreparando.length > 0
+  const mostrarBotonPesaje = todasDecididas && hayEscuelasIniciadas && !yaSePesoHoy
+
   if (cargando) {
     return <div className="text-center py-12 text-gray-500">Cargando dashboard...</div>
   }
@@ -223,6 +250,7 @@ function DashboardDelDia({
   return (
     <div className="w-full max-w-5xl">
       
+      {/* Modal Sin Clase */}
       {modalSinClase && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
@@ -264,6 +292,19 @@ function DashboardDelDia({
         </div>
       )}
 
+      {/* 🆕 Modal de Pesaje Crudo */}
+      {modalPesajeAbierto && (
+        <ModalPesajeCrudo
+          empresaId={empresaId}
+          usuario={usuario}
+          operacionesPreparando={operacionesPreparando}
+          escuelas={escuelas}
+          onCerrar={() => setModalPesajeAbierto(false)}
+          onAprobado={pesajeAprobado}
+        />
+      )}
+
+      {/* Header con botones de navegación */}
       <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl p-6 mb-6 text-white">
         <div className="flex justify-between items-start mb-4">
           <div>
@@ -346,6 +387,7 @@ function DashboardDelDia({
         </div>
       </div>
 
+      {/* Operaciones de hoy */}
       <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
         <p className="text-xs text-gray-500 font-semibold tracking-wider mb-4">
           📅 OPERACIONES DE HOY
@@ -368,6 +410,7 @@ function DashboardDelDia({
         </div>
       </div>
 
+      {/* Iniciar día completo (solo si hay escuelas pendientes) */}
       {escuelasPendientesCount > 0 && (
         <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl shadow-xl p-6 mb-6 text-white">
           <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -391,6 +434,44 @@ function DashboardDelDia({
         </div>
       )}
 
+      {/* 🆕 Iniciar Pesaje (cuando todas decididas + no pesado) */}
+      {mostrarBotonPesaje && (
+        <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl shadow-xl p-6 mb-6 text-white">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <p className="text-amber-100 text-xs font-semibold tracking-wider">SIGUIENTE PASO</p>
+              <h3 className="text-2xl font-bold mt-1">
+                🥘 Iniciar Pesaje
+              </h3>
+              <p className="text-amber-100 text-sm mt-1">
+                {operacionesPreparando.length} escuela(s) · {totalRacionesHoy.toLocaleString()} raciones · Pesa todos los ingredientes crudos
+              </p>
+            </div>
+            <button
+              onClick={() => setModalPesajeAbierto(true)}
+              disabled={procesando}
+              className="bg-white hover:bg-amber-50 text-orange-700 font-bold px-6 py-3 rounded-xl shadow-lg disabled:opacity-50 whitespace-nowrap"
+            >
+              🥘 Pesar ingredientes
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 🆕 Banner: pesaje ya aprobado */}
+      {yaSePesoHoy && hayEscuelasIniciadas && (
+        <div className="bg-gradient-to-br from-emerald-500 to-green-600 rounded-2xl shadow-md p-4 mb-6 text-white">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">✅</span>
+            <div>
+              <p className="font-bold">Pesaje crudo aprobado</p>
+              <p className="text-emerald-100 text-sm">Ingredientes ya descontados del inventario · {totalRacionesHoy.toLocaleString()} raciones</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Escuelas del día */}
       {escuelas.length > 0 && (
         <div className="bg-white rounded-2xl shadow-xl p-6">
           <p className="text-xs text-gray-500 font-semibold tracking-wider mb-4">
@@ -443,7 +524,6 @@ function DashboardDelDia({
                         </span>
                       )}
 
-                      {/* Botones según estado */}
                       {!op && (
                         <>
                           <button
