@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import ModalPesajeCrudo from '../pesaje/ModalPesajeCrudo'
+import ModalPesajeCocido from '../pesaje/ModalPesajeCocido'
 
 function DashboardDelDia({ 
   usuario, 
@@ -27,7 +28,9 @@ function DashboardDelDia({
   const [modalSinClase, setModalSinClase] = useState(null)
   const [razonSinClase, setRazonSinClase] = useState('')
   const [yaSePesoHoy, setYaSePesoHoy] = useState(false)
+  const [yaSePesoCocidoHoy, setYaSePesoCocidoHoy] = useState(false)
   const [modalPesajeAbierto, setModalPesajeAbierto] = useState(false)
+  const [modalPesajeCocidoAbierto, setModalPesajeCocidoAbierto] = useState(false)
 
   useEffect(() => {
     if (empresaId) cargarDatos()
@@ -52,15 +55,22 @@ function DashboardDelDia({
       .eq('fecha', fechaHoy)
     setOperacionesHoy(opsData || [])
 
-    // 🆕 Detectar si ya se pesó hoy
-    const { count } = await supabase
+    // Detectar si ya se pesó crudo hoy
+    const { count: countCrudo } = await supabase
       .from('movimientos_inventario')
       .select('id', { count: 'exact', head: true })
       .eq('empresa_id', empresaId)
       .eq('fecha', fechaHoy)
       .eq('origen', 'consumo_operacion')
+    setYaSePesoHoy((countCrudo || 0) > 0)
 
-    setYaSePesoHoy((count || 0) > 0)
+    // 🆕 Detectar si ya se pesó cocido hoy
+    const { count: countCocido } = await supabase
+      .from('pesajes_cocido')
+      .select('id', { count: 'exact', head: true })
+      .eq('empresa_id', empresaId)
+      .eq('fecha', fechaHoy)
+    setYaSePesoCocidoHoy((countCocido || 0) > 0)
 
     setCargando(false)
   }
@@ -207,9 +217,14 @@ function DashboardDelDia({
     setProcesando(false)
   }
 
-  // 🆕 Después de aprobar pesaje
   async function pesajeAprobado() {
     setModalPesajeAbierto(false)
+    await cargarDatos()
+  }
+
+  // 🆕 Después de aprobar pesaje cocido
+  async function pesajeCocidoAprobado() {
+    setModalPesajeCocidoAbierto(false)
     await cargarDatos()
   }
 
@@ -233,13 +248,14 @@ function DashboardDelDia({
     return !op
   }).length
 
-  // 🆕 Lógica del botón de pesaje
   const operacionesPreparando = operacionesHoy.filter(op => 
     op.estado === 'preparando' || op.estado === 'lista' || op.estado === 'despachando' || op.estado === 'entregada' || op.estado === 'cerrada'
   )
   const todasDecididas = escuelasPendientesCount === 0
   const hayEscuelasIniciadas = operacionesPreparando.length > 0
   const mostrarBotonPesaje = todasDecididas && hayEscuelasIniciadas && !yaSePesoHoy
+  // 🆕 El botón de cocido aparece DESPUÉS del crudo y ANTES de tener cocido
+  const mostrarBotonPesajeCocido = yaSePesoHoy && !yaSePesoCocidoHoy
 
   if (cargando) {
     return <div className="text-center py-12 text-gray-500">Cargando dashboard...</div>
@@ -292,7 +308,7 @@ function DashboardDelDia({
         </div>
       )}
 
-      {/* 🆕 Modal de Pesaje Crudo */}
+      {/* Modal de Pesaje Crudo */}
       {modalPesajeAbierto && (
         <ModalPesajeCrudo
           empresaId={empresaId}
@@ -301,6 +317,16 @@ function DashboardDelDia({
           escuelas={escuelas}
           onCerrar={() => setModalPesajeAbierto(false)}
           onAprobado={pesajeAprobado}
+        />
+      )}
+
+      {/* 🆕 Modal de Pesaje Cocido */}
+      {modalPesajeCocidoAbierto && (
+        <ModalPesajeCocido
+          empresaId={empresaId}
+          usuario={usuario}
+          onCerrar={() => setModalPesajeCocidoAbierto(false)}
+          onAprobado={pesajeCocidoAprobado}
         />
       )}
 
@@ -434,7 +460,7 @@ function DashboardDelDia({
         </div>
       )}
 
-      {/* 🆕 Iniciar Pesaje (cuando todas decididas + no pesado) */}
+      {/* Iniciar Pesaje Crudo (cuando todas decididas + no pesado) */}
       {mostrarBotonPesaje && (
         <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl shadow-xl p-6 mb-6 text-white">
           <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -458,7 +484,7 @@ function DashboardDelDia({
         </div>
       )}
 
-      {/* 🆕 Banner: pesaje ya aprobado */}
+      {/* Banner: pesaje crudo ya aprobado */}
       {yaSePesoHoy && hayEscuelasIniciadas && (
         <div className="bg-gradient-to-br from-emerald-500 to-green-600 rounded-2xl shadow-md p-4 mb-6 text-white">
           <div className="flex items-center gap-3">
@@ -466,6 +492,43 @@ function DashboardDelDia({
             <div>
               <p className="font-bold">Pesaje crudo aprobado</p>
               <p className="text-emerald-100 text-sm">Ingredientes ya descontados del inventario · {totalRacionesHoy.toLocaleString()} raciones</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🆕 Iniciar Pesaje Cocido (después del crudo) */}
+      {mostrarBotonPesajeCocido && (
+        <div className="bg-gradient-to-br from-rose-500 to-pink-600 rounded-2xl shadow-xl p-6 mb-6 text-white">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <p className="text-rose-100 text-xs font-semibold tracking-wider">DESPUÉS DE COCINAR</p>
+              <h3 className="text-2xl font-bold mt-1">
+                🍲 Pesaje Cocido
+              </h3>
+              <p className="text-rose-100 text-sm mt-1">
+                Pesa lo cocinado o acepta sugerencias · Opcional pero recomendado
+              </p>
+            </div>
+            <button
+              onClick={() => setModalPesajeCocidoAbierto(true)}
+              disabled={procesando}
+              className="bg-white hover:bg-rose-50 text-pink-700 font-bold px-6 py-3 rounded-xl shadow-lg disabled:opacity-50 whitespace-nowrap"
+            >
+              🍲 Pesar cocido
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 🆕 Banner: pesaje cocido ya aprobado */}
+      {yaSePesoCocidoHoy && (
+        <div className="bg-gradient-to-br from-pink-500 to-rose-600 rounded-2xl shadow-md p-4 mb-6 text-white">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">🍲</span>
+            <div>
+              <p className="font-bold">Pesaje cocido registrado</p>
+              <p className="text-rose-100 text-sm">Datos guardados para alimentar la inteligencia</p>
             </div>
           </div>
         </div>
