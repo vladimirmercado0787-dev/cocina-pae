@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import ModalPesajeCrudo from '../pesaje/ModalPesajeCrudo'
 import ModalPesajeCocido from '../pesaje/ModalPesajeCocido'
+import ModalPesajeSobrante from '../pesaje/ModalPesajeSobrante'
 
 function DashboardDelDia({ 
   usuario, 
@@ -29,8 +30,10 @@ function DashboardDelDia({
   const [razonSinClase, setRazonSinClase] = useState('')
   const [yaSePesoHoy, setYaSePesoHoy] = useState(false)
   const [yaSePesoCocidoHoy, setYaSePesoCocidoHoy] = useState(false)
+  const [yaSePesoSobranteHoy, setYaSePesoSobranteHoy] = useState(false)
   const [modalPesajeAbierto, setModalPesajeAbierto] = useState(false)
   const [modalPesajeCocidoAbierto, setModalPesajeCocidoAbierto] = useState(false)
+  const [modalPesajeSobranteAbierto, setModalPesajeSobranteAbierto] = useState(false)
 
   useEffect(() => {
     if (empresaId) cargarDatos()
@@ -64,13 +67,22 @@ function DashboardDelDia({
       .eq('origen', 'consumo_operacion')
     setYaSePesoHoy((countCrudo || 0) > 0)
 
-    // 🆕 Detectar si ya se pesó cocido hoy
+    // Detectar si ya se pesó cocido hoy
     const { count: countCocido } = await supabase
       .from('pesajes_cocido')
       .select('id', { count: 'exact', head: true })
       .eq('empresa_id', empresaId)
       .eq('fecha', fechaHoy)
     setYaSePesoCocidoHoy((countCocido || 0) > 0)
+
+    // Detectar si ya se pesó sobrante hoy
+    const { count: countSobrante } = await supabase
+      .from('pesajes_cocido')
+      .select('id', { count: 'exact', head: true })
+      .eq('empresa_id', empresaId)
+      .eq('fecha', fechaHoy)
+      .not('peso_sobrante_lb', 'is', null)
+    setYaSePesoSobranteHoy((countSobrante || 0) > 0)
 
     setCargando(false)
   }
@@ -222,9 +234,13 @@ function DashboardDelDia({
     await cargarDatos()
   }
 
-  // 🆕 Después de aprobar pesaje cocido
   async function pesajeCocidoAprobado() {
     setModalPesajeCocidoAbierto(false)
+    await cargarDatos()
+  }
+
+  async function pesajeSobranteAprobado() {
+    setModalPesajeSobranteAbierto(false)
     await cargarDatos()
   }
 
@@ -254,8 +270,18 @@ function DashboardDelDia({
   const todasDecididas = escuelasPendientesCount === 0
   const hayEscuelasIniciadas = operacionesPreparando.length > 0
   const mostrarBotonPesaje = todasDecididas && hayEscuelasIniciadas && !yaSePesoHoy
-  // 🆕 El botón de cocido aparece DESPUÉS del crudo y ANTES de tener cocido
   const mostrarBotonPesajeCocido = yaSePesoHoy && !yaSePesoCocidoHoy
+
+  // 🆕 LÓGICA DE DESPACHO/ENTREGA
+  const escuelasEntregadas = operacionesHoy.filter(op => 
+    op.estado === 'entregada' || op.estado === 'cerrada'
+  ).length
+  const escuelasEnCamino = operacionesHoy.filter(op => op.estado === 'despachando').length
+  const escuelasOperativas = escuelas.length - operacionesHoy.filter(op => op.estado === 'sin_clase').length
+  const todasEntregadas = escuelasOperativas > 0 && escuelasEntregadas >= escuelasOperativas
+  const mostrarBotonDespacho = yaSePesoCocidoHoy && !todasEntregadas
+  // 🆕 Sobrante AHORA aparece solo después de entregar TODAS las escuelas
+  const mostrarBotonPesajeSobrante = todasEntregadas && !yaSePesoSobranteHoy
 
   if (cargando) {
     return <div className="text-center py-12 text-gray-500">Cargando dashboard...</div>
@@ -320,13 +346,23 @@ function DashboardDelDia({
         />
       )}
 
-      {/* 🆕 Modal de Pesaje Cocido */}
+      {/* Modal de Pesaje Cocido */}
       {modalPesajeCocidoAbierto && (
         <ModalPesajeCocido
           empresaId={empresaId}
           usuario={usuario}
           onCerrar={() => setModalPesajeCocidoAbierto(false)}
           onAprobado={pesajeCocidoAprobado}
+        />
+      )}
+
+      {/* Modal de Pesaje Sobrante */}
+      {modalPesajeSobranteAbierto && (
+        <ModalPesajeSobrante
+          empresaId={empresaId}
+          usuario={usuario}
+          onCerrar={() => setModalPesajeSobranteAbierto(false)}
+          onAprobado={pesajeSobranteAprobado}
         />
       )}
 
@@ -436,7 +472,7 @@ function DashboardDelDia({
         </div>
       </div>
 
-      {/* Iniciar día completo (solo si hay escuelas pendientes) */}
+      {/* Iniciar día completo (si hay escuelas pendientes) */}
       {escuelasPendientesCount > 0 && (
         <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl shadow-xl p-6 mb-6 text-white">
           <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -460,7 +496,7 @@ function DashboardDelDia({
         </div>
       )}
 
-      {/* Iniciar Pesaje Crudo (cuando todas decididas + no pesado) */}
+      {/* Iniciar Pesaje Crudo */}
       {mostrarBotonPesaje && (
         <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl shadow-xl p-6 mb-6 text-white">
           <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -484,7 +520,7 @@ function DashboardDelDia({
         </div>
       )}
 
-      {/* Banner: pesaje crudo ya aprobado */}
+      {/* Banner: pesaje crudo aprobado */}
       {yaSePesoHoy && hayEscuelasIniciadas && (
         <div className="bg-gradient-to-br from-emerald-500 to-green-600 rounded-2xl shadow-md p-4 mb-6 text-white">
           <div className="flex items-center gap-3">
@@ -497,7 +533,7 @@ function DashboardDelDia({
         </div>
       )}
 
-      {/* 🆕 Iniciar Pesaje Cocido (después del crudo) */}
+      {/* Iniciar Pesaje Cocido */}
       {mostrarBotonPesajeCocido && (
         <div className="bg-gradient-to-br from-rose-500 to-pink-600 rounded-2xl shadow-xl p-6 mb-6 text-white">
           <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -521,7 +557,7 @@ function DashboardDelDia({
         </div>
       )}
 
-      {/* 🆕 Banner: pesaje cocido ya aprobado */}
+      {/* Banner: pesaje cocido aprobado */}
       {yaSePesoCocidoHoy && (
         <div className="bg-gradient-to-br from-pink-500 to-rose-600 rounded-2xl shadow-md p-4 mb-6 text-white">
           <div className="flex items-center gap-3">
@@ -529,6 +565,82 @@ function DashboardDelDia({
             <div>
               <p className="font-bold">Pesaje cocido registrado</p>
               <p className="text-rose-100 text-sm">Datos guardados para alimentar la inteligencia</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🆕 Despachar y Entregar (después del cocido, antes del sobrante) */}
+      {mostrarBotonDespacho && (
+        <div className="bg-gradient-to-br from-orange-500 to-red-600 rounded-2xl shadow-xl p-6 mb-6 text-white">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <p className="text-orange-100 text-xs font-semibold tracking-wider">SIGUIENTE PASO</p>
+              <h3 className="text-2xl font-bold mt-1">
+                🚚 Despachar y Entregar
+              </h3>
+              <p className="text-orange-100 text-sm mt-1">
+                {escuelasEntregadas} de {escuelasOperativas} entregadas
+                {escuelasEnCamino > 0 && ` · ${escuelasEnCamino} en camino`}
+                {' '}· Falta firmar conduces de los directores
+              </p>
+            </div>
+            <button
+              onClick={onIrDespacho}
+              disabled={procesando}
+              className="bg-white hover:bg-orange-50 text-red-700 font-bold px-6 py-3 rounded-xl shadow-lg disabled:opacity-50 whitespace-nowrap"
+            >
+              🚚 Ir a Modo Despacho
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 🆕 Banner: todas las escuelas entregadas y firmadas */}
+      {yaSePesoCocidoHoy && todasEntregadas && !yaSePesoSobranteHoy && (
+        <div className="bg-gradient-to-br from-orange-400 to-red-500 rounded-2xl shadow-md p-4 mb-6 text-white">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">✅</span>
+            <div>
+              <p className="font-bold">Todas las escuelas entregadas y firmadas</p>
+              <p className="text-orange-100 text-sm">{escuelasEntregadas} conduce(s) firmado(s) por los directores</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Iniciar Pesaje Sobrante (solo después de entregar todas) */}
+      {mostrarBotonPesajeSobrante && (
+        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-xl p-6 mb-6 text-white">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <p className="text-indigo-100 text-xs font-semibold tracking-wider">CIERRE DEL CICLO</p>
+              <h3 className="text-2xl font-bold mt-1">
+                🍱 Pesaje Sobrante
+              </h3>
+              <p className="text-indigo-100 text-sm mt-1">
+                Pesa lo que regresó de las escuelas · Por defecto asume 0 (no sobró)
+              </p>
+            </div>
+            <button
+              onClick={() => setModalPesajeSobranteAbierto(true)}
+              disabled={procesando}
+              className="bg-white hover:bg-indigo-50 text-purple-700 font-bold px-6 py-3 rounded-xl shadow-lg disabled:opacity-50 whitespace-nowrap"
+            >
+              🍱 Pesar sobrante
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Banner: pesaje sobrante registrado */}
+      {yaSePesoSobranteHoy && (
+        <div className="bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl shadow-md p-4 mb-6 text-white">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">🍱</span>
+            <div>
+              <p className="font-bold">Pesaje sobrante registrado · Ciclo completo</p>
+              <p className="text-indigo-100 text-sm">Inteligencia alimentada · Las sugerencias futuras serán más precisas</p>
             </div>
           </div>
         </div>

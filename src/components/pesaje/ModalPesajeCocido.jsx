@@ -1,13 +1,6 @@
 // src/components/pesaje/ModalPesajeCocido.jsx
-// Modal de Pesaje Cocido — Cocina PAE
-// Decisión 16-may-2026
-//
-// Flujo:
-// 1. Busca los pesajes crudos de hoy (movimientos_inventario con origen='consumo_operacion')
-// 2. Por cada ingrediente sugiere: peso_crudo × factor_rendimiento = peso_cocido_sugerido
-// 3. Doña Elba puede pesar REAL o aceptar la sugerencia (asume)
-// 4. Al aprobar: inserta N filas en pesajes_cocido (1 por ingrediente)
-//    fue_pesado_real = true si pesó, false si asumió
+// Modal de Pesaje COCIDO — Cocina PAE
+// Refactor 16-may-2026: ahora trabaja con COMPONENTES (platos), no ingredientes individuales
 
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
@@ -18,117 +11,198 @@ export default function ModalPesajeCocido({
   onCerrar, 
   onAprobado 
 }) {
-  const [ingredientes, setIngredientes] = useState([])
+  const [componentes, setComponentes] = useState([])
+  const [recetaInfo, setRecetaInfo] = useState(null)
+  const [racionesHoy, setRacionesHoy] = useState(0)
   const [cargando, setCargando] = useState(true)
   const [procesando, setProcesando] = useState(false)
   const [error, setError] = useState(null)
   const [notasGenerales, setNotasGenerales] = useState('')
 
-  // ─── Cargar pesajes crudos de hoy ──────────────────────────
   useEffect(() => {
-    cargarPesajesCrudo()
+    cargarDatos()
   }, [])
 
-  async function cargarPesajesCrudo() {
+  async function cargarDatos() {
     try {
       setCargando(true)
       setError(null)
 
       const fechaHoy = new Date().toISOString().split('T')[0]
 
-      // 1. Buscar todos los movimientos de hoy (crudo)
-      const { data: movimientos, error: errMov } = await supabase
-        .from('movimientos_inventario')
-        .select(`
-          id,
-          ingrediente_id,
-          cantidad,
-          unidad,
-          ingredientes (
-            id,
-            nombre,
-            categoria,
-            factor_rendimiento
-          )
-        `)
+      // 1. Calcular raciones totales del día
+      const { data: operaciones, error: errOps } = await supabase
+        .from('operaciones_dia')
+        .select('raciones_planificadas, estado')
         .eq('empresa_id', empresaId)
         .eq('fecha', fechaHoy)
-        .eq('origen', 'consumo_operacion')
-        .order('created_at', { ascending: true })
 
-      if (errMov) throw errMov
-      if (!movimientos || movimientos.length === 0) {
-        throw new Error('No hay pesajes crudos registrados hoy. Primero pesa los ingredientes crudos.')
+      if (errOps) throw errOps
+      
+      const totalRaciones = (operaciones || [])
+        .filter(op => op.estado !== 'sin_clase')
+        .reduce((sum, op) => sum + (op.raciones_planificadas || 0), 0)
+
+      if (totalRaciones === 0) {
+        throw new Error('No hay raciones planificadas hoy. Inicia primero las escuelas.')
       }
 
-      // 2. Construir lista de ingredientes con sugerencias
-      const lista = movimientos.map(mov => {
-        const ing = mov.ingredientes
-        const pesoCrudo = Number(mov.cantidad)
-        const factor = Number(ing.factor_rendimiento || 1)
-        const sugerencia = pesoCrudo * factor
+      setRacionesHoy(totalRaciones)
+
+      // 2. Detectar receta del día por el día de la semana
+      const diasSemana = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado']
+      const diaSemanaHoy = diasSemana[new Date().getDay()]
+
+      let receta = null
+      
+      const { data: recetaData } = await supabase
+        .from('recetas')
+        .select('id, nombre, dia_semana')
+        .eq('empresa_id', empresaId)
+        .eq('dia_semana', diaSemanaHoy)
+        .eq('activa', true)
+        .maybeSingle()
+
+      if (recetaData) {
+        receta = recetaData
+      } else {
+        // Fallback: cualquier receta activa
+        const { data: cualquierReceta } = await supabase
+          .from('recetas')
+          .select('id, nombre, dia_semana')
+          .eq('empresa_id', empresaId)
+          .eq('activa', true)
+          .limit(1)
+          .maybeSingle()
+        if (cualquierReceta) receta = cualquierReceta
+      }
+
+      if (!receta) {
+        throw new Error('No se encontró ninguna receta activa para esta empresa.')
+      }
+
+      setRecetaInfo(receta)
+
+      // 3. Cargar componentes de la receta con sus ingredientes
+      const { data: componentesData, error: errComp } = await supabase
+        .from('componentes_receta')
+        .select(`
+          id,
+          nombre,
+          emoji,
+          orden,
+          unidad,
+          factor_ajuste,
+          componentes_ingredientes (
+            ingrediente_id,
+            ingredientes (
+              id,
+              nombre,
+              factor_rendimiento
+            )
+          )
+        `)
+        .eq('receta_id', receta.id)
+        .order('orden', { ascending: true })
+
+      if (errComp) throw errComp
+      if (!componentesData || componentesData.length === 0) {
+        throw new Error(`La receta "${receta.nombre}" no tiene componentes definidos.`)
+      }
+
+      // 4. Cargar cantidades crudas por ración
+      const { data: cantidadesCrudo, error: errCant } = await supabase
+        .from('recetas_ingredientes')
+        .select('ingrediente_id, cantidad_crudo_por_racion')
+        .eq('receta_id', receta.id)
+
+      if (errCant) throw errCant
+
+      const mapaCrudo = {}
+      ;(cantidadesCrudo || []).forEach(c => {
+        mapaCrudo[c.ingrediente_id] = Number(c.cantidad_crudo_por_racion) || 0
+      })
+
+      // 5. Calcular sugerencias por componente
+      const lista = componentesData.map(comp => {
+        const ingredientes = (comp.componentes_ingredientes || [])
+          .map(ci => ci.ingredientes)
+          .filter(Boolean)
+        
+        let pesoCrudoTotal = 0
+        let pesoCocidoSugerido = 0
+
+        ingredientes.forEach(ing => {
+          const cantidadCrudoPorRacion = mapaCrudo[ing.id] || 0
+          const factorRendimiento = Number(ing.factor_rendimiento) || 1
+          const pesoCrudoIngrediente = cantidadCrudoPorRacion * totalRaciones
+          const pesoCocidoIngrediente = pesoCrudoIngrediente * factorRendimiento
+
+          pesoCrudoTotal += pesoCrudoIngrediente
+          pesoCocidoSugerido += pesoCocidoIngrediente
+        })
+
+        const factorAjuste = Number(comp.factor_ajuste) || 1
+        pesoCocidoSugerido *= factorAjuste
 
         return {
-          ingrediente_id: ing.id,
-          nombre: ing.nombre,
-          categoria: ing.categoria,
-          unidad: mov.unidad,
-          peso_crudo: pesoCrudo,
-          factor_rendimiento: factor,
-          peso_cocido_sugerido: sugerencia,
-          peso_cocido_real: sugerencia, // editable, default = sugerencia
-          fue_pesado_real: false, // se marca true si Doña Elba lo edita
-          notas: ''
+          componente_id: comp.id,
+          nombre: comp.nombre,
+          emoji: comp.emoji,
+          unidad: comp.unidad,
+          factor_ajuste: factorAjuste,
+          ingredientes_nombres: ingredientes.map(i => i.nombre),
+          peso_crudo_total: pesoCrudoTotal,
+          peso_cocido_sugerido: pesoCocidoSugerido,
+          peso_cocido_real: pesoCocidoSugerido,
+          fue_pesado_real: false,
         }
       })
 
-      setIngredientes(lista)
+      setComponentes(lista)
     } catch (err) {
-      console.error('Error cargando pesajes crudos:', err)
+      console.error('Error cargando componentes cocido:', err)
       setError(err.message)
     } finally {
       setCargando(false)
     }
   }
 
-  function editarCantidad(ingrediente_id, valorNuevo) {
+  function editarPeso(componente_id, valorNuevo) {
     const valor = parseFloat(valorNuevo) || 0
-    setIngredientes(prev => prev.map(ing => 
-      ing.ingrediente_id === ingrediente_id
+    setComponentes(prev => prev.map(c => 
+      c.componente_id === componente_id
         ? { 
-            ...ing, 
+            ...c, 
             peso_cocido_real: valor,
-            // Si cambió respecto a la sugerencia, marcar como pesado_real
-            fue_pesado_real: Math.abs(valor - ing.peso_cocido_sugerido) > 0.001
+            fue_pesado_real: Math.abs(valor - c.peso_cocido_sugerido) > 0.001
           }
-        : ing
+        : c
     ))
   }
 
-  function aceptarSugerencia(ingrediente_id) {
-    // Marcar explícitamente que esta sugerencia se asumió (no se pesó)
-    setIngredientes(prev => prev.map(ing => 
-      ing.ingrediente_id === ingrediente_id
-        ? { ...ing, peso_cocido_real: ing.peso_cocido_sugerido, fue_pesado_real: false }
-        : ing
+  function aceptarSugerencia(componente_id) {
+    setComponentes(prev => prev.map(c => 
+      c.componente_id === componente_id
+        ? { ...c, peso_cocido_real: c.peso_cocido_sugerido, fue_pesado_real: false }
+        : c
     ))
   }
 
-  // ─── Aprobar pesaje cocido ──────────────────────────────────
   async function aprobarPesajeCocido() {
-    if (ingredientes.length === 0) {
-      alert('No hay ingredientes para registrar')
+    if (componentes.length === 0) {
+      alert('No hay componentes para registrar')
       return
     }
 
-    const pesadosReales = ingredientes.filter(i => i.fue_pesado_real).length
-    const asumidos = ingredientes.length - pesadosReales
+    const pesadosReales = componentes.filter(c => c.fue_pesado_real).length
+    const asumidos = componentes.length - pesadosReales
 
     const confirmar = window.confirm(
       `¿Confirmas el pesaje cocido?\n\n` +
-      `🍲 ${pesadosReales} ingrediente(s) pesados de verdad\n` +
-      `🤖 ${asumidos} ingrediente(s) asumidos por el sistema\n\n` +
-      `Esto se usa para alimentar la inteligencia.`
+      `🍲 ${pesadosReales} plato(s) pesados de verdad\n` +
+      `🤖 ${asumidos} plato(s) asumidos por el sistema\n\n` +
+      `Esto alimenta la inteligencia para futuras sugerencias.`
     )
     if (!confirmar) return
 
@@ -138,16 +212,16 @@ export default function ModalPesajeCocido({
     try {
       const fechaHoy = new Date().toISOString().split('T')[0]
 
-      const registros = ingredientes.map(ing => ({
+      const registros = componentes.map(c => ({
         empresa_id: empresaId,
         fecha: fechaHoy,
-        ingrediente_id: ing.ingrediente_id,
-        peso_crudo_lb: ing.peso_crudo,
-        peso_cocido_sugerido: ing.peso_cocido_sugerido,
-        peso_cocido_real: ing.peso_cocido_real,
-        factor_aplicado: ing.factor_rendimiento,
-        fue_pesado_real: ing.fue_pesado_real,
-        notas: ing.notas || (notasGenerales ? notasGenerales : null),
+        componente_id: c.componente_id,
+        peso_crudo_total: c.peso_crudo_total,
+        peso_cocido_sugerido: c.peso_cocido_sugerido,
+        peso_cocido_real: c.peso_cocido_real,
+        factor_aplicado: c.factor_ajuste,
+        fue_pesado_real: c.fue_pesado_real,
+        notas: notasGenerales || null,
         created_by: usuario.id
       }))
 
@@ -157,7 +231,7 @@ export default function ModalPesajeCocido({
 
       if (errInsert) throw errInsert
 
-      alert(`✅ Pesaje cocido aprobado\n\n${ingredientes.length} ingredientes registrados\n${pesadosReales} pesados, ${asumidos} asumidos`)
+      alert(`✅ Pesaje cocido aprobado\n\n${componentes.length} plato(s) registrados\n${pesadosReales} pesados, ${asumidos} asumidos`)
       if (onAprobado) onAprobado()
     } catch (err) {
       console.error('Error aprobando pesaje cocido:', err)
@@ -167,26 +241,24 @@ export default function ModalPesajeCocido({
     }
   }
 
-  // ─── Cálculos en vivo ────────────────────────────────────────
-  const totalCrudo = ingredientes.reduce((sum, ing) => sum + ing.peso_crudo, 0)
-  const totalCocido = ingredientes.reduce((sum, ing) => sum + ing.peso_cocido_real, 0)
-  const pesadosReales = ingredientes.filter(i => i.fue_pesado_real).length
-  const asumidos = ingredientes.length - pesadosReales
+  // Cálculos en vivo
+  const totalCrudo = componentes.reduce((sum, c) => sum + c.peso_crudo_total, 0)
+  const totalCocido = componentes.reduce((sum, c) => sum + c.peso_cocido_real, 0)
+  const pesadosReales = componentes.filter(c => c.fue_pesado_real).length
+  const asumidos = componentes.length - pesadosReales
 
-  // ─── Render: Loading ─────────────────────────────────────────
   if (cargando) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl p-12 text-center">
           <div className="text-6xl mb-4 animate-pulse">🍲</div>
-          <p className="text-gray-700 font-medium">Cargando pesajes crudos...</p>
+          <p className="text-gray-700 font-medium">Cargando platos del día...</p>
         </div>
       </div>
     )
   }
 
-  // ─── Render: Error ───────────────────────────────────────────
-  if (error && ingredientes.length === 0) {
+  if (error && componentes.length === 0) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl p-6 max-w-md w-full">
@@ -200,7 +272,6 @@ export default function ModalPesajeCocido({
     )
   }
 
-  // ─── Render: Modal completo ──────────────────────────────────
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-start justify-center p-4 overflow-y-auto">
       <div className="bg-white rounded-2xl max-w-4xl w-full my-8 shadow-2xl">
@@ -209,13 +280,13 @@ export default function ModalPesajeCocido({
         <div className="bg-gradient-to-r from-rose-500 to-pink-600 rounded-t-2xl p-6 text-white">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-rose-100 text-xs font-semibold tracking-wider">PESAJE COCIDO</p>
+              <p className="text-rose-100 text-xs font-semibold tracking-wider">PESAJE COCIDO · POR PLATO</p>
               <h2 className="text-2xl font-bold mt-1 flex items-center gap-2">
                 <span className="text-3xl">🍲</span>
                 Después de cocinar
               </h2>
               <p className="text-rose-50 text-sm mt-1">
-                Pesa cada ingrediente cocinado o acepta la sugerencia del sistema
+                {recetaInfo?.nombre} · {racionesHoy.toLocaleString()} raciones
               </p>
             </div>
             <button
@@ -232,70 +303,68 @@ export default function ModalPesajeCocido({
         <div className="bg-blue-50 border-b border-blue-200 p-4">
           <p className="text-xs font-semibold text-blue-800 uppercase mb-1">💡 Cómo funciona</p>
           <p className="text-sm text-gray-700">
-            El sistema sugiere el peso cocido usando el factor de rendimiento de cada ingrediente. 
+            Se pesa cada <strong>plato completo</strong> (no ingredientes sueltos, porque al cocinar se mezclan). 
+            El sistema sugiere el peso usando los factores de rendimiento. 
             Si pesas de verdad → mejor inteligencia futura. Si aceptas la sugerencia → el sistema asume.
           </p>
         </div>
 
-        {/* Lista de ingredientes */}
+        {/* Lista de componentes */}
         <div className="p-6">
           <p className="text-xs font-bold text-gray-700 uppercase mb-4">
-            🥘 Ingredientes pesados crudos ({ingredientes.length})
+            🍽️ Platos del día ({componentes.length})
           </p>
           
-          <div className="space-y-2">
-            {ingredientes.map((ing) => (
+          <div className="space-y-3">
+            {componentes.map((c) => (
               <div
-                key={ing.ingrediente_id}
-                className={`border-2 rounded-xl p-3 ${
-                  ing.fue_pesado_real
+                key={c.componente_id}
+                className={`border-2 rounded-xl p-4 ${
+                  c.fue_pesado_real
                     ? 'border-emerald-300 bg-emerald-50'
                     : 'border-gray-200 bg-white'
                 }`}
               >
-                <div className="flex items-center gap-3">
-                  {/* Nombre y categoría */}
+                <div className="flex items-start gap-3">
+                  
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold text-gray-900 truncate">{ing.nombre}</p>
-                    <p className="text-xs text-gray-500">{ing.categoria}</p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl">{c.emoji}</span>
+                      <p className="font-bold text-gray-900 text-lg">{c.nombre}</p>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      <strong>Ingredientes:</strong> {c.ingredientes_nombres.join(', ')}
+                    </p>
                     <p className="text-xs text-gray-600 mt-1">
-                      Crudo: <strong>{ing.peso_crudo.toFixed(3)} {ing.unidad}</strong>
-                      <span className="text-gray-400"> · Factor: ×{ing.factor_rendimiento.toFixed(2)}</span>
+                      Crudo total: <strong>{c.peso_crudo_total.toFixed(2)} lb</strong>
+                      {' · '}
+                      Sugerencia cocido: <strong>{c.peso_cocido_sugerido.toFixed(2)} {c.unidad}</strong>
                     </p>
                   </div>
 
-                  {/* Sugerencia visual */}
-                  <div className="text-right text-xs">
-                    <p className="text-gray-500">Sugerencia</p>
-                    <p className="font-bold text-gray-700">
-                      {ing.peso_cocido_sugerido.toFixed(3)} {ing.unidad}
-                    </p>
-                  </div>
-
-                  {/* Input editable */}
                   <div className="flex flex-col items-end">
                     <input
                       type="number"
                       min="0"
-                      step="0.001"
-                      value={ing.peso_cocido_real}
-                      onChange={(e) => editarCantidad(ing.ingrediente_id, e.target.value)}
+                      step="0.01"
+                      value={c.peso_cocido_real}
+                      onChange={(e) => editarPeso(c.componente_id, e.target.value)}
                       disabled={procesando}
-                      className={`w-24 px-2 py-1.5 border-2 rounded-lg text-right font-bold ${
-                        ing.fue_pesado_real
-                          ? 'border-emerald-400 text-emerald-900'
+                      className={`w-28 px-2 py-2 border-2 rounded-lg text-right font-bold text-lg ${
+                        c.fue_pesado_real
+                          ? 'border-emerald-400 text-emerald-900 bg-white'
                           : 'border-gray-300'
                       }`}
                     />
-                    <span className="text-xs text-gray-500 mt-0.5">{ing.unidad}</span>
-                    {ing.fue_pesado_real ? (
+                    <span className="text-xs text-gray-500 mt-0.5">{c.unidad}</span>
+                    {c.fue_pesado_real ? (
                       <span className="text-xs text-emerald-700 font-semibold mt-1">
                         ✓ Pesado real
                       </span>
                     ) : (
                       <button
-                        onClick={() => aceptarSugerencia(ing.ingrediente_id)}
-                        className="text-xs text-gray-500 mt-1 italic"
+                        onClick={() => aceptarSugerencia(c.componente_id)}
+                        className="text-xs text-gray-500 mt-1 italic hover:text-gray-700"
                       >
                         Sugerencia asumida
                       </button>
@@ -316,7 +385,7 @@ export default function ModalPesajeCocido({
             type="text"
             value={notasGenerales}
             onChange={(e) => setNotasGenerales(e.target.value)}
-            placeholder="Ej: La carne rindió más de lo esperado..."
+            placeholder="Ej: Las habichuelas rindieron más de lo esperado..."
             disabled={procesando}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
           />
@@ -325,7 +394,6 @@ export default function ModalPesajeCocido({
         {/* Footer: resumen + botones */}
         <div className="bg-gray-50 rounded-b-2xl p-6 border-t border-gray-200">
           
-          {/* Resumen */}
           <div className="grid grid-cols-4 gap-3 mb-4 text-center">
             <div className="bg-white rounded-lg p-3 border border-gray-200">
               <p className="text-xs text-gray-500">Total crudo</p>
@@ -355,7 +423,6 @@ export default function ModalPesajeCocido({
             </div>
           )}
 
-          {/* Botones */}
           <div className="flex gap-3">
             <button
               onClick={onCerrar}
