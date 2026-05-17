@@ -1,15 +1,6 @@
 // src/components/pesaje/ModalPesajeCrudo.jsx
 // Modal de Pesaje Crudo — Cocina PAE
-// Decisión 15-may-2026 (actualizado 16-may para soportar sábado/domingo)
-//
-// Flujo:
-// 1. Carga TODAS las recetas activas
-// 2. Auto-selecciona la del día (si hoy es lunes-viernes)
-// 3. Si no hay receta del día (sábado/domingo) → dropdown manual
-// 4. Permite CAMBIAR de receta en cualquier momento (dropdown arriba)
-// 5. Suma raciones de escuelas en estado 'preparando' o 'lista'
-// 6. Calcula sugerencia de cada ingrediente: cantidad_por_racion × total_raciones
-// 7. Al aprobar: inserta N filas en movimientos_inventario
+// Actualizado 16-may-2026: + Modo Edición (revierte y rehace inventario + borra cocido/sobrante)
 
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
@@ -32,7 +23,8 @@ export default function ModalPesajeCrudo({
   operacionesPreparando,
   escuelas,
   onCerrar, 
-  onAprobado 
+  onAprobado,
+  modoEdicion = false  // 🆕 si es true, precarga movimientos existentes
 }) {
   const [recetasDisponibles, setRecetasDisponibles] = useState([])
   const [recetaSeleccionada, setRecetaSeleccionada] = useState(null)
@@ -50,18 +42,19 @@ export default function ModalPesajeCrudo({
   }, [])
 
   // ─── Recalcular sugerencias cuando cambian raciones o receta ──
+  // (Solo en modo normal — en edición los valores vienen de la BD)
   useEffect(() => {
-    if (recetaSeleccionada && racionesEditables > 0) {
+    if (!modoEdicion && recetaSeleccionada && racionesEditables > 0) {
       construirListaIngredientes(recetaSeleccionada, racionesEditables)
     }
-  }, [racionesEditables, recetaSeleccionada?.id])
+  }, [racionesEditables, recetaSeleccionada?.id, modoEdicion])
 
   async function cargarRecetasYDelDia() {
     try {
       setCargando(true)
       setError(null)
 
-      // 1. Calcular raciones totales
+      // 1. Calcular raciones totales (igual en ambos modos)
       const totalRaciones = operacionesPreparando.reduce((sum, op) => {
         return sum + (op.raciones_planificadas || 0)
       }, 0)
@@ -101,7 +94,6 @@ export default function ModalPesajeCrudo({
         throw new Error('No hay recetas activas configuradas')
       }
 
-      // Ordenar por día de la semana
       const ordenadas = recetasData.sort((a, b) => {
         const idxA = DIAS_SEMANA.indexOf(a.dia_semana)
         const idxB = DIAS_SEMANA.indexOf(b.dia_semana)
@@ -110,16 +102,20 @@ export default function ModalPesajeCrudo({
 
       setRecetasDisponibles(ordenadas)
 
-      // 3. Auto-detectar receta del día (lunes-viernes)
+      // 🆕 SI ES MODO EDICIÓN: precargar desde movimientos_inventario
+      if (modoEdicion) {
+        await precargarDesdeEdicion(ordenadas)
+        return
+      }
+
+      // ─── MODO NORMAL: auto-detectar receta del día ──────────
       const hoy = new Date()
       const diaSemana = DIAS_SEMANA[hoy.getDay()]
       const recetaDelDia = ordenadas.find(r => r.dia_semana === diaSemana)
 
-      // Si hay receta del día, usarla. Si no, dejar null para que elija
       if (recetaDelDia) {
         setRecetaSeleccionada(recetaDelDia)
       } else {
-        // Sábado o domingo → no auto-selecciona, usuario debe elegir
         setRecetaSeleccionada(null)
       }
     } catch (err) {
@@ -128,6 +124,86 @@ export default function ModalPesajeCrudo({
     } finally {
       setCargando(false)
     }
+  }
+
+  // 🆕 Precarga datos en modo edición
+  async function precargarDesdeEdicion(recetasOrdenadas) {
+    const fechaHoy = new Date().toISOString().split('T')[0]
+
+    // 1. Cargar movimientos existentes del día
+    const { data: movimientosExistentes, error: errMov } = await supabase
+      .from('movimientos_inventario')
+      .select(`
+        id,
+        ingrediente_id,
+        cantidad,
+        unidad,
+        precio_unitario,
+        stock_antes,
+        stock_despues,
+        notas,
+        ingredientes (
+          id,
+          nombre,
+          categoria,
+          factor_rendimiento,
+          stock_actual,
+          precio_unitario
+        )
+      `)
+      .eq('empresa_id', empresaId)
+      .eq('fecha', fechaHoy)
+      .eq('origen', 'consumo_operacion')
+
+    if (errMov) throw errMov
+    if (!movimientosExistentes || movimientosExistentes.length === 0) {
+      throw new Error('No hay pesaje crudo previo para editar')
+    }
+
+    // 2. Extraer la receta del campo notas (formato: "Pesaje crudo · NOMBRE · X raciones")
+    const primerNota = movimientosExistentes[0].notas || ''
+    const matchReceta = primerNota.match(/Pesaje crudo · (.+?) · \d+ raciones/)
+    const nombreReceta = matchReceta ? matchReceta[1].trim() : null
+
+    // 3. Buscar la receta por nombre
+    let recetaEncontrada = null
+    if (nombreReceta) {
+      recetaEncontrada = recetasOrdenadas.find(r => r.nombre === nombreReceta)
+    }
+    if (!recetaEncontrada) {
+      // Fallback: primera receta activa
+      recetaEncontrada = recetasOrdenadas[0]
+    }
+
+    setRecetaSeleccionada(recetaEncontrada)
+
+    // 4. Extraer notas del usuario (lo que está después del último "· ")
+    const matchNotas = primerNota.match(/Pesaje crudo · .+? · \d+ raciones · (.+)$/)
+    if (matchNotas) {
+      setNotas(matchNotas[1].trim())
+    }
+
+    // 5. Construir lista de ingredientes precargados con valores actuales
+    const lista = movimientosExistentes.map(mov => {
+      const ing = mov.ingredientes
+      return {
+        ingrediente_id: ing.id,
+        nombre: ing.nombre,
+        categoria: ing.categoria,
+        unidad: mov.unidad || 'lb',
+        cantidad_por_racion: 0, // no aplica en edición
+        cantidad_sugerida: Number(mov.cantidad), // la sugerencia es lo que ya estaba
+        cantidad_real: Number(mov.cantidad),
+        stock_actual: Number(ing.stock_actual || 0),
+        precio_unitario: Number(mov.precio_unitario || 0),
+        factor_rendimiento: Number(ing.factor_rendimiento || 1),
+        notas: '',
+        movimiento_id: mov.id,           // 🆕 guardar id para revertir
+        cantidad_original: Number(mov.cantidad)  // 🆕 cuánto se sacó originalmente
+      }
+    })
+
+    setIngredientes(lista)
   }
 
   function construirListaIngredientes(receta, raciones) {
@@ -152,6 +228,10 @@ export default function ModalPesajeCrudo({
   }
 
   function cambiarReceta(recetaId) {
+    if (modoEdicion) {
+      alert('No se puede cambiar la receta en modo edición. Si quieres cambiar la receta, debes empezar de nuevo.')
+      return
+    }
     const nueva = recetasDisponibles.find(r => r.id === recetaId)
     if (nueva) setRecetaSeleccionada(nueva)
   }
@@ -173,6 +253,29 @@ export default function ModalPesajeCrudo({
     ))
   }
 
+  // ─── Verificar si hay cocido o sobrante para advertir antes de editar
+  async function tieneCocidoOSobrante() {
+    const fechaHoy = new Date().toISOString().split('T')[0]
+    
+    const { count: countCocido } = await supabase
+      .from('pesajes_cocido')
+      .select('id', { count: 'exact', head: true })
+      .eq('empresa_id', empresaId)
+      .eq('fecha', fechaHoy)
+
+    const { count: countSobrante } = await supabase
+      .from('pesajes_cocido')
+      .select('id', { count: 'exact', head: true })
+      .eq('empresa_id', empresaId)
+      .eq('fecha', fechaHoy)
+      .not('peso_sobrante_lb', 'is', null)
+
+    return {
+      hayCocido: (countCocido || 0) > 0,
+      haySobrante: (countSobrante || 0) > 0
+    }
+  }
+
   async function aprobarPesaje() {
     if (!recetaSeleccionada) {
       alert('Selecciona una receta antes de aprobar')
@@ -189,20 +292,50 @@ export default function ModalPesajeCrudo({
       return
     }
 
-    const confirmar = window.confirm(
-      `¿Confirmas el pesaje?\n\n` +
-      `🍽️ Receta: ${recetaSeleccionada.nombre}\n` +
-      `📊 ${racionesEditables.toLocaleString()} raciones\n` +
-      `🥘 ${ingredientesAGuardar.length} ingredientes a sacar del inventario\n\n` +
-      `Esta acción NO se puede deshacer fácilmente.`
-    )
-    if (!confirmar) return
+    // 🆕 MODO EDICIÓN: advertir si hay cocido/sobrante
+    if (modoEdicion) {
+      const { hayCocido, haySobrante } = await tieneCocidoOSobrante()
+      
+      let mensajeAdvertencia = `⚠️ ESTÁS EDITANDO EL PESAJE CRUDO\n\n`
+      mensajeAdvertencia += `Esto va a:\n`
+      mensajeAdvertencia += `✅ Revertir el inventario actual (devolver las cantidades viejas)\n`
+      mensajeAdvertencia += `✅ Descontar las cantidades nuevas del inventario\n`
+      
+      if (hayCocido || haySobrante) {
+        mensajeAdvertencia += `\n🚨 ATENCIÓN:\n`
+        if (hayCocido) mensajeAdvertencia += `❌ Se borrará el pesaje COCIDO de hoy\n`
+        if (haySobrante) mensajeAdvertencia += `❌ Se borrará el pesaje SOBRANTE de hoy\n`
+        mensajeAdvertencia += `\nTendrás que volver a hacer esos pesajes después.\n`
+      }
+      
+      mensajeAdvertencia += `\n¿Continuar?`
+      
+      const confirmar = window.confirm(mensajeAdvertencia)
+      if (!confirmar) return
+    } else {
+      // Modo normal: confirmación simple
+      const confirmar = window.confirm(
+        `¿Confirmas el pesaje?\n\n` +
+        `🍽️ Receta: ${recetaSeleccionada.nombre}\n` +
+        `📊 ${racionesEditables.toLocaleString()} raciones\n` +
+        `🥘 ${ingredientesAGuardar.length} ingredientes a sacar del inventario\n\n` +
+        `Esta acción NO se puede deshacer fácilmente.`
+      )
+      if (!confirmar) return
+    }
 
     setProcesando(true)
     setError(null)
 
     try {
       const fechaHoy = new Date().toISOString().split('T')[0]
+
+      // 🆕 MODO EDICIÓN: revertir movimientos viejos + ajustar stocks + borrar cocido/sobrante
+      if (modoEdicion) {
+        await revertirYBorrarDependencias()
+      }
+
+      // ─── INSERT de movimientos nuevos (en ambos modos) ──────
       const origenId = operacionesPreparando[0]?.id || null
 
       const movimientos = ingredientesAGuardar.map(ing => ({
@@ -227,6 +360,7 @@ export default function ModalPesajeCrudo({
 
       if (errInsert) throw errInsert
 
+      // ─── Actualizar stock_actual de cada ingrediente ────────
       for (const ing of ingredientesAGuardar) {
         const nuevoStock = ing.stock_actual - ing.cantidad_real
         await supabase
@@ -235,14 +369,68 @@ export default function ModalPesajeCrudo({
           .eq('id', ing.ingrediente_id)
       }
 
-      alert(`✅ Pesaje aprobado\n\n${ingredientesAGuardar.length} ingredientes registrados\n${racionesEditables} raciones`)
+      const titulo = modoEdicion ? '✅ Pesaje actualizado' : '✅ Pesaje aprobado'
+      alert(`${titulo}\n\n${ingredientesAGuardar.length} ingredientes registrados\n${racionesEditables} raciones`)
       if (onAprobado) onAprobado()
     } catch (err) {
-      console.error('Error aprobando pesaje:', err)
+      console.error('Error guardando pesaje:', err)
       setError(err.message)
     } finally {
       setProcesando(false)
     }
+  }
+
+  // 🆕 Revierte movimientos viejos + ajusta stocks + borra cocido/sobrante
+  async function revertirYBorrarDependencias() {
+    const fechaHoy = new Date().toISOString().split('T')[0]
+
+    // 1. Cargar movimientos viejos del día
+    const { data: movimientosViejos, error: errMov } = await supabase
+      .from('movimientos_inventario')
+      .select('id, ingrediente_id, cantidad')
+      .eq('empresa_id', empresaId)
+      .eq('fecha', fechaHoy)
+      .eq('origen', 'consumo_operacion')
+
+    if (errMov) throw errMov
+
+    // 2. Devolver al stock cada cantidad vieja
+    if (movimientosViejos && movimientosViejos.length > 0) {
+      for (const mov of movimientosViejos) {
+        // Leer stock actual
+        const { data: ingActual } = await supabase
+          .from('ingredientes')
+          .select('stock_actual')
+          .eq('id', mov.ingrediente_id)
+          .single()
+
+        const stockActual = Number(ingActual?.stock_actual || 0)
+        const cantidadVieja = Number(mov.cantidad)
+        const stockRevertido = stockActual + cantidadVieja
+
+        // Devolver al stock
+        await supabase
+          .from('ingredientes')
+          .update({ stock_actual: stockRevertido })
+          .eq('id', mov.ingrediente_id)
+      }
+
+      // 3. Borrar movimientos viejos
+      const idsAEliminar = movimientosViejos.map(m => m.id)
+      const { error: errDelete } = await supabase
+        .from('movimientos_inventario')
+        .delete()
+        .in('id', idsAEliminar)
+
+      if (errDelete) throw errDelete
+    }
+
+    // 4. Borrar pesajes_cocido del día (esto incluye el sobrante porque está en la misma tabla)
+    await supabase
+      .from('pesajes_cocido')
+      .delete()
+      .eq('empresa_id', empresaId)
+      .eq('fecha', fechaHoy)
   }
 
   const costoTotal = ingredientes.reduce((sum, ing) => sum + (ing.cantidad_real * ing.precio_unitario), 0)
@@ -261,7 +449,9 @@ export default function ModalPesajeCrudo({
       <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl p-12 text-center">
           <div className="text-6xl mb-4 animate-pulse">🥘</div>
-          <p className="text-gray-700 font-medium">Cargando recetas...</p>
+          <p className="text-gray-700 font-medium">
+            {modoEdicion ? 'Cargando datos del pesaje crudo...' : 'Cargando recetas...'}
+          </p>
         </div>
       </div>
     )
@@ -290,13 +480,16 @@ export default function ModalPesajeCrudo({
         <div className="bg-gradient-to-r from-amber-500 to-orange-600 rounded-t-2xl p-6 text-white">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-amber-100 text-xs font-semibold tracking-wider">PESAJE CRUDO</p>
+              <p className="text-amber-100 text-xs font-semibold tracking-wider">
+                {modoEdicion ? '✏️ EDITANDO PESAJE CRUDO' : 'PESAJE CRUDO'}
+              </p>
               <h2 className="text-2xl font-bold mt-1 flex items-center gap-2">
                 <span className="text-3xl">{recetaSeleccionada?.emoji || '🥘'}</span>
                 {recetaSeleccionada?.nombre || 'Selecciona una receta'}
               </h2>
               <p className="text-amber-50 text-sm mt-1">
-                {operacionesPreparando.length} escuela(s) · Pesa todo de un solo cocinazo
+                {operacionesPreparando.length} escuela(s)
+                {modoEdicion ? ' · Modo edición' : ' · Pesa todo de un solo cocinazo'}
               </p>
             </div>
             <button
@@ -309,7 +502,21 @@ export default function ModalPesajeCrudo({
           </div>
         </div>
 
-        {/* 🆕 Selector de receta */}
+        {/* 🆕 Advertencia grande en modo edición */}
+        {modoEdicion && (
+          <div className="bg-yellow-50 border-b-2 border-yellow-300 p-4">
+            <p className="text-xs font-bold text-yellow-900 uppercase mb-1">⚠️ Modo edición — Esto afecta TODO</p>
+            <p className="text-sm text-gray-800">
+              Al guardar:
+              <br />✅ Se devuelven al inventario las cantidades viejas
+              <br />✅ Se descuentan las cantidades nuevas
+              <br />❌ <strong>Se borrarán los pesajes de Cocido y Sobrante (si existen)</strong>
+              <br />Tendrás que volver a hacerlos después.
+            </p>
+          </div>
+        )}
+
+        {/* Selector de receta */}
         <div className="bg-orange-50 border-b border-orange-200 p-4">
           <label className="block text-xs font-bold text-orange-800 uppercase mb-2">
             {esDiaSinReceta ? '⚠️ Hoy no hay receta automática — Elige una' : '🍽️ Receta a cocinar (puedes cambiarla)'}
@@ -317,8 +524,8 @@ export default function ModalPesajeCrudo({
           <select
             value={recetaSeleccionada?.id || ''}
             onChange={(e) => cambiarReceta(e.target.value)}
-            disabled={procesando}
-            className="w-full px-3 py-2 border-2 border-orange-300 rounded-lg font-medium bg-white"
+            disabled={procesando || modoEdicion}
+            className="w-full px-3 py-2 border-2 border-orange-300 rounded-lg font-medium bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
           >
             <option value="">— Selecciona una receta —</option>
             {recetasDisponibles.map(r => (
@@ -327,7 +534,12 @@ export default function ModalPesajeCrudo({
               </option>
             ))}
           </select>
-          {esDiaSinReceta && (
+          {modoEdicion && (
+            <p className="text-xs text-orange-700 mt-2 italic">
+              En modo edición no se puede cambiar la receta. Para cambiarla, cancela y empieza de nuevo.
+            </p>
+          )}
+          {esDiaSinReceta && !modoEdicion && (
             <p className="text-xs text-orange-700 mt-2 italic">
               Hoy es {DIAS_LABEL[diaSemanaHoy]}. No hay receta INABIE configurada — selecciona cualquier receta activa.
             </p>
@@ -520,7 +732,10 @@ export default function ModalPesajeCrudo({
               disabled={procesando || !recetaSeleccionada || racionesEditables <= 0}
               className="flex-1 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg disabled:opacity-50"
             >
-              {procesando ? 'Guardando pesaje...' : '✅ Aprobar pesaje y sacar del inventario'}
+              {procesando 
+                ? (modoEdicion ? 'Actualizando pesaje...' : 'Guardando pesaje...') 
+                : (modoEdicion ? '✏️ Actualizar pesaje crudo' : '✅ Aprobar pesaje y sacar del inventario')
+              }
             </button>
           </div>
         </div>

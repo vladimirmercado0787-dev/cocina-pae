@@ -1,6 +1,6 @@
 // src/components/pesaje/ModalPesajeSobrante.jsx
 // Modal de Pesaje SOBRANTE — Cocina PAE
-// Refactor 16-may-2026: ahora trabaja con COMPONENTES (platos), no ingredientes individuales
+// Refactor 16-may-2026: Componentes + Modo Edición
 
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
@@ -9,7 +9,8 @@ export default function ModalPesajeSobrante({
   empresaId, 
   usuario, 
   onCerrar, 
-  onAprobado 
+  onAprobado,
+  modoEdicion = false  // 🆕 si es true, precarga valores existentes
 }) {
   const [pesajes, setPesajes] = useState([])
   const [recetaInfo, setRecetaInfo] = useState(null)
@@ -29,7 +30,6 @@ export default function ModalPesajeSobrante({
 
       const fechaHoy = new Date().toISOString().split('T')[0]
 
-      // 1. Buscar pesajes cocidos de hoy con su componente y receta
       const { data: pesajesHoy, error: errPesajes } = await supabase
         .from('pesajes_cocido')
         .select(`
@@ -39,6 +39,8 @@ export default function ModalPesajeSobrante({
           peso_cocido_sugerido,
           peso_cocido_real,
           peso_sobrante_lb,
+          fue_pesado_sobrante_real,
+          notas_sobrante,
           componentes_receta (
             id,
             nombre,
@@ -60,24 +62,32 @@ export default function ModalPesajeSobrante({
         throw new Error('No hay pesajes cocidos registrados hoy. Primero hay que aprobar el pesaje cocido.')
       }
 
-      // Tomar el nombre de la receta del primer pesaje
       const primerPesaje = pesajesHoy[0]
       const nombreReceta = primerPesaje.componentes_receta?.recetas?.nombre || 'Receta del día'
       setRecetaInfo({ nombre: nombreReceta })
 
-      // 2. Armar lista de componentes con default 0 (no sobró)
+      // 🆕 Si está en modo edición, precargar notas existentes
+      if (modoEdicion && primerPesaje.notas_sobrante) {
+        setNotasGenerales(primerPesaje.notas_sobrante)
+      }
+
+      // 🆕 Si modoEdicion: usar el valor existente de peso_sobrante_lb
+      //    Si no:         default 0 (no sobró)
       const lista = pesajesHoy
-        .map(p => ({
-          pesaje_id: p.id,
-          componente_id: p.componente_id,
-          nombre: p.componentes_receta?.nombre || 'Componente',
-          emoji: p.componentes_receta?.emoji || '🍽️',
-          unidad: p.componentes_receta?.unidad || 'lb',
-          orden: p.componentes_receta?.orden || 999,
-          peso_cocido_real: Number(p.peso_cocido_real) || 0,
-          peso_sobrante_lb: p.peso_sobrante_lb !== null ? Number(p.peso_sobrante_lb) : 0,
-          fue_pesado_sobrante_real: false,
-        }))
+        .map(p => {
+          const sobranteExistente = p.peso_sobrante_lb !== null ? Number(p.peso_sobrante_lb) : 0
+          return {
+            pesaje_id: p.id,
+            componente_id: p.componente_id,
+            nombre: p.componentes_receta?.nombre || 'Componente',
+            emoji: p.componentes_receta?.emoji || '🍽️',
+            unidad: p.componentes_receta?.unidad || 'lb',
+            orden: p.componentes_receta?.orden || 999,
+            peso_cocido_real: Number(p.peso_cocido_real) || 0,
+            peso_sobrante_lb: modoEdicion ? sobranteExistente : 0,
+            fue_pesado_sobrante_real: modoEdicion ? Boolean(p.fue_pesado_sobrante_real) : false,
+          }
+        })
         .sort((a, b) => a.orden - b.orden)
 
       setPesajes(lista)
@@ -111,8 +121,10 @@ export default function ModalPesajeSobrante({
     const conSobrante = pesajes.filter(p => p.peso_sobrante_lb > 0).length
     const sinSobrante = pesajes.length - conSobrante
 
+    const titulo = modoEdicion ? '¿Actualizar el pesaje sobrante?' : '¿Confirmas el pesaje sobrante?'
+
     const confirmar = window.confirm(
-      `¿Confirmas el pesaje sobrante?\n\n` +
+      `${titulo}\n\n` +
       `🍱 ${conSobrante} plato(s) con sobrante\n` +
       `✅ ${sinSobrante} plato(s) sin sobrante (se consumió todo)\n\n` +
       `Esto cierra el ciclo del día y alimenta la inteligencia.`
@@ -123,7 +135,6 @@ export default function ModalPesajeSobrante({
     setError(null)
 
     try {
-      // Actualizar cada fila de pesajes_cocido con el sobrante
       const promesas = pesajes.map(p => 
         supabase
           .from('pesajes_cocido')
@@ -136,17 +147,16 @@ export default function ModalPesajeSobrante({
       )
 
       const resultados = await Promise.all(promesas)
-      
-      // Revisar si hubo algún error
       const errores = resultados.filter(r => r.error)
       if (errores.length > 0) {
         throw new Error(`${errores.length} de ${pesajes.length} actualizaciones fallaron`)
       }
 
-      alert(`✅ Pesaje sobrante aprobado\n\n${conSobrante} con sobrante, ${sinSobrante} sin sobrante\n\nCiclo del día completo 🎉`)
+      const accion = modoEdicion ? 'actualizado' : 'aprobado'
+      alert(`✅ Pesaje sobrante ${accion}\n\n${conSobrante} con sobrante, ${sinSobrante} sin sobrante\n\nCiclo del día completo 🎉`)
       if (onAprobado) onAprobado()
     } catch (err) {
-      console.error('Error aprobando pesaje sobrante:', err)
+      console.error('Error guardando pesaje sobrante:', err)
       setError(err.message)
     } finally {
       setProcesando(false)
@@ -164,7 +174,9 @@ export default function ModalPesajeSobrante({
       <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl p-12 text-center">
           <div className="text-6xl mb-4 animate-pulse">🍱</div>
-          <p className="text-gray-700 font-medium">Cargando platos del día...</p>
+          <p className="text-gray-700 font-medium">
+            {modoEdicion ? 'Cargando datos del sobrante...' : 'Cargando platos del día...'}
+          </p>
         </div>
       </div>
     )
@@ -192,13 +204,15 @@ export default function ModalPesajeSobrante({
         <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-t-2xl p-6 text-white">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-indigo-100 text-xs font-semibold tracking-wider">PESAJE SOBRANTE · POR PLATO</p>
+              <p className="text-indigo-100 text-xs font-semibold tracking-wider">
+                {modoEdicion ? '✏️ EDITANDO PESAJE SOBRANTE' : 'PESAJE SOBRANTE · POR PLATO'}
+              </p>
               <h2 className="text-2xl font-bold mt-1 flex items-center gap-2">
                 <span className="text-3xl">🍱</span>
                 Lo que regresó de las escuelas
               </h2>
               <p className="text-indigo-50 text-sm mt-1">
-                {recetaInfo?.nombre} · Cierre del ciclo
+                {recetaInfo?.nombre} · {modoEdicion ? 'Modo edición' : 'Cierre del ciclo'}
               </p>
             </div>
             <button
@@ -212,12 +226,17 @@ export default function ModalPesajeSobrante({
         </div>
 
         {/* Nota informativa */}
-        <div className="bg-blue-50 border-b border-blue-200 p-4">
-          <p className="text-xs font-semibold text-blue-800 uppercase mb-1">💡 Cómo funciona</p>
+        <div className={`${modoEdicion ? 'bg-yellow-50 border-yellow-200' : 'bg-blue-50 border-blue-200'} border-b p-4`}>
+          <p className={`text-xs font-semibold ${modoEdicion ? 'text-yellow-800' : 'text-blue-800'} uppercase mb-1`}>
+            {modoEdicion ? '⚠️ Modo edición' : '💡 Cómo funciona'}
+          </p>
           <p className="text-sm text-gray-700">
-            Por defecto, todos los platos están en <strong>0</strong> (asumiendo que se consumió todo). 
-            Solo edita los platos que sí regresaron sobrantes. Esta información ayuda a calcular el 
-            consumo real y ajustar las cantidades futuras.
+            {modoEdicion ? (
+              <>Los valores actuales están precargados. Edita lo que necesites corregir y aprueba para actualizar.</>
+            ) : (
+              <>Por defecto, todos los platos están en <strong>0</strong> (asumiendo que se consumió todo). 
+              Solo edita los platos que sí regresaron sobrantes.</>
+            )}
           </p>
         </div>
 
@@ -342,7 +361,10 @@ export default function ModalPesajeSobrante({
               disabled={procesando}
               className="flex-1 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg disabled:opacity-50"
             >
-              {procesando ? 'Guardando pesaje sobrante...' : '✅ Aprobar pesaje sobrante'}
+              {procesando 
+                ? (modoEdicion ? 'Actualizando...' : 'Guardando pesaje sobrante...') 
+                : (modoEdicion ? '✏️ Actualizar pesaje sobrante' : '✅ Aprobar pesaje sobrante')
+              }
             </button>
           </div>
         </div>

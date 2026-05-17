@@ -34,6 +34,9 @@ function DashboardDelDia({
   const [modalPesajeAbierto, setModalPesajeAbierto] = useState(false)
   const [modalPesajeCocidoAbierto, setModalPesajeCocidoAbierto] = useState(false)
   const [modalPesajeSobranteAbierto, setModalPesajeSobranteAbierto] = useState(false)
+  const [modoEdicionSobrante, setModoEdicionSobrante] = useState(false)
+  const [modoEdicionCocido, setModoEdicionCocido] = useState(false)
+  const [modoEdicionCrudo, setModoEdicionCrudo] = useState(false)
 
   useEffect(() => {
     if (empresaId) cargarDatos()
@@ -231,16 +234,19 @@ function DashboardDelDia({
 
   async function pesajeAprobado() {
     setModalPesajeAbierto(false)
+    setModoEdicionCrudo(false)
     await cargarDatos()
   }
 
   async function pesajeCocidoAprobado() {
     setModalPesajeCocidoAbierto(false)
+    setModoEdicionCocido(false)
     await cargarDatos()
   }
 
   async function pesajeSobranteAprobado() {
     setModalPesajeSobranteAbierto(false)
+    setModoEdicionSobrante(false)
     await cargarDatos()
   }
 
@@ -272,7 +278,7 @@ function DashboardDelDia({
   const mostrarBotonPesaje = todasDecididas && hayEscuelasIniciadas && !yaSePesoHoy
   const mostrarBotonPesajeCocido = yaSePesoHoy && !yaSePesoCocidoHoy
 
-  // 🆕 LÓGICA DE DESPACHO/ENTREGA
+  // LÓGICA DE DESPACHO/ENTREGA
   const escuelasEntregadas = operacionesHoy.filter(op => 
     op.estado === 'entregada' || op.estado === 'cerrada'
   ).length
@@ -280,7 +286,6 @@ function DashboardDelDia({
   const escuelasOperativas = escuelas.length - operacionesHoy.filter(op => op.estado === 'sin_clase').length
   const todasEntregadas = escuelasOperativas > 0 && escuelasEntregadas >= escuelasOperativas
   const mostrarBotonDespacho = yaSePesoCocidoHoy && !todasEntregadas
-  // 🆕 Sobrante AHORA aparece solo después de entregar TODAS las escuelas
   const mostrarBotonPesajeSobrante = todasEntregadas && !yaSePesoSobranteHoy
 
   if (cargando) {
@@ -334,34 +339,46 @@ function DashboardDelDia({
         </div>
       )}
 
-      {/* Modal de Pesaje Crudo */}
+      {/* Modal de Pesaje Crudo (con modoEdicion) */}
       {modalPesajeAbierto && (
         <ModalPesajeCrudo
           empresaId={empresaId}
           usuario={usuario}
           operacionesPreparando={operacionesPreparando}
           escuelas={escuelas}
-          onCerrar={() => setModalPesajeAbierto(false)}
+          modoEdicion={modoEdicionCrudo}
+          onCerrar={() => {
+            setModalPesajeAbierto(false)
+            setModoEdicionCrudo(false)
+          }}
           onAprobado={pesajeAprobado}
         />
       )}
 
-      {/* Modal de Pesaje Cocido */}
+      {/* Modal de Pesaje Cocido (con modoEdicion) */}
       {modalPesajeCocidoAbierto && (
         <ModalPesajeCocido
           empresaId={empresaId}
           usuario={usuario}
-          onCerrar={() => setModalPesajeCocidoAbierto(false)}
+          modoEdicion={modoEdicionCocido}
+          onCerrar={() => {
+            setModalPesajeCocidoAbierto(false)
+            setModoEdicionCocido(false)
+          }}
           onAprobado={pesajeCocidoAprobado}
         />
       )}
 
-      {/* Modal de Pesaje Sobrante */}
+      {/* Modal de Pesaje Sobrante (con modoEdicion) */}
       {modalPesajeSobranteAbierto && (
         <ModalPesajeSobrante
           empresaId={empresaId}
           usuario={usuario}
-          onCerrar={() => setModalPesajeSobranteAbierto(false)}
+          modoEdicion={modoEdicionSobrante}
+          onCerrar={() => {
+            setModalPesajeSobranteAbierto(false)
+            setModoEdicionSobrante(false)
+          }}
           onAprobado={pesajeSobranteAprobado}
         />
       )}
@@ -510,7 +527,10 @@ function DashboardDelDia({
               </p>
             </div>
             <button
-              onClick={() => setModalPesajeAbierto(true)}
+              onClick={() => {
+                setModoEdicionCrudo(false)
+                setModalPesajeAbierto(true)
+              }}
               disabled={procesando}
               className="bg-white hover:bg-amber-50 text-orange-700 font-bold px-6 py-3 rounded-xl shadow-lg disabled:opacity-50 whitespace-nowrap"
             >
@@ -520,15 +540,26 @@ function DashboardDelDia({
         </div>
       )}
 
-      {/* Banner: pesaje crudo aprobado */}
+      {/* Banner: pesaje crudo aprobado (con botón Editar) */}
       {yaSePesoHoy && hayEscuelasIniciadas && (
         <div className="bg-gradient-to-br from-emerald-500 to-green-600 rounded-2xl shadow-md p-4 mb-6 text-white">
-          <div className="flex items-center gap-3">
-            <span className="text-3xl">✅</span>
-            <div>
-              <p className="font-bold">Pesaje crudo aprobado</p>
-              <p className="text-emerald-100 text-sm">Ingredientes ya descontados del inventario · {totalRacionesHoy.toLocaleString()} raciones</p>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <span className="text-3xl">✅</span>
+              <div>
+                <p className="font-bold">Pesaje crudo aprobado</p>
+                <p className="text-emerald-100 text-sm">Ingredientes ya descontados del inventario · {totalRacionesHoy.toLocaleString()} raciones</p>
+              </div>
             </div>
+            <button
+              onClick={() => {
+                setModoEdicionCrudo(true)
+                setModalPesajeAbierto(true)
+              }}
+              className="bg-white/20 hover:bg-white/30 text-white text-sm font-bold px-4 py-2 rounded-lg border border-white/30 whitespace-nowrap"
+            >
+              ✏️ Editar
+            </button>
           </div>
         </div>
       )}
@@ -547,7 +578,10 @@ function DashboardDelDia({
               </p>
             </div>
             <button
-              onClick={() => setModalPesajeCocidoAbierto(true)}
+              onClick={() => {
+                setModoEdicionCocido(false)
+                setModalPesajeCocidoAbierto(true)
+              }}
               disabled={procesando}
               className="bg-white hover:bg-rose-50 text-pink-700 font-bold px-6 py-3 rounded-xl shadow-lg disabled:opacity-50 whitespace-nowrap"
             >
@@ -557,20 +591,31 @@ function DashboardDelDia({
         </div>
       )}
 
-      {/* Banner: pesaje cocido aprobado */}
+      {/* Banner: pesaje cocido aprobado (con botón Editar) */}
       {yaSePesoCocidoHoy && (
         <div className="bg-gradient-to-br from-pink-500 to-rose-600 rounded-2xl shadow-md p-4 mb-6 text-white">
-          <div className="flex items-center gap-3">
-            <span className="text-3xl">🍲</span>
-            <div>
-              <p className="font-bold">Pesaje cocido registrado</p>
-              <p className="text-rose-100 text-sm">Datos guardados para alimentar la inteligencia</p>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <span className="text-3xl">🍲</span>
+              <div>
+                <p className="font-bold">Pesaje cocido registrado</p>
+                <p className="text-rose-100 text-sm">Datos guardados para alimentar la inteligencia</p>
+              </div>
             </div>
+            <button
+              onClick={() => {
+                setModoEdicionCocido(true)
+                setModalPesajeCocidoAbierto(true)
+              }}
+              className="bg-white/20 hover:bg-white/30 text-white text-sm font-bold px-4 py-2 rounded-lg border border-white/30 whitespace-nowrap"
+            >
+              ✏️ Editar
+            </button>
           </div>
         </div>
       )}
 
-      {/* 🆕 Despachar y Entregar (después del cocido, antes del sobrante) */}
+      {/* Despachar y Entregar */}
       {mostrarBotonDespacho && (
         <div className="bg-gradient-to-br from-orange-500 to-red-600 rounded-2xl shadow-xl p-6 mb-6 text-white">
           <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -596,7 +641,7 @@ function DashboardDelDia({
         </div>
       )}
 
-      {/* 🆕 Banner: todas las escuelas entregadas y firmadas */}
+      {/* Banner: todas las escuelas entregadas y firmadas */}
       {yaSePesoCocidoHoy && todasEntregadas && !yaSePesoSobranteHoy && (
         <div className="bg-gradient-to-br from-orange-400 to-red-500 rounded-2xl shadow-md p-4 mb-6 text-white">
           <div className="flex items-center gap-3">
@@ -609,7 +654,7 @@ function DashboardDelDia({
         </div>
       )}
 
-      {/* Iniciar Pesaje Sobrante (solo después de entregar todas) */}
+      {/* Iniciar Pesaje Sobrante */}
       {mostrarBotonPesajeSobrante && (
         <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-xl p-6 mb-6 text-white">
           <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -623,7 +668,10 @@ function DashboardDelDia({
               </p>
             </div>
             <button
-              onClick={() => setModalPesajeSobranteAbierto(true)}
+              onClick={() => {
+                setModoEdicionSobrante(false)
+                setModalPesajeSobranteAbierto(true)
+              }}
               disabled={procesando}
               className="bg-white hover:bg-indigo-50 text-purple-700 font-bold px-6 py-3 rounded-xl shadow-lg disabled:opacity-50 whitespace-nowrap"
             >
@@ -633,15 +681,26 @@ function DashboardDelDia({
         </div>
       )}
 
-      {/* Banner: pesaje sobrante registrado */}
+      {/* Banner: pesaje sobrante registrado (con botón Editar) */}
       {yaSePesoSobranteHoy && (
         <div className="bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl shadow-md p-4 mb-6 text-white">
-          <div className="flex items-center gap-3">
-            <span className="text-3xl">🍱</span>
-            <div>
-              <p className="font-bold">Pesaje sobrante registrado · Ciclo completo</p>
-              <p className="text-indigo-100 text-sm">Inteligencia alimentada · Las sugerencias futuras serán más precisas</p>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <span className="text-3xl">🍱</span>
+              <div>
+                <p className="font-bold">Pesaje sobrante registrado · Ciclo completo</p>
+                <p className="text-indigo-100 text-sm">Inteligencia alimentada · Las sugerencias futuras serán más precisas</p>
+              </div>
             </div>
+            <button
+              onClick={() => {
+                setModoEdicionSobrante(true)
+                setModalPesajeSobranteAbierto(true)
+              }}
+              className="bg-white/20 hover:bg-white/30 text-white text-sm font-bold px-4 py-2 rounded-lg border border-white/30 whitespace-nowrap"
+            >
+              ✏️ Editar
+            </button>
           </div>
         </div>
       )}

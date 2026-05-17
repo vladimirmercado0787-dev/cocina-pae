@@ -1,6 +1,6 @@
 // src/components/pesaje/ModalPesajeCocido.jsx
 // Modal de Pesaje COCIDO — Cocina PAE
-// Refactor 16-may-2026: ahora trabaja con COMPONENTES (platos), no ingredientes individuales
+// Refactor 16-may-2026: Componentes + Modo Edición
 
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
@@ -9,7 +9,8 @@ export default function ModalPesajeCocido({
   empresaId, 
   usuario, 
   onCerrar, 
-  onAprobado 
+  onAprobado,
+  modoEdicion = false  // 🆕 si es true, precarga valores existentes
 }) {
   const [componentes, setComponentes] = useState([])
   const [recetaInfo, setRecetaInfo] = useState(null)
@@ -49,7 +50,70 @@ export default function ModalPesajeCocido({
 
       setRacionesHoy(totalRaciones)
 
-      // 2. Detectar receta del día por el día de la semana
+      // 🆕 SI ES MODO EDICIÓN: cargar desde pesajes_cocido existentes
+      if (modoEdicion) {
+        const { data: pesajesExistentes, error: errExist } = await supabase
+          .from('pesajes_cocido')
+          .select(`
+            id,
+            componente_id,
+            peso_crudo_total,
+            peso_cocido_sugerido,
+            peso_cocido_real,
+            factor_aplicado,
+            fue_pesado_real,
+            notas,
+            componentes_receta (
+              id,
+              nombre,
+              emoji,
+              orden,
+              unidad,
+              receta_id,
+              recetas (
+                id,
+                nombre
+              )
+            )
+          `)
+          .eq('empresa_id', empresaId)
+          .eq('fecha', fechaHoy)
+
+        if (errExist) throw errExist
+        if (!pesajesExistentes || pesajesExistentes.length === 0) {
+          throw new Error('No hay pesajes cocidos previos para editar')
+        }
+
+        const nombreReceta = pesajesExistentes[0].componentes_receta?.recetas?.nombre || 'Receta del día'
+        setRecetaInfo({ nombre: nombreReceta })
+
+        if (pesajesExistentes[0].notas) {
+          setNotasGenerales(pesajesExistentes[0].notas)
+        }
+
+        const listaEdicion = pesajesExistentes
+          .map(p => ({
+            pesaje_id: p.id,  // 🆕 guarda el id para hacer UPDATE
+            componente_id: p.componente_id,
+            nombre: p.componentes_receta?.nombre || 'Componente',
+            emoji: p.componentes_receta?.emoji || '🍽️',
+            unidad: p.componentes_receta?.unidad || 'lb',
+            orden: p.componentes_receta?.orden || 999,
+            factor_ajuste: Number(p.factor_aplicado) || 1,
+            ingredientes_nombres: [], // no necesario en edición
+            peso_crudo_total: Number(p.peso_crudo_total) || 0,
+            peso_cocido_sugerido: Number(p.peso_cocido_sugerido) || 0,
+            peso_cocido_real: Number(p.peso_cocido_real) || 0,
+            fue_pesado_real: Boolean(p.fue_pesado_real),
+          }))
+          .sort((a, b) => a.orden - b.orden)
+
+        setComponentes(listaEdicion)
+        return
+      }
+
+      // ─── MODO NORMAL (NO EDICIÓN) ──────────────────────
+      // 2. Detectar receta del día
       const diasSemana = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado']
       const diaSemanaHoy = diasSemana[new Date().getDay()]
 
@@ -66,7 +130,6 @@ export default function ModalPesajeCocido({
       if (recetaData) {
         receta = recetaData
       } else {
-        // Fallback: cualquier receta activa
         const { data: cualquierReceta } = await supabase
           .from('recetas')
           .select('id, nombre, dia_semana')
@@ -83,7 +146,7 @@ export default function ModalPesajeCocido({
 
       setRecetaInfo(receta)
 
-      // 3. Cargar componentes de la receta con sus ingredientes
+      // 3. Cargar componentes de la receta
       const { data: componentesData, error: errComp } = await supabase
         .from('componentes_receta')
         .select(`
@@ -146,6 +209,7 @@ export default function ModalPesajeCocido({
         pesoCocidoSugerido *= factorAjuste
 
         return {
+          pesaje_id: null,  // 🆕 null en modo normal (es INSERT)
           componente_id: comp.id,
           nombre: comp.nombre,
           emoji: comp.emoji,
@@ -198,8 +262,10 @@ export default function ModalPesajeCocido({
     const pesadosReales = componentes.filter(c => c.fue_pesado_real).length
     const asumidos = componentes.length - pesadosReales
 
+    const titulo = modoEdicion ? '¿Actualizar el pesaje cocido?' : '¿Confirmas el pesaje cocido?'
+
     const confirmar = window.confirm(
-      `¿Confirmas el pesaje cocido?\n\n` +
+      `${titulo}\n\n` +
       `🍲 ${pesadosReales} plato(s) pesados de verdad\n` +
       `🤖 ${asumidos} plato(s) asumidos por el sistema\n\n` +
       `Esto alimenta la inteligencia para futuras sugerencias.`
@@ -212,6 +278,31 @@ export default function ModalPesajeCocido({
     try {
       const fechaHoy = new Date().toISOString().split('T')[0]
 
+      // 🆕 SI ES EDICIÓN: hacer UPDATE en cada fila existente
+      if (modoEdicion) {
+        const promesas = componentes.map(c => 
+          supabase
+            .from('pesajes_cocido')
+            .update({
+              peso_cocido_real: c.peso_cocido_real,
+              fue_pesado_real: c.fue_pesado_real,
+              notas: notasGenerales || null,
+            })
+            .eq('id', c.pesaje_id)
+        )
+
+        const resultados = await Promise.all(promesas)
+        const errores = resultados.filter(r => r.error)
+        if (errores.length > 0) {
+          throw new Error(`${errores.length} de ${componentes.length} actualizaciones fallaron`)
+        }
+
+        alert(`✅ Pesaje cocido actualizado\n\n${componentes.length} plato(s) actualizado(s)\n${pesadosReales} pesados, ${asumidos} asumidos`)
+        if (onAprobado) onAprobado()
+        return
+      }
+
+      // ─── MODO NORMAL: INSERT (como ya estaba) ─────────────
       const registros = componentes.map(c => ({
         empresa_id: empresaId,
         fecha: fechaHoy,
@@ -234,7 +325,7 @@ export default function ModalPesajeCocido({
       alert(`✅ Pesaje cocido aprobado\n\n${componentes.length} plato(s) registrados\n${pesadosReales} pesados, ${asumidos} asumidos`)
       if (onAprobado) onAprobado()
     } catch (err) {
-      console.error('Error aprobando pesaje cocido:', err)
+      console.error('Error guardando pesaje cocido:', err)
       setError(err.message)
     } finally {
       setProcesando(false)
@@ -252,7 +343,9 @@ export default function ModalPesajeCocido({
       <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl p-12 text-center">
           <div className="text-6xl mb-4 animate-pulse">🍲</div>
-          <p className="text-gray-700 font-medium">Cargando platos del día...</p>
+          <p className="text-gray-700 font-medium">
+            {modoEdicion ? 'Cargando datos del cocido...' : 'Cargando platos del día...'}
+          </p>
         </div>
       </div>
     )
@@ -280,13 +373,16 @@ export default function ModalPesajeCocido({
         <div className="bg-gradient-to-r from-rose-500 to-pink-600 rounded-t-2xl p-6 text-white">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-rose-100 text-xs font-semibold tracking-wider">PESAJE COCIDO · POR PLATO</p>
+              <p className="text-rose-100 text-xs font-semibold tracking-wider">
+                {modoEdicion ? '✏️ EDITANDO PESAJE COCIDO' : 'PESAJE COCIDO · POR PLATO'}
+              </p>
               <h2 className="text-2xl font-bold mt-1 flex items-center gap-2">
                 <span className="text-3xl">🍲</span>
                 Después de cocinar
               </h2>
               <p className="text-rose-50 text-sm mt-1">
                 {recetaInfo?.nombre} · {racionesHoy.toLocaleString()} raciones
+                {modoEdicion && ' · Modo edición'}
               </p>
             </div>
             <button
@@ -300,12 +396,18 @@ export default function ModalPesajeCocido({
         </div>
 
         {/* Nota informativa */}
-        <div className="bg-blue-50 border-b border-blue-200 p-4">
-          <p className="text-xs font-semibold text-blue-800 uppercase mb-1">💡 Cómo funciona</p>
+        <div className={`${modoEdicion ? 'bg-yellow-50 border-yellow-200' : 'bg-blue-50 border-blue-200'} border-b p-4`}>
+          <p className={`text-xs font-semibold ${modoEdicion ? 'text-yellow-800' : 'text-blue-800'} uppercase mb-1`}>
+            {modoEdicion ? '⚠️ Modo edición' : '💡 Cómo funciona'}
+          </p>
           <p className="text-sm text-gray-700">
-            Se pesa cada <strong>plato completo</strong> (no ingredientes sueltos, porque al cocinar se mezclan). 
-            El sistema sugiere el peso usando los factores de rendimiento. 
-            Si pesas de verdad → mejor inteligencia futura. Si aceptas la sugerencia → el sistema asume.
+            {modoEdicion ? (
+              <>Los valores actuales están precargados. Edita lo que necesites corregir. 
+              <strong> No afecta inventario ni el pesaje sobrante.</strong></>
+            ) : (
+              <>Se pesa cada <strong>plato completo</strong> (no ingredientes sueltos, porque al cocinar se mezclan). 
+              El sistema sugiere el peso usando los factores de rendimiento.</>
+            )}
           </p>
         </div>
 
@@ -332,9 +434,11 @@ export default function ModalPesajeCocido({
                       <span className="text-2xl">{c.emoji}</span>
                       <p className="font-bold text-gray-900 text-lg">{c.nombre}</p>
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      <strong>Ingredientes:</strong> {c.ingredientes_nombres.join(', ')}
-                    </p>
+                    {c.ingredientes_nombres.length > 0 && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        <strong>Ingredientes:</strong> {c.ingredientes_nombres.join(', ')}
+                      </p>
+                    )}
                     <p className="text-xs text-gray-600 mt-1">
                       Crudo total: <strong>{c.peso_crudo_total.toFixed(2)} lb</strong>
                       {' · '}
@@ -436,7 +540,10 @@ export default function ModalPesajeCocido({
               disabled={procesando}
               className="flex-1 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg disabled:opacity-50"
             >
-              {procesando ? 'Guardando pesaje cocido...' : '✅ Aprobar pesaje cocido'}
+              {procesando 
+                ? (modoEdicion ? 'Actualizando...' : 'Guardando pesaje cocido...') 
+                : (modoEdicion ? '✏️ Actualizar pesaje cocido' : '✅ Aprobar pesaje cocido')
+              }
             </button>
           </div>
         </div>
