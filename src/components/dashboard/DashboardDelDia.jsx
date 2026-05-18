@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
+import { registrar, TIPOS_ACCION } from '../../utils/historial'
 import ModalPesajeCrudo from '../pesaje/ModalPesajeCrudo'
-import ModalPesajeCocido from '../pesaje/ModalPesajeCocido'
-import ModalPesajeSobrante from '../pesaje/ModalPesajeSobrante'
 
 function DashboardDelDia({ 
   usuario, 
@@ -19,6 +18,7 @@ function DashboardDelDia({
   onIrIngredientes,
   onIrGastos,
   onIrCatalogo,
+  onIrHistorial,
   onVerComoSecretaria 
 }) {
   const [empresa, setEmpresa] = useState(null)
@@ -29,13 +29,7 @@ function DashboardDelDia({
   const [modalSinClase, setModalSinClase] = useState(null)
   const [razonSinClase, setRazonSinClase] = useState('')
   const [yaSePesoHoy, setYaSePesoHoy] = useState(false)
-  const [yaSePesoCocidoHoy, setYaSePesoCocidoHoy] = useState(false)
-  const [yaSePesoSobranteHoy, setYaSePesoSobranteHoy] = useState(false)
   const [modalPesajeAbierto, setModalPesajeAbierto] = useState(false)
-  const [modalPesajeCocidoAbierto, setModalPesajeCocidoAbierto] = useState(false)
-  const [modalPesajeSobranteAbierto, setModalPesajeSobranteAbierto] = useState(false)
-  const [modoEdicionSobrante, setModoEdicionSobrante] = useState(false)
-  const [modoEdicionCocido, setModoEdicionCocido] = useState(false)
   const [modoEdicionCrudo, setModoEdicionCrudo] = useState(false)
 
   useEffect(() => {
@@ -70,23 +64,6 @@ function DashboardDelDia({
       .eq('origen', 'consumo_operacion')
     setYaSePesoHoy((countCrudo || 0) > 0)
 
-    // Detectar si ya se pesó cocido hoy
-    const { count: countCocido } = await supabase
-      .from('pesajes_cocido')
-      .select('id', { count: 'exact', head: true })
-      .eq('empresa_id', empresaId)
-      .eq('fecha', fechaHoy)
-    setYaSePesoCocidoHoy((countCocido || 0) > 0)
-
-    // Detectar si ya se pesó sobrante hoy
-    const { count: countSobrante } = await supabase
-      .from('pesajes_cocido')
-      .select('id', { count: 'exact', head: true })
-      .eq('empresa_id', empresaId)
-      .eq('fecha', fechaHoy)
-      .not('peso_sobrante_lb', 'is', null)
-    setYaSePesoSobranteHoy((countSobrante || 0) > 0)
-
     setCargando(false)
   }
 
@@ -111,15 +88,32 @@ function DashboardDelDia({
       despachador_id: usuario.id,
     }
 
-    const { error } = await supabase
+    const { data: opCreada, error } = await supabase
       .from('operaciones_dia')
       .insert([nuevaOp])
+      .select()
+      .single()
 
     if (error) {
       alert('Error al iniciar la escuela: ' + error.message)
       setProcesando(false)
       return
     }
+
+    // 📜 Registrar en historial
+    await registrar({
+      empresaId,
+      usuario,
+      tipoAccion: TIPOS_ACCION.ESCUELA_INICIADA,
+      descripcion: `Inició preparación de ${escuela.nombre} (${escuela.raciones_contractuales || 0} raciones)`,
+      entidad: 'operacion_dia',
+      entidadId: opCreada?.id,
+      detallesExtra: {
+        escuela_nombre: escuela.nombre,
+        escuela_id: escuela.id,
+        raciones: escuela.raciones_contractuales || 0
+      }
+    })
 
     await cargarDatos()
     setProcesando(false)
@@ -157,9 +151,10 @@ function DashboardDelDia({
       despachador_id: usuario.id,
     }))
 
-    const { error } = await supabase
+    const { data: opsCreadas, error } = await supabase
       .from('operaciones_dia')
       .insert(operacionesNuevas)
+      .select()
 
     if (error) {
       alert('Error al iniciar las escuelas: ' + error.message)
@@ -167,12 +162,37 @@ function DashboardDelDia({
       return
     }
 
+    // 📜 Registrar en historial (una entrada por escuela)
+    const totalRaciones = escuelasPendientes.reduce((sum, e) => sum + (e.raciones_contractuales || 0), 0)
+    
+    await registrar({
+      empresaId,
+      usuario,
+      tipoAccion: TIPOS_ACCION.ESCUELA_INICIADA,
+      descripcion: `🚀 Inició día completo: ${escuelasPendientes.length} escuela(s) · ${totalRaciones.toLocaleString()} raciones totales`,
+      entidad: 'operacion_dia',
+      detallesExtra: {
+        escuelas: escuelasPendientes.map(e => ({
+          id: e.id,
+          nombre: e.nombre,
+          raciones: e.raciones_contractuales || 0
+        })),
+        total_raciones: totalRaciones,
+        cantidad_escuelas: escuelasPendientes.length
+      }
+    })
+
     await cargarDatos()
     setProcesando(false)
   }
 
   async function marcarLista(operacion) {
     setProcesando(true)
+    
+    // Buscar nombre de escuela para el historial
+    const escuela = escuelas.find(e => e.id === operacion.escuela_id)
+    const nombreEscuela = escuela?.nombre || 'Escuela'
+    
     const { error } = await supabase
       .from('operaciones_dia')
       .update({
@@ -187,6 +207,22 @@ function DashboardDelDia({
       setProcesando(false)
       return
     }
+
+    // 📜 Registrar en historial
+    await registrar({
+      empresaId,
+      usuario,
+      tipoAccion: TIPOS_ACCION.ESCUELA_LISTA,
+      descripcion: `Marcó comida lista para ${nombreEscuela}`,
+      entidad: 'operacion_dia',
+      entidadId: operacion.id,
+      detallesExtra: {
+        escuela_nombre: nombreEscuela,
+        escuela_id: operacion.escuela_id,
+        raciones: operacion.raciones_planificadas
+      }
+    })
+
     await cargarDatos()
     setProcesando(false)
   }
@@ -216,15 +252,32 @@ function DashboardDelDia({
       despachador_id: usuario.id,
     }
 
-    const { error } = await supabase
+    const { data: opCreada, error } = await supabase
       .from('operaciones_dia')
       .insert([nuevaOp])
+      .select()
+      .single()
 
     if (error) {
       alert('Error al marcar sin clase: ' + error.message)
       setProcesando(false)
       return
     }
+
+    // 📜 Registrar en historial
+    await registrar({
+      empresaId,
+      usuario,
+      tipoAccion: TIPOS_ACCION.ESCUELA_SIN_CLASE,
+      descripcion: `🚫 Marcó ${modalSinClase.nombre} como SIN CLASE: "${razonSinClase.trim()}"`,
+      entidad: 'operacion_dia',
+      entidadId: opCreada?.id,
+      detallesExtra: {
+        escuela_nombre: modalSinClase.nombre,
+        escuela_id: modalSinClase.id,
+        razon: razonSinClase.trim()
+      }
+    })
 
     setModalSinClase(null)
     setRazonSinClase('')
@@ -235,18 +288,6 @@ function DashboardDelDia({
   async function pesajeAprobado() {
     setModalPesajeAbierto(false)
     setModoEdicionCrudo(false)
-    await cargarDatos()
-  }
-
-  async function pesajeCocidoAprobado() {
-    setModalPesajeCocidoAbierto(false)
-    setModoEdicionCocido(false)
-    await cargarDatos()
-  }
-
-  async function pesajeSobranteAprobado() {
-    setModalPesajeSobranteAbierto(false)
-    setModoEdicionSobrante(false)
     await cargarDatos()
   }
 
@@ -276,7 +317,6 @@ function DashboardDelDia({
   const todasDecididas = escuelasPendientesCount === 0
   const hayEscuelasIniciadas = operacionesPreparando.length > 0
   const mostrarBotonPesaje = todasDecididas && hayEscuelasIniciadas && !yaSePesoHoy
-  const mostrarBotonPesajeCocido = yaSePesoHoy && !yaSePesoCocidoHoy
 
   // LÓGICA DE DESPACHO/ENTREGA
   const escuelasEntregadas = operacionesHoy.filter(op => 
@@ -285,8 +325,8 @@ function DashboardDelDia({
   const escuelasEnCamino = operacionesHoy.filter(op => op.estado === 'despachando').length
   const escuelasOperativas = escuelas.length - operacionesHoy.filter(op => op.estado === 'sin_clase').length
   const todasEntregadas = escuelasOperativas > 0 && escuelasEntregadas >= escuelasOperativas
-  const mostrarBotonDespacho = yaSePesoCocidoHoy && !todasEntregadas
-  const mostrarBotonPesajeSobrante = todasEntregadas && !yaSePesoSobranteHoy
+  // Mostrar botón Despacho cuando: ya se pesó crudo + hay escuelas iniciadas + no todas entregadas
+  const mostrarBotonDespacho = yaSePesoHoy && hayEscuelasIniciadas && !todasEntregadas
 
   if (cargando) {
     return <div className="text-center py-12 text-gray-500">Cargando dashboard...</div>
@@ -355,34 +395,6 @@ function DashboardDelDia({
         />
       )}
 
-      {/* Modal de Pesaje Cocido (con modoEdicion) */}
-      {modalPesajeCocidoAbierto && (
-        <ModalPesajeCocido
-          empresaId={empresaId}
-          usuario={usuario}
-          modoEdicion={modoEdicionCocido}
-          onCerrar={() => {
-            setModalPesajeCocidoAbierto(false)
-            setModoEdicionCocido(false)
-          }}
-          onAprobado={pesajeCocidoAprobado}
-        />
-      )}
-
-      {/* Modal de Pesaje Sobrante (con modoEdicion) */}
-      {modalPesajeSobranteAbierto && (
-        <ModalPesajeSobrante
-          empresaId={empresaId}
-          usuario={usuario}
-          modoEdicion={modoEdicionSobrante}
-          onCerrar={() => {
-            setModalPesajeSobranteAbierto(false)
-            setModoEdicionSobrante(false)
-          }}
-          onAprobado={pesajeSobranteAprobado}
-        />
-      )}
-
       {/* Header con botones de navegación */}
       <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl p-6 mb-6 text-white">
         <div className="flex justify-between items-start mb-4">
@@ -421,6 +433,11 @@ function DashboardDelDia({
             {onIrCatalogo && (
               <button onClick={onIrCatalogo} className="bg-teal-600 hover:bg-teal-700 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md">
                 📋 Catálogo
+              </button>
+            )}
+            {onIrHistorial && (
+              <button onClick={onIrHistorial} className="bg-slate-700 hover:bg-slate-800 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md">
+                📜 Historial
               </button>
             )}
             {onIrIngredientes && (
@@ -564,57 +581,6 @@ function DashboardDelDia({
         </div>
       )}
 
-      {/* Iniciar Pesaje Cocido */}
-      {mostrarBotonPesajeCocido && (
-        <div className="bg-gradient-to-br from-rose-500 to-pink-600 rounded-2xl shadow-xl p-6 mb-6 text-white">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div>
-              <p className="text-rose-100 text-xs font-semibold tracking-wider">DESPUÉS DE COCINAR</p>
-              <h3 className="text-2xl font-bold mt-1">
-                🍲 Pesaje Cocido
-              </h3>
-              <p className="text-rose-100 text-sm mt-1">
-                Pesa lo cocinado o acepta sugerencias · Opcional pero recomendado
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                setModoEdicionCocido(false)
-                setModalPesajeCocidoAbierto(true)
-              }}
-              disabled={procesando}
-              className="bg-white hover:bg-rose-50 text-pink-700 font-bold px-6 py-3 rounded-xl shadow-lg disabled:opacity-50 whitespace-nowrap"
-            >
-              🍲 Pesar cocido
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Banner: pesaje cocido aprobado (con botón Editar) */}
-      {yaSePesoCocidoHoy && (
-        <div className="bg-gradient-to-br from-pink-500 to-rose-600 rounded-2xl shadow-md p-4 mb-6 text-white">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <span className="text-3xl">🍲</span>
-              <div>
-                <p className="font-bold">Pesaje cocido registrado</p>
-                <p className="text-rose-100 text-sm">Datos guardados para alimentar la inteligencia</p>
-              </div>
-            </div>
-            <button
-              onClick={() => {
-                setModoEdicionCocido(true)
-                setModalPesajeCocidoAbierto(true)
-              }}
-              className="bg-white/20 hover:bg-white/30 text-white text-sm font-bold px-4 py-2 rounded-lg border border-white/30 whitespace-nowrap"
-            >
-              ✏️ Editar
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Despachar y Entregar */}
       {mostrarBotonDespacho && (
         <div className="bg-gradient-to-br from-orange-500 to-red-600 rounded-2xl shadow-xl p-6 mb-6 text-white">
@@ -627,7 +593,7 @@ function DashboardDelDia({
               <p className="text-orange-100 text-sm mt-1">
                 {escuelasEntregadas} de {escuelasOperativas} entregadas
                 {escuelasEnCamino > 0 && ` · ${escuelasEnCamino} en camino`}
-                {' '}· Falta firmar conduces de los directores
+                {' '}· Pesa cocido por escuela, despacha y firma conduces
               </p>
             </div>
             <button
@@ -642,65 +608,14 @@ function DashboardDelDia({
       )}
 
       {/* Banner: todas las escuelas entregadas y firmadas */}
-      {yaSePesoCocidoHoy && todasEntregadas && !yaSePesoSobranteHoy && (
-        <div className="bg-gradient-to-br from-orange-400 to-red-500 rounded-2xl shadow-md p-4 mb-6 text-white">
+      {todasEntregadas && (
+        <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl shadow-md p-4 mb-6 text-white">
           <div className="flex items-center gap-3">
-            <span className="text-3xl">✅</span>
+            <span className="text-3xl">🏆</span>
             <div>
               <p className="font-bold">Todas las escuelas entregadas y firmadas</p>
-              <p className="text-orange-100 text-sm">{escuelasEntregadas} conduce(s) firmado(s) por los directores</p>
+              <p className="text-green-100 text-sm">{escuelasEntregadas} conduce(s) firmado(s) por los directores · Día completado</p>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Iniciar Pesaje Sobrante */}
-      {mostrarBotonPesajeSobrante && (
-        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-xl p-6 mb-6 text-white">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div>
-              <p className="text-indigo-100 text-xs font-semibold tracking-wider">CIERRE DEL CICLO</p>
-              <h3 className="text-2xl font-bold mt-1">
-                🍱 Pesaje Sobrante
-              </h3>
-              <p className="text-indigo-100 text-sm mt-1">
-                Pesa lo que regresó de las escuelas · Por defecto asume 0 (no sobró)
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                setModoEdicionSobrante(false)
-                setModalPesajeSobranteAbierto(true)
-              }}
-              disabled={procesando}
-              className="bg-white hover:bg-indigo-50 text-purple-700 font-bold px-6 py-3 rounded-xl shadow-lg disabled:opacity-50 whitespace-nowrap"
-            >
-              🍱 Pesar sobrante
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Banner: pesaje sobrante registrado (con botón Editar) */}
-      {yaSePesoSobranteHoy && (
-        <div className="bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl shadow-md p-4 mb-6 text-white">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <span className="text-3xl">🍱</span>
-              <div>
-                <p className="font-bold">Pesaje sobrante registrado · Ciclo completo</p>
-                <p className="text-indigo-100 text-sm">Inteligencia alimentada · Las sugerencias futuras serán más precisas</p>
-              </div>
-            </div>
-            <button
-              onClick={() => {
-                setModoEdicionSobrante(true)
-                setModalPesajeSobranteAbierto(true)
-              }}
-              className="bg-white/20 hover:bg-white/30 text-white text-sm font-bold px-4 py-2 rounded-lg border border-white/30 whitespace-nowrap"
-            >
-              ✏️ Editar
-            </button>
           </div>
         </div>
       )}

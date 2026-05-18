@@ -336,10 +336,10 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario
       {modalPesaje && (
         <ModalPesarYDespachar
           operacion={modalPesaje.operacion}
-          escuela={modalPesaje.escuela}
+          empresaId={empresaId}
           usuario={usuario}
           onCerrar={() => setModalPesaje(null)}
-          onGuardado={() => {
+          onDespachado={() => {
             cargarDatos()
             setModalPesaje(null)
           }}
