@@ -25,6 +25,7 @@ import VistaCompras from './components/compras/VistaCompras'
 import VistaIngredientes from './components/ingredientes/VistaIngredientes'
 import VistaGastos from './components/gastos/VistaGastos'
 import VistaCatalogoRecetas from './components/catalogo/VistaCatalogoRecetas'
+import VistaHistorial from './components/historial/VistaHistorial'
 
 function App() {
   const [pasoActual, setPasoActual] = useState(1)
@@ -129,6 +130,9 @@ function App() {
   const puedeGestionarGastos = usuarioLogueado && 
     (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'secretaria')
 
+  // 🆕 Permiso para ver el historial completo (admins) o solo el propio (todos)
+  const puedeVerHistorial = usuarioLogueado !== null  // todos pueden ver, pero la vista filtra por rol
+
   function renderPasoWizard() {
     if (pasoActual === 1) {
       return <Paso1MiCocina onAvanzar={avanzarPaso} empresaActual={empresaActual} setEmpresaActual={setEmpresaActual} />
@@ -170,6 +174,7 @@ function App() {
           onIrIngredientes={() => setVistaActual('ingredientes')}
           onIrGastos={() => setVistaActual('gastos')}
           onIrCatalogo={() => setVistaActual('catalogo_recetas')}
+          onIrHistorial={() => setVistaActual('historial')}
         />
       )
     }
@@ -225,6 +230,7 @@ function App() {
               : null
           }
           onIrCatalogo={() => setVistaActual('catalogo_recetas')}
+          onIrHistorial={() => setVistaActual('historial')}
         />
       )
     }
@@ -274,6 +280,7 @@ function App() {
             : null
         }
         onIrCatalogo={() => setVistaActual('catalogo_recetas')}
+        onIrHistorial={() => setVistaActual('historial')}
       />
     )
   }
@@ -329,6 +336,7 @@ function App() {
           onIrIngredientes={() => setVistaActual('ingredientes')}
           onIrGastos={() => setVistaActual('gastos')}
           onIrCatalogo={() => setVistaActual('catalogo_recetas')}
+          onIrHistorial={() => setVistaActual('historial')}
           onVolverAlPanel={() => setVistaActual('dashboard')}
           modoAdmin={true}
         />
@@ -416,6 +424,13 @@ function App() {
       {pasoActual === 7 && vistaActual === 'catalogo_recetas' && usuarioLogueado && (
         <VistaCatalogoRecetas 
           empresa_id={empresaActual?.id}
+          onVolver={() => setVistaActual('dashboard')}
+        />
+      )}
+      {pasoActual === 7 && vistaActual === 'historial' && usuarioLogueado && (
+        <VistaHistorial 
+          usuario={usuarioLogueado}
+          empresaId={empresaActual?.id}
           onVolver={() => setVistaActual('dashboard')}
         />
       )}
