@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import ModalNuevoIngrediente from './ModalNuevoIngrediente'
+import VistaListaCompras from './VistaListaCompras'
+import { obtenerListaCompras } from '../../utils/calculosCompras'
 
 const UNIDADES = [
   'lb', 'kg', 'oz', 'unidad', 'docena', 'gal', 'litro', 
@@ -10,11 +12,16 @@ const UNIDADES = [
 function VistaIngredientes({ usuario, empresaId, onVolver }) {
   const [ingredientes, setIngredientes] = useState([])
   const [proveedores, setProveedores] = useState([])
+  const [empresa, setEmpresa] = useState(null)
   const [cargando, setCargando] = useState(true)
   const [busqueda, setBusqueda] = useState('')
   const [filtroStock, setFiltroStock] = useState('todos') // todos | bajo | sin | con
   const [modalNuevo, setModalNuevo] = useState(false)
   const [ingredienteEditando, setIngredienteEditando] = useState(null)
+  
+  // 🆕 Lista de Compras
+  const [mostrarListaCompras, setMostrarListaCompras] = useState(false)
+  const [resumenCompras, setResumenCompras] = useState({ urgentes: 0, proximos: 0 })
 
   useEffect(() => {
     if (empresaId) cargarDatos()
@@ -22,6 +29,14 @@ function VistaIngredientes({ usuario, empresaId, onVolver }) {
 
   async function cargarDatos() {
     setCargando(true)
+
+    // Cargar empresa
+    const { data: empData } = await supabase
+      .from('empresas')
+      .select('*')
+      .eq('id', empresaId)
+      .single()
+    setEmpresa(empData)
 
     const { data: ingData } = await supabase
       .from('ingredientes')
@@ -35,6 +50,20 @@ function VistaIngredientes({ usuario, empresaId, onVolver }) {
       .select('*')
       .eq('empresa_id', empresaId)
     setProveedores(provData || [])
+
+    // 🆕 Calcular cuántos urgentes/próximos para el badge
+    try {
+      const { items } = await obtenerListaCompras(
+        empresaId,
+        5, // default 1 semana
+        empData?.raciones_diarias_total || 1230
+      )
+      const urgentes = items.filter(i => i.urgencia === 'urgente').length
+      const proximos = items.filter(i => i.urgencia === 'proximo').length
+      setResumenCompras({ urgentes, proximos })
+    } catch (err) {
+      console.error('Error calculando resumen compras:', err)
+    }
 
     setCargando(false)
   }
@@ -79,8 +108,25 @@ function VistaIngredientes({ usuario, empresaId, onVolver }) {
     return sum + (stock * costo)
   }, 0)
 
+  // 🆕 Total alertas para el badge
+  const totalAlertas = resumenCompras.urgentes + resumenCompras.proximos
+
   if (cargando) {
     return <div className="text-center py-12 text-gray-500">Cargando ingredientes...</div>
+  }
+
+  // 🆕 Si está abierta la lista de compras, mostrarla en lugar de la vista principal
+  if (mostrarListaCompras) {
+    return (
+      <VistaListaCompras
+        empresaId={empresaId}
+        empresa={empresa}
+        onVolver={() => {
+          setMostrarListaCompras(false)
+          cargarDatos() // Recargar al volver por si cambió algo
+        }}
+      />
+    )
   }
 
   return (
@@ -88,13 +134,34 @@ function VistaIngredientes({ usuario, empresaId, onVolver }) {
       
       {/* HEADER */}
       <div className="bg-gradient-to-br from-green-600 to-emerald-700 rounded-2xl p-6 mb-6 text-white">
-        <div className="flex justify-between items-start mb-4">
+        <div className="flex justify-between items-start mb-4 flex-wrap gap-3">
           <div>
             <p className="text-green-100 text-xs font-semibold tracking-wider">MÓDULO INGREDIENTES</p>
             <h2 className="text-3xl font-bold mt-1">🥕 Inventario de Ingredientes</h2>
             <p className="text-green-200 mt-1">{totalIngredientes} ingredientes registrados</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            
+            {/* 🆕 BOTÓN LISTA DE COMPRAS CON BADGE */}
+            <button
+              onClick={() => setMostrarListaCompras(true)}
+              className={`relative font-bold px-5 py-3 rounded-xl shadow-lg transition-all ${
+                resumenCompras.urgentes > 0
+                  ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse'
+                  : totalAlertas > 0
+                    ? 'bg-orange-500 hover:bg-orange-600 text-white'
+                    : 'bg-white text-emerald-700 hover:bg-emerald-50'
+              }`}
+            >
+              📦 Lista de Compras
+              {totalAlertas > 0 && (
+                <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold rounded-full bg-white text-red-600 shadow-md">
+                  {resumenCompras.urgentes > 0 && '🚨 '}
+                  {totalAlertas}
+                </span>
+              )}
+            </button>
+            
             <button
               onClick={() => { setIngredienteEditando(null); setModalNuevo(true); }}
               className="bg-white text-green-700 hover:bg-green-50 font-bold px-5 py-3 rounded-xl shadow-lg"
@@ -109,6 +176,21 @@ function VistaIngredientes({ usuario, empresaId, onVolver }) {
             </button>
           </div>
         </div>
+
+        {/* 🆕 BANNER DE ALERTA SI HAY URGENTES (anunciar el valor) */}
+        {resumenCompras.urgentes > 0 && (
+          <div className="bg-red-500/30 border-2 border-red-300 rounded-xl p-3 mt-3 backdrop-blur-sm">
+            <p className="text-white font-bold flex items-center gap-2">
+              🚨 ATENCIÓN: {resumenCompras.urgentes} ingrediente{resumenCompras.urgentes > 1 ? 's' : ''} se {resumenCompras.urgentes > 1 ? 'acaban' : 'acaba'} en menos de 2 días
+              <button
+                onClick={() => setMostrarListaCompras(true)}
+                className="ml-auto bg-white text-red-700 px-3 py-1 rounded-lg text-sm hover:bg-red-50"
+              >
+                Ver lista →
+              </button>
+            </p>
+          </div>
+        )}
       </div>
 
       {/* STATS */}

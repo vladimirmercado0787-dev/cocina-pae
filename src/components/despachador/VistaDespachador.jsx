@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import ModalEntregarYFirmar from './ModalEntregarYFirmar'
 import ModalPesarYDespachar from './ModalPesarYDespachar'
+import ModalPesarSobrante from './ModalPesarSobrante'
 
 const ESTADOS_DESPACHADOR = {
   pendiente:    { label: 'Pendiente',     color: 'bg-gray-100 text-gray-700', emoji: '⏳' },
@@ -22,6 +23,7 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario
   const [empresa, setEmpresa] = useState(null)
   const [modalFirma, setModalFirma] = useState(null)
   const [modalPesaje, setModalPesaje] = useState(null)
+  const [modalSobrante, setModalSobrante] = useState(null)
   const [procesando, setProcesando] = useState(false)
 
   useEffect(() => {
@@ -294,15 +296,41 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario
                   </button>
                 )}
 
-                {(op?.estado === 'entregada' || op?.estado === 'cerrada') && (
+                {op?.estado === 'entregada' && (
+                  <>
+                    <div className="text-center py-2 mb-2">
+                      <p className="text-green-700 font-bold text-sm">
+                        🎉 Entregada exitosamente
+                      </p>
+                      {op.hora_entrega && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          {new Date(op.hora_entrega).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' })}
+                          {op.director_firma && ' · ✍️ Director firmó'}
+                        </p>
+                      )}
+                      {op.firmado_por_nombre && (
+                        <p className="text-xs text-gray-600 mt-1">
+                          Recibido por: <strong>{op.firmado_por_nombre}</strong>
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => setModalSobrante({ operacion: op, escuela })}
+                      className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-xl text-base"
+                    >
+                      🍱 Pesar sobrante y cerrar día
+                    </button>
+                  </>
+                )}
+
+                {op?.estado === 'cerrada' && (
                   <div className="text-center py-2">
-                    <p className="text-green-700 font-bold text-sm">
-                      🎉 Entregada exitosamente
+                    <p className="text-purple-700 font-bold text-sm">
+                      🔒 Día cerrado
                     </p>
-                    {op.hora_entrega && (
+                    {op.hora_regreso && (
                       <p className="text-xs text-gray-500 mt-1">
-                        {new Date(op.hora_entrega).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' })}
-                        {op.director_firma && ' · ✍️ Director firmó'}
+                        Cierre: {new Date(op.hora_regreso).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' })}
                       </p>
                     )}
                     {op.firmado_por_nombre && (
@@ -358,6 +386,20 @@ function VistaDespachador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario
           onGuardado={() => {
             cargarDatos()
             setModalFirma(null)
+          }}
+        />
+      )}
+
+      {/* Modal de pesar sobrante y cerrar día */}
+      {modalSobrante && (
+        <ModalPesarSobrante
+          operacion={modalSobrante.operacion}
+          empresaId={empresaId}
+          usuario={usuario}
+          onCerrar={() => setModalSobrante(null)}
+          onCerrado={() => {
+            cargarDatos()
+            setModalSobrante(null)
           }}
         />
       )}
