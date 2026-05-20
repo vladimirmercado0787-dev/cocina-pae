@@ -6,9 +6,11 @@ const MESES = [
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
 ]
 
+const ROLES_PUEDEN_FIRMAR = ['propietario', 'administrador']
+
 function FacturaInabie({ usuario, empresaId, onVolver }) {
   const hoy = new Date()
-  const [modo, setModo] = useState('mensual') // 'mensual' | 'diaria'
+  const [modo, setModo] = useState('mensual')
   const [mes, setMes] = useState(hoy.getMonth())
   const [anio, setAnio] = useState(hoy.getFullYear())
   const [fechaSeleccionada, setFechaSeleccionada] = useState(hoy.toISOString().split('T')[0])
@@ -72,6 +74,31 @@ function FacturaInabie({ usuario, empresaId, onVolver }) {
     window.print()
   }
 
+  async function firmarComoPropietario(operacionId) {
+    const confirmar = window.confirm(
+      `¿Confirmas firmar este conduce como ${empresa?.nombre_propietario || 'Propietario'}?\n\n` +
+      `Esta acción quedará registrada con fecha y hora para auditoría INABIE.`
+    )
+    
+    if (!confirmar) return
+
+    const { error } = await supabase
+      .from('operaciones_dia')
+      .update({
+        firma_propietario_at: new Date().toISOString(),
+        firma_propietario_por_usuario_id: usuario.id,
+        firma_propietario_por_nombre: usuario.nombre || usuario.email
+      })
+      .eq('id', operacionId)
+
+    if (error) {
+      alert('Error al firmar: ' + error.message)
+      return
+    }
+
+    await cargarDatos()
+  }
+
   if (cargando) {
     return <div className="text-center py-12 text-gray-500">Cargando...</div>
   }
@@ -79,7 +106,6 @@ function FacturaInabie({ usuario, empresaId, onVolver }) {
   return (
     <div className="w-full max-w-5xl">
       
-      {/* Header (no se imprime) */}
       <div className="print:hidden bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-2xl p-6 mb-6 text-white">
         <div className="flex justify-between items-start mb-4">
           <div>
@@ -95,14 +121,11 @@ function FacturaInabie({ usuario, empresaId, onVolver }) {
           </button>
         </div>
 
-        {/* Selector de MODO */}
         <div className="flex gap-2 mb-4">
           <button
             onClick={() => setModo('mensual')}
             className={`flex-1 px-4 py-3 rounded-xl text-sm font-bold transition-colors ${
-              modo === 'mensual'
-                ? 'bg-white text-indigo-700'
-                : 'bg-indigo-700 hover:bg-indigo-900 text-white'
+              modo === 'mensual' ? 'bg-white text-indigo-700' : 'bg-indigo-700 hover:bg-indigo-900 text-white'
             }`}
           >
             📊 Factura Mensual
@@ -110,77 +133,38 @@ function FacturaInabie({ usuario, empresaId, onVolver }) {
           <button
             onClick={() => setModo('diaria')}
             className={`flex-1 px-4 py-3 rounded-xl text-sm font-bold transition-colors ${
-              modo === 'diaria'
-                ? 'bg-white text-indigo-700'
-                : 'bg-indigo-700 hover:bg-indigo-900 text-white'
+              modo === 'diaria' ? 'bg-white text-indigo-700' : 'bg-indigo-700 hover:bg-indigo-900 text-white'
             }`}
           >
             📅 Conduces Diarios
           </button>
         </div>
 
-        {/* Selector de PERÍODO según modo */}
         <div className="flex gap-3 flex-wrap">
           {modo === 'mensual' ? (
             <>
-              <select
-                value={mes}
-                onChange={(e) => setMes(parseInt(e.target.value))}
-                className="bg-white text-gray-900 px-4 py-2 rounded-lg text-sm font-semibold"
-              >
-                {MESES.map((m, i) => (
-                  <option key={i} value={i}>{m}</option>
-                ))}
+              <select value={mes} onChange={(e) => setMes(parseInt(e.target.value))} className="bg-white text-gray-900 px-4 py-2 rounded-lg text-sm font-semibold">
+                {MESES.map((m, i) => (<option key={i} value={i}>{m}</option>))}
               </select>
-              <select
-                value={anio}
-                onChange={(e) => setAnio(parseInt(e.target.value))}
-                className="bg-white text-gray-900 px-4 py-2 rounded-lg text-sm font-semibold"
-              >
-                {[2024, 2025, 2026, 2027, 2028].map(a => (
-                  <option key={a} value={a}>{a}</option>
-                ))}
+              <select value={anio} onChange={(e) => setAnio(parseInt(e.target.value))} className="bg-white text-gray-900 px-4 py-2 rounded-lg text-sm font-semibold">
+                {[2024, 2025, 2026, 2027, 2028].map(a => (<option key={a} value={a}>{a}</option>))}
               </select>
             </>
           ) : (
-            <input
-              type="date"
-              value={fechaSeleccionada}
-              onChange={(e) => setFechaSeleccionada(e.target.value)}
-              className="bg-white text-gray-900 px-4 py-2 rounded-lg text-sm font-semibold"
-            />
+            <input type="date" value={fechaSeleccionada} onChange={(e) => setFechaSeleccionada(e.target.value)} className="bg-white text-gray-900 px-4 py-2 rounded-lg text-sm font-semibold" />
           )}
-          <button
-            onClick={imprimir}
-            className="bg-white text-indigo-700 hover:bg-gray-100 font-bold px-4 py-2 rounded-lg text-sm ml-auto"
-          >
+          <button onClick={imprimir} className="bg-white text-indigo-700 hover:bg-gray-100 font-bold px-4 py-2 rounded-lg text-sm ml-auto">
             🖨️ Imprimir / PDF
           </button>
         </div>
       </div>
 
-      {/* DOCUMENTO IMPRIMIBLE */}
       {modo === 'mensual' ? (
-        <FacturaMensual
-          empresa={empresa}
-          finanzas={finanzas}
-          escuelas={escuelas}
-          operaciones={operaciones}
-          mes={mes}
-          anio={anio}
-        />
+        <FacturaMensual empresa={empresa} finanzas={finanzas} escuelas={escuelas} operaciones={operaciones} mes={mes} anio={anio} />
       ) : (
-        <ConducesDiarios
-          empresa={empresa}
-          finanzas={finanzas}
-          escuelas={escuelas}
-          operaciones={operaciones}
-          recetas={recetas}
-          fecha={fechaSeleccionada}
-        />
+        <ConducesDiarios empresa={empresa} finanzas={finanzas} escuelas={escuelas} operaciones={operaciones} recetas={recetas} fecha={fechaSeleccionada} usuario={usuario} onFirmar={firmarComoPropietario} />
       )}
 
-      {/* Estilos para impresión */}
       <style>{`
         @media print {
           body { background: white !important; }
@@ -194,9 +178,6 @@ function FacturaInabie({ usuario, empresaId, onVolver }) {
   )
 }
 
-// ============================================
-// FACTURA MENSUAL (totalidad del mes)
-// ============================================
 function FacturaMensual({ empresa, finanzas, escuelas, operaciones, mes, anio }) {
   const resumenPorEscuela = escuelas.map(escuela => {
     const opsEscuela = operaciones.filter(op => op.escuela_id === escuela.id)
@@ -206,14 +187,7 @@ function FacturaMensual({ empresa, finanzas, escuelas, operaciones, mes, anio })
     const diasTrabajados = opsEscuela.length
     const conducesFirmados = opsEscuela.filter(op => op.firma_imagen).length
 
-    return {
-      escuela,
-      diasTrabajados,
-      totalRaciones,
-      precioRacion,
-      subtotal,
-      conducesFirmados,
-    }
+    return { escuela, diasTrabajados, totalRaciones, precioRacion, subtotal, conducesFirmados }
   }).filter(item => item.totalRaciones > 0)
 
   const totalRacionesMes = resumenPorEscuela.reduce((sum, item) => sum + item.totalRaciones, 0)
@@ -222,12 +196,10 @@ function FacturaMensual({ empresa, finanzas, escuelas, operaciones, mes, anio })
   const anticipoPct = parseFloat(finanzas?.anticipo_porcentaje || 20)
   const anticipoMonto = totalFacturacion * (anticipoPct / 100)
   const pendienteCobrar = totalFacturacion - anticipoMonto
-
   const numeroFactura = `${anio}-${String(mes + 1).padStart(2, '0')}-${empresa?.rnc?.replace(/-/g, '').slice(-4) || '0001'}`
 
   return (
     <div className="bg-white rounded-2xl shadow-xl p-8 print:shadow-none print:p-4">
-
       <div className="border-b-2 border-gray-900 pb-4 mb-6">
         <div className="flex justify-between items-start">
           <div>
@@ -242,12 +214,8 @@ function FacturaMensual({ empresa, finanzas, escuelas, operaciones, mes, anio })
           <div className="text-right">
             <p className="text-xs text-gray-500 font-semibold tracking-wider">FACTURA</p>
             <p className="text-xl font-bold text-gray-900">N° {numeroFactura}</p>
-            <p className="text-sm text-gray-600 mt-1">
-              Período: <strong>{MESES[mes]} {anio}</strong>
-            </p>
-            <p className="text-xs text-gray-500 mt-1">
-              Emitida: {new Date().toLocaleDateString('es-DO')}
-            </p>
+            <p className="text-sm text-gray-600 mt-1">Período: <strong>{MESES[mes]} {anio}</strong></p>
+            <p className="text-xs text-gray-500 mt-1">Emitida: {new Date().toLocaleDateString('es-DO')}</p>
           </div>
         </div>
       </div>
@@ -272,11 +240,7 @@ function FacturaMensual({ empresa, finanzas, escuelas, operaciones, mes, anio })
         </thead>
         <tbody>
           {resumenPorEscuela.length === 0 ? (
-            <tr>
-              <td colSpan={6} className="py-8 text-center text-gray-400">
-                No hay operaciones registradas en {MESES[mes]} {anio}
-              </td>
-            </tr>
+            <tr><td colSpan={6} className="py-8 text-center text-gray-400">No hay operaciones registradas en {MESES[mes]} {anio}</td></tr>
           ) : (
             resumenPorEscuela.map(item => (
               <tr key={item.escuela.id} className="border-b border-gray-200">
@@ -291,9 +255,7 @@ function FacturaMensual({ empresa, finanzas, escuelas, operaciones, mes, anio })
                 <td className="py-3 text-center text-sm">
                   {item.conducesFirmados > 0 ? (
                     <span className="text-green-700 font-bold">✅ {item.conducesFirmados}</span>
-                  ) : (
-                    <span className="text-gray-400">—</span>
-                  )}
+                  ) : (<span className="text-gray-400">—</span>)}
                 </td>
                 <td className="py-3 text-right text-sm font-mono">{item.totalRaciones.toLocaleString()}</td>
                 <td className="py-3 text-right text-sm font-mono">RD$ {item.precioRacion.toFixed(2)}</td>
@@ -309,90 +271,45 @@ function FacturaMensual({ empresa, finanzas, escuelas, operaciones, mes, anio })
           <div className="bg-gray-50 rounded-xl p-4">
             <p className="text-xs text-gray-500 font-semibold tracking-wider mb-2">RESUMEN OPERATIVO</p>
             <div className="space-y-1 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Total raciones:</span>
-                <span className="font-bold">{totalRacionesMes.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Escuelas atendidas:</span>
-                <span className="font-bold">{resumenPorEscuela.length}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Días operativos:</span>
-                <span className="font-bold">
-                  {[...new Set(operaciones.map(op => op.fecha))].length}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Conduces firmados:</span>
-                <span className="font-bold text-green-700">
-                  ✅ {totalConducesFirmados} / {operaciones.length}
-                </span>
-              </div>
+              <div className="flex justify-between"><span className="text-gray-600">Total raciones:</span><span className="font-bold">{totalRacionesMes.toLocaleString()}</span></div>
+              <div className="flex justify-between"><span className="text-gray-600">Escuelas atendidas:</span><span className="font-bold">{resumenPorEscuela.length}</span></div>
+              <div className="flex justify-between"><span className="text-gray-600">Días operativos:</span><span className="font-bold">{[...new Set(operaciones.map(op => op.fecha))].length}</span></div>
+              <div className="flex justify-between"><span className="text-gray-600">Conduces firmados:</span><span className="font-bold text-green-700">✅ {totalConducesFirmados} / {operaciones.length}</span></div>
             </div>
           </div>
-
           <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
             <p className="text-xs text-blue-700 font-semibold tracking-wider mb-2">RESUMEN FINANCIERO</p>
             <div className="space-y-1 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-700">Total facturación:</span>
-                <span className="font-bold font-mono">RD$ {totalFacturacion.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
-              </div>
-              <div className="flex justify-between text-green-700">
-                <span>Anticipo INABIE ({anticipoPct}%):</span>
-                <span className="font-bold font-mono">- RD$ {anticipoMonto.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
-              </div>
-              <div className="flex justify-between border-t border-blue-300 pt-2 mt-2 text-base">
-                <span className="font-bold text-gray-900">PENDIENTE COBRAR:</span>
-                <span className="font-bold font-mono text-blue-900">RD$ {pendienteCobrar.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
-              </div>
+              <div className="flex justify-between"><span className="text-gray-700">Total facturación:</span><span className="font-bold font-mono">RD$ {totalFacturacion.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span></div>
+              <div className="flex justify-between text-green-700"><span>Anticipo INABIE ({anticipoPct}%):</span><span className="font-bold font-mono">- RD$ {anticipoMonto.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span></div>
+              <div className="flex justify-between border-t border-blue-300 pt-2 mt-2 text-base"><span className="font-bold text-gray-900">PENDIENTE COBRAR:</span><span className="font-bold font-mono text-blue-900">RD$ {pendienteCobrar.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span></div>
             </div>
           </div>
         </div>
       </div>
 
-      {empresa?.banco && empresa?.cuenta_bancaria && (
-        <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-xl p-4">
-          <p className="text-xs text-yellow-800 font-semibold tracking-wider mb-2">INFORMACIÓN DE PAGO</p>
-          <p className="text-sm text-gray-700">
-            <strong>Banco:</strong> {empresa.banco}
-            {' · '}
-            <strong>Cuenta:</strong> {empresa.cuenta_bancaria}
-          </p>
-        </div>
-      )}
-
-      {finanzas?.usa_ecf && finanzas?.rnc_certificado_ecf && (
-        <div className="mt-4 text-xs text-gray-500 text-center">
-          🧾 Documento certificado e-CF · RNC: {finanzas.rnc_certificado_ecf}
-        </div>
-      )}
-
       <div className="mt-8 text-center text-xs text-gray-400 border-t border-gray-200 pt-4">
         <p>Generado por Cocina PAE · {new Date().toLocaleString('es-DO')}</p>
-        <p className="mt-1">Plazo de pago promedio: {finanzas?.dias_pago_promedio || 90} días</p>
       </div>
     </div>
   )
 }
 
-/// ============================================
-// CONDUCES DIARIOS (uno por escuela) - FORMATO INABIE V1-PAE v2
-// ============================================
-function ConducesDiarios({ empresa, finanzas, escuelas, operaciones, recetas, fecha }) {
+function ConducesDiarios({ empresa, finanzas, escuelas, operaciones, recetas, fecha, usuario, onFirmar }) {
   const fechaCorta = new Date(fecha + 'T12:00:00').toLocaleDateString('es-DO', {
     day: '2-digit', month: '2-digit', year: 'numeric'
   })
 
-  // Solo escuelas que tuvieron operación ese día
   const escuelasConOperacion = escuelas
     .map(escuela => {
       const op = operaciones.find(o => o.escuela_id === escuela.id)
-      const receta = op ? recetas.find(r => r.id === op.receta_id) : null
-      return { escuela, op, receta }
+      if (!op) return null
+      const recetaOverride = op.receta_id_override ? recetas.find(r => r.id === op.receta_id_override) : null
+      const recetaPlanificada = recetas.find(r => r.id === op.receta_id)
+      const receta = recetaOverride || recetaPlanificada
+      return { escuela, op, receta, esRecetaSustituida: !!recetaOverride }
     })
-    .filter(item => item.op)
+    .filter(item => item !== null)
 
   if (escuelasConOperacion.length === 0) {
     return (
@@ -400,95 +317,68 @@ function ConducesDiarios({ empresa, finanzas, escuelas, operaciones, recetas, fe
         <div className="text-6xl mb-4">📅</div>
         <h3 className="text-xl font-bold text-gray-900">Sin operaciones</h3>
         <p className="text-gray-500 mt-2">No hay entregas registradas para el {fechaCorta}.</p>
-        <p className="text-sm text-gray-400 mt-4">Selecciona otra fecha o registra las operaciones del día.</p>
       </div>
     )
   }
 
-  // Construir provincia/municipio
   const formatearProvinciaMunicipio = (esc) => {
     const partes = [esc.provincia, esc.municipio].filter(Boolean)
     return partes.length > 0 ? partes.join(' / ').toUpperCase() : '—'
   }
 
-  // Hora de recepción si firmó digitalmente
   const formatearHoraRecepcion = (op) => {
     if (!op.firmado_en) return null
-    return new Date(op.firmado_en).toLocaleTimeString('es-DO', {
-      hour: '2-digit', minute: '2-digit', hour12: true
-    })
+    return new Date(op.firmado_en).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit', hour12: true })
   }
 
-  // Fecha de recepción si firmó digitalmente
   const formatearFechaRecepcion = (op) => {
     if (!op.firmado_en) return null
-    return new Date(op.firmado_en).toLocaleDateString('es-DO', {
-      day: '2-digit', month: '2-digit', year: 'numeric'
-    })
+    return new Date(op.firmado_en).toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' })
   }
+
+  const formatearFechaHoraPropietario = (op) => {
+    if (!op.firma_propietario_at) return null
+    const fechaObj = new Date(op.firma_propietario_at)
+    return {
+      fecha: fechaObj.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+      hora: fechaObj.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit', hour12: true })
+    }
+  }
+
+  const usuarioPuedeFirmar = usuario && ROLES_PUEDEN_FIRMAR.includes(usuario.rol)
 
   return (
     <>
       {escuelasConOperacion.map((item, idx) => {
-        const { escuela, op, receta } = item
+        const { escuela, op, receta, esRecetaSustituida } = item
         const numeroConduce = op.numero_conduce || String(4000 + idx + 1).padStart(4, '0')
         const horaRecepcion = formatearHoraRecepcion(op)
         const fechaRecepcion = formatearFechaRecepcion(op)
         const provinciaMunicipio = formatearProvinciaMunicipio(escuela)
         const descripcionProducto = receta?.nombre || 'Ración alimenticia escolar'
+        
+        const directorFirmo = !!op.firma_imagen
+        const propietarioFirmo = !!op.firma_propietario_at
+        const propietarioInfo = formatearFechaHoraPropietario(op)
+        const puedeFirmarAhora = usuarioPuedeFirmar && directorFirmo && !propietarioFirmo
 
         return (
-          <div
-            key={escuela.id}
-            className={`bg-white rounded-2xl shadow-xl p-10 print:shadow-none print:p-6 mb-6 ${idx < escuelasConOperacion.length - 1 ? 'page-break' : ''}`}
-          >
+          <div key={escuela.id} className={`bg-white rounded-2xl shadow-xl p-10 print:shadow-none print:p-6 mb-6 ${idx < escuelasConOperacion.length - 1 ? 'page-break' : ''}`}>
 
-            {/* ENCABEZADO CENTRADO - Estilo INABIE oficial */}
             <div className="text-center pb-4 mb-6 border-b-2 border-gray-900">
-              <h1 className="text-2xl font-black text-gray-900 tracking-tight uppercase">
-                {empresa?.nombre || 'Mi Cocina'}
-              </h1>
-              {empresa?.direccion && (
-                <p className="text-xs text-gray-700 mt-1 uppercase tracking-wide">
-                  {empresa.direccion}
-                </p>
-              )}
-              {empresa?.telefono && (
-                <p className="text-xs text-gray-700 mt-0.5">
-                  Tel.: {empresa.telefono}
-                </p>
-              )}
-              {empresa?.rnc && (
-                <p className="text-xs text-gray-700 mt-0.5 font-semibold">
-                  RNC: {empresa.rnc}
-                </p>
-              )}
+              <h1 className="text-2xl font-black text-gray-900 tracking-tight uppercase">{empresa?.nombre || 'Mi Cocina'}</h1>
+              {empresa?.direccion && (<p className="text-xs text-gray-700 mt-1 uppercase tracking-wide">{empresa.direccion}</p>)}
+              {empresa?.telefono && (<p className="text-xs text-gray-700 mt-0.5">Tel.: {empresa.telefono}</p>)}
+              {empresa?.rnc && (<p className="text-xs text-gray-700 mt-0.5 font-semibold">RNC: {empresa.rnc}</p>)}
             </div>
 
-            {/* BLOQUE SUPERIOR: Datos del centro (izq) + Conduce no/Fecha (der) */}
             <div className="grid grid-cols-3 gap-6 mb-6 text-sm">
-              
-              {/* Columna izquierda y central - Datos centro educativo (2/3) */}
               <div className="col-span-2 space-y-2">
-                <CampoFormulario 
-                  label="Nombre Centro Educativo" 
-                  valor={escuela.nombre?.toUpperCase()} 
-                />
-                <CampoFormulario 
-                  label="Director del Centro" 
-                  valor={escuela.director_nombre?.toUpperCase()} 
-                />
-                <CampoFormulario 
-                  label="Dirección" 
-                  valor={[escuela.barrio_sector, escuela.direccion].filter(Boolean).join(' / ').toUpperCase() || '—'} 
-                />
-                <CampoFormulario 
-                  label="Provincia/Municipio" 
-                  valor={provinciaMunicipio} 
-                />
+                <CampoFormulario label="Nombre Centro Educativo" valor={escuela.nombre?.toUpperCase()} />
+                <CampoFormulario label="Director del Centro" valor={escuela.director_nombre?.toUpperCase()} />
+                <CampoFormulario label="Dirección" valor={[escuela.barrio_sector, escuela.direccion].filter(Boolean).join(' / ').toUpperCase() || '—'} />
+                <CampoFormulario label="Provincia/Municipio" valor={provinciaMunicipio} />
               </div>
-
-              {/* Columna derecha - Datos oficiales */}
               <div className="space-y-2">
                 <div className="bg-gradient-to-br from-indigo-50 to-blue-50 border-2 border-indigo-200 rounded-xl p-3 shadow-sm">
                   <div className="text-center mb-2 pb-2 border-b border-indigo-200">
@@ -500,64 +390,43 @@ function ConducesDiarios({ empresa, finanzas, escuelas, operaciones, recetas, fe
                     <p className="text-base font-bold text-indigo-900 font-mono">{fechaCorta}</p>
                   </div>
                 </div>
-
-                <CampoFormulario 
-                  label="Cód. Centro" 
-                  valor={escuela.codigo_centro || '—'}
-                  mono
-                />
-                <CampoFormulario 
-                  label="Teléfono" 
-                  valor={escuela.director_telefono || '—'}
-                  mono
-                />
-                <CampoFormulario 
-                  label="Regional/Distrito" 
-                  valor={escuela.regional_distrito || '—'}
-                  mono
-                />
+                <CampoFormulario label="Cód. Centro" valor={escuela.codigo_centro || '—'} mono />
+                <CampoFormulario label="Teléfono" valor={escuela.director_telefono || '—'} mono />
+                <CampoFormulario label="Regional/Distrito" valor={escuela.regional_distrito || '—'} mono />
               </div>
             </div>
 
-            {/* TÍTULO DE TABLA estilo INABIE */}
             <div className="text-center my-4">
               <p className="text-sm font-bold text-gray-700 tracking-wide">
                 &laquo;&laquo;&laquo;&laquo; Detalle de las Raciones Entregadas y Recibidas &raquo;&raquo;&raquo;&raquo;
               </p>
             </div>
 
-            {/* TABLA DE RACIONES - Sin precios */}
             <div className="flex items-center gap-3 mb-6">
               <div className="bg-gray-900 text-white px-3 py-8 rounded-l-lg flex items-center justify-center">
-                <p className="text-xs font-bold tracking-widest [writing-mode:vertical-rl] rotate-180">
-                  RACIONES
-                </p>
+                <p className="text-xs font-bold tracking-widest [writing-mode:vertical-rl] rotate-180">RACIONES</p>
               </div>
               <table className="flex-1 border-2 border-gray-300 rounded-r-lg overflow-hidden">
                 <thead className="bg-gray-100">
                   <tr>
-                    <th className="text-left py-3 px-4 text-xs font-bold text-gray-700 tracking-wider border-r border-gray-300">
-                      Descripción del producto
-                    </th>
-                    <th className="text-center py-3 px-4 text-xs font-bold text-gray-700 tracking-wider w-32">
-                      Cantidad
-                    </th>
+                    <th className="text-left py-3 px-4 text-xs font-bold text-gray-700 tracking-wider border-r border-gray-300">Descripción del producto</th>
+                    <th className="text-center py-3 px-4 text-xs font-bold text-gray-700 tracking-wider w-32">Cantidad</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr className="border-t border-gray-300">
                     <td className="py-4 px-4 text-base font-semibold text-gray-900 border-r border-gray-300">
                       {descripcionProducto}
+                      {esRecetaSustituida && (
+                        <span className="ml-2 inline-block bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded">MENÚ SUSTITUIDO</span>
+                      )}
                     </td>
-                    <td className="py-4 px-4 text-center text-xl font-black font-mono text-gray-900">
-                      {op.raciones_planificadas?.toLocaleString() || 0}
-                    </td>
+                    <td className="py-4 px-4 text-center text-xl font-black font-mono text-gray-900">{op.raciones_planificadas?.toLocaleString() || 0}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
 
-            {/* OBSERVACIONES */}
             <div className="mb-8">
               <div className="flex items-baseline gap-2">
                 <p className="text-sm font-semibold text-gray-700 whitespace-nowrap">Observaciones:</p>
@@ -567,55 +436,68 @@ function ConducesDiarios({ empresa, finanzas, escuelas, operaciones, recetas, fe
               </div>
             </div>
 
-            {/* SECCIÓN DE FIRMAS - 2 columnas */}
             <div className="grid grid-cols-2 gap-12 mt-12">
               
-              {/* FIRMA Y SELLO DEL SUPLIDOR (izquierda) */}
-              <div className="text-center">
-                <div className="border-b-2 border-gray-900 mb-2 h-20 flex items-end justify-center pb-1">
-                  {/* Espacio para firma manuscrita del suplidor */}
-                </div>
-                <p className="text-xs font-bold text-gray-900 tracking-widest">
-                  FIRMA Y SELLO DEL SUPLIDOR
-                </p>
-                <p className="text-xs text-gray-600 mt-1">{empresa?.nombre}</p>
-              </div>
-
-              {/* RECIBIDO POR (derecha) */}
               <div>
-                <p className="text-sm font-bold text-gray-900 mb-4">Recibido por:</p>
+                <p className="text-sm font-bold text-gray-900 mb-4">Firma y sello del Propietario:</p>
                 
-                {op.firma_imagen ? (
-                  // CON FIRMA DIGITAL - se pre-llenan los campos
+                {propietarioFirmo ? (
                   <div className="space-y-3">
-                    <div className="bg-green-50 border-2 border-green-300 rounded-lg p-2 mb-3">
-                      <img 
-                        src={op.firma_imagen} 
-                        alt="Firma digital" 
-                        className="max-h-16 mx-auto object-contain"
-                      />
-                      <p className="text-[10px] text-green-700 text-center font-bold tracking-wider mt-1">
-                        ✓ FIRMA DIGITAL VALIDADA
-                      </p>
+                    <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-2 mb-3">
+                      {empresa?.firma_propietario_url && (
+                        <img src={empresa.firma_propietario_url} alt="Firma del propietario" className="max-h-16 mx-auto object-contain" />
+                      )}
+                      <p className="text-[10px] text-blue-700 text-center font-bold tracking-wider mt-1">✓ FIRMA DIGITAL VALIDADA</p>
                     </div>
-                    <CampoFormulario 
-                      label="Nombre" 
-                      valor={(op.firmado_por_nombre || escuela.director_nombre)?.toUpperCase()} 
-                    />
-                    <CampoFormulario 
-                      label="Fecha Recepción" 
-                      valor={fechaRecepcion}
-                      mono
-                    />
-                    <CampoFormulario 
-                      label="Hora Recepción" 
-                      valor={horaRecepcion}
-                      mono
-                    />
+                    <CampoFormulario label="Nombre" valor={(empresa?.nombre_propietario || 'Propietario').toUpperCase()} />
+                    <CampoFormulario label="Fecha Firma" valor={propietarioInfo?.fecha} mono />
+                    <CampoFormulario label="Hora Firma" valor={propietarioInfo?.hora} mono />
+                  </div>
+                ) : puedeFirmarAhora ? (
+                  <div className="space-y-3">
+                    <div className="bg-amber-50 border-2 border-amber-300 border-dashed rounded-lg p-4 text-center print:hidden">
+                      <p className="text-xs text-amber-800 mb-3">⏳ El director ya firmó. Falta tu firma como propietaria.</p>
+                      <button
+                        onClick={() => onFirmar(op.id)}
+                        className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-4 py-2 rounded-lg shadow-md transition-colors"
+                      >
+                        🖊️ Firmar como {empresa?.nombre_propietario || 'Propietario'}
+                      </button>
+                    </div>
+                    <div className="hidden print:block space-y-3">
+                      <div className="border-b-2 border-gray-900 h-20"></div>
+                      <p className="text-xs text-gray-600 text-center">{empresa?.nombre_propietario || empresa?.nombre}</p>
+                    </div>
                   </div>
                 ) : (
-                  // SIN FIRMA - líneas en blanco para llenar a mano
                   <div className="space-y-3">
+                    <div className="border-b-2 border-gray-900 mb-2 h-20"></div>
+                    <CampoFormulario label="Nombre" valor="" />
+                    <CampoFormulario label="Fecha Firma" valor="" />
+                    <CampoFormulario label="Hora Firma" valor="" />
+                    {!directorFirmo && (
+                      <p className="text-[10px] text-gray-400 italic text-center print:hidden">Pendiente: el director debe firmar primero</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <p className="text-sm font-bold text-gray-900 mb-4">Recibido por (Director):</p>
+                
+                {op.firma_imagen ? (
+                  <div className="space-y-3">
+                    <div className="bg-green-50 border-2 border-green-300 rounded-lg p-2 mb-3">
+                      <img src={op.firma_imagen} alt="Firma digital" className="max-h-16 mx-auto object-contain" />
+                      <p className="text-[10px] text-green-700 text-center font-bold tracking-wider mt-1">✓ FIRMA DIGITAL VALIDADA</p>
+                    </div>
+                    <CampoFormulario label="Nombre" valor={(op.firmado_por_nombre || escuela.director_nombre)?.toUpperCase()} />
+                    <CampoFormulario label="Fecha Recepción" valor={fechaRecepcion} mono />
+                    <CampoFormulario label="Hora Recepción" valor={horaRecepcion} mono />
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="border-b-2 border-gray-900 mb-2 h-20"></div>
                     <CampoFormulario label="Nombre" valor="" />
                     <CampoFormulario label="Fecha Recepción" valor="" />
                     <CampoFormulario label="Hora Recepción" valor="" />
@@ -625,16 +507,18 @@ function ConducesDiarios({ empresa, finanzas, escuelas, operaciones, recetas, fe
 
             </div>
 
-            {/* Badge de firmado digitalmente (sutil, abajo) */}
-            {op.firma_imagen && (
-              <div className="mt-8 text-center">
-                <span className="inline-block bg-green-100 text-green-800 text-xs font-bold px-4 py-1.5 rounded-full">
-                  ✅ DOCUMENTO FIRMADO DIGITALMENTE
-                </span>
-              </div>
-            )}
+            <div className="mt-8 text-center flex justify-center gap-2 flex-wrap">
+              {directorFirmo && propietarioFirmo && (
+                <span className="inline-block bg-green-100 text-green-800 text-xs font-bold px-4 py-1.5 rounded-full">✅ CONDUCE COMPLETO - AMBAS FIRMAS APLICADAS</span>
+              )}
+              {directorFirmo && !propietarioFirmo && (
+                <span className="inline-block bg-amber-100 text-amber-800 text-xs font-bold px-4 py-1.5 rounded-full">⏳ FIRMADO POR DIRECTOR - FALTA FIRMA PROPIETARIO</span>
+              )}
+              {!directorFirmo && !propietarioFirmo && (
+                <span className="inline-block bg-gray-100 text-gray-700 text-xs font-bold px-4 py-1.5 rounded-full print:hidden">📋 CONDUCE PENDIENTE DE FIRMAS</span>
+              )}
+            </div>
 
-            {/* FOOTER estilo INABIE */}
             <div className="mt-10 pt-3 border-t border-gray-300 flex justify-between items-center text-[10px] text-gray-500">
               <p>
                 Preparado por: <span className="font-semibold">{empresa?.email || 'cocinapae@andamio.do'}</span>
@@ -643,9 +527,7 @@ function ConducesDiarios({ empresa, finanzas, escuelas, operaciones, recetas, fe
                 <span className="mx-2">·</span>
                 Fecha de impresión: <span className="font-semibold">{new Date().toLocaleDateString('es-DO')}</span>
               </p>
-              <p>
-                Página: <span className="font-bold">{idx + 1}</span>
-              </p>
+              <p>Página: <span className="font-bold">{idx + 1}</span></p>
             </div>
 
           </div>
@@ -655,16 +537,10 @@ function ConducesDiarios({ empresa, finanzas, escuelas, operaciones, recetas, fe
   )
 }
 
-// ============================================
-// COMPONENTE AUXILIAR: Campo de formulario estilo INABIE
-// Label + línea con valor (o vacía para llenar a mano)
-// ============================================
 function CampoFormulario({ label, valor, mono = false }) {
   return (
     <div className="flex items-baseline gap-2">
-      <p className="text-xs font-semibold text-gray-700 whitespace-nowrap">
-        {label}:
-      </p>
+      <p className="text-xs font-semibold text-gray-700 whitespace-nowrap">{label}:</p>
       <div className={`flex-1 border-b border-gray-400 px-1 text-sm text-gray-900 font-semibold min-h-[1.25rem] ${mono ? 'font-mono' : ''}`}>
         {valor || ''}
       </div>
