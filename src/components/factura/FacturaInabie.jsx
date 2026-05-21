@@ -11,6 +11,7 @@ const ROLES_PUEDEN_FIRMAR = ['propietario', 'administrador']
 function FacturaInabie({ usuario, empresaId, onVolver }) {
   const hoy = new Date()
   const [modo, setModo] = useState('mensual')
+  const [tipoVistaConduces, setTipoVistaConduces] = useState('dia')
   const [mes, setMes] = useState(hoy.getMonth())
   const [anio, setAnio] = useState(hoy.getFullYear())
   const [fechaSeleccionada, setFechaSeleccionada] = useState(hoy.toISOString().split('T')[0])
@@ -24,7 +25,7 @@ function FacturaInabie({ usuario, empresaId, onVolver }) {
 
   useEffect(() => {
     cargarDatos()
-  }, [empresaId, mes, anio, fechaSeleccionada, modo])
+  }, [empresaId, mes, anio, fechaSeleccionada, modo, tipoVistaConduces])
 
   async function cargarDatos() {
     setCargando(true)
@@ -58,13 +59,30 @@ function FacturaInabie({ usuario, empresaId, onVolver }) {
         .in('estado', ['entregada', 'cerrada'])
       setOperaciones(opsData || [])
     } else {
-      const { data: opsData } = await supabase
-        .from('operaciones_dia')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .eq('fecha', fechaSeleccionada)
-        .in('estado', ['entregada', 'cerrada'])
-      setOperaciones(opsData || [])
+      if (tipoVistaConduces === 'dia') {
+        const { data: opsData } = await supabase
+          .from('operaciones_dia')
+          .select('*')
+          .eq('empresa_id', empresaId)
+          .eq('fecha', fechaSeleccionada)
+          .in('estado', ['entregada', 'cerrada'])
+          .order('numero_conduce', { ascending: true })
+        setOperaciones(opsData || [])
+      } else {
+        const inicioMes = new Date(anio, mes, 1).toISOString().split('T')[0]
+        const finMes = new Date(anio, mes + 1, 0).toISOString().split('T')[0]
+        
+        const { data: opsData } = await supabase
+          .from('operaciones_dia')
+          .select('*')
+          .eq('empresa_id', empresaId)
+          .gte('fecha', inicioMes)
+          .lte('fecha', finMes)
+          .in('estado', ['entregada', 'cerrada'])
+          .order('fecha', { ascending: true })
+          .order('numero_conduce', { ascending: true })
+        setOperaciones(opsData || [])
+      }
     }
 
     setCargando(false)
@@ -136,9 +154,34 @@ function FacturaInabie({ usuario, empresaId, onVolver }) {
               modo === 'diaria' ? 'bg-white text-indigo-700' : 'bg-indigo-700 hover:bg-indigo-900 text-white'
             }`}
           >
-            📅 Conduces Diarios
+            📅 Conduces
           </button>
         </div>
+
+        {modo === 'diaria' && (
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => setTipoVistaConduces('dia')}
+              className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${
+                tipoVistaConduces === 'dia' 
+                  ? 'bg-indigo-200 text-indigo-900' 
+                  : 'bg-indigo-700/50 hover:bg-indigo-700 text-white'
+              }`}
+            >
+              📅 Un día
+            </button>
+            <button
+              onClick={() => setTipoVistaConduces('mes')}
+              className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${
+                tipoVistaConduces === 'mes' 
+                  ? 'bg-indigo-200 text-indigo-900' 
+                  : 'bg-indigo-700/50 hover:bg-indigo-700 text-white'
+              }`}
+            >
+              🗓️ Mes completo
+            </button>
+          </div>
+        )}
 
         <div className="flex gap-3 flex-wrap">
           {modo === 'mensual' ? (
@@ -150,27 +193,109 @@ function FacturaInabie({ usuario, empresaId, onVolver }) {
                 {[2024, 2025, 2026, 2027, 2028].map(a => (<option key={a} value={a}>{a}</option>))}
               </select>
             </>
+          ) : tipoVistaConduces === 'dia' ? (
+            <input 
+              type="date" 
+              value={fechaSeleccionada} 
+              onChange={(e) => setFechaSeleccionada(e.target.value)} 
+              className="bg-white text-gray-900 px-4 py-2 rounded-lg text-sm font-semibold" 
+            />
           ) : (
-            <input type="date" value={fechaSeleccionada} onChange={(e) => setFechaSeleccionada(e.target.value)} className="bg-white text-gray-900 px-4 py-2 rounded-lg text-sm font-semibold" />
+            <>
+              <select value={mes} onChange={(e) => setMes(parseInt(e.target.value))} className="bg-white text-gray-900 px-4 py-2 rounded-lg text-sm font-semibold">
+                {MESES.map((m, i) => (<option key={i} value={i}>{m}</option>))}
+              </select>
+              <select value={anio} onChange={(e) => setAnio(parseInt(e.target.value))} className="bg-white text-gray-900 px-4 py-2 rounded-lg text-sm font-semibold">
+                {[2024, 2025, 2026, 2027, 2028].map(a => (<option key={a} value={a}>{a}</option>))}
+              </select>
+            </>
           )}
           <button onClick={imprimir} className="bg-white text-indigo-700 hover:bg-gray-100 font-bold px-4 py-2 rounded-lg text-sm ml-auto">
             🖨️ Imprimir / PDF
           </button>
         </div>
+
+        {modo === 'diaria' && tipoVistaConduces === 'mes' && operaciones.length > 0 && (
+          <div className="mt-3 bg-indigo-700/50 rounded-lg px-3 py-2 text-xs text-indigo-100">
+            📊 <strong>{operaciones.length} conduce(s)</strong> en {MESES[mes]} {anio} · 
+            Cada uno saldrá en una página separada al imprimir
+          </div>
+        )}
       </div>
 
       {modo === 'mensual' ? (
         <FacturaMensual empresa={empresa} finanzas={finanzas} escuelas={escuelas} operaciones={operaciones} mes={mes} anio={anio} />
       ) : (
-        <ConducesDiarios empresa={empresa} finanzas={finanzas} escuelas={escuelas} operaciones={operaciones} recetas={recetas} fecha={fechaSeleccionada} usuario={usuario} onFirmar={firmarComoPropietario} />
+        <ConducesDiarios 
+          empresa={empresa} 
+          finanzas={finanzas} 
+          escuelas={escuelas} 
+          operaciones={operaciones} 
+          recetas={recetas} 
+          fecha={fechaSeleccionada} 
+          usuario={usuario} 
+          onFirmar={firmarComoPropietario}
+          tipoVista={tipoVistaConduces}
+          mes={mes}
+          anio={anio}
+        />
       )}
 
       <style>{`
         @media print {
-          body { background: white !important; }
-          @page { margin: 1.5cm; }
-          .page-break { page-break-after: always; }
-          .page-break:last-child { page-break-after: auto; }
+          body { 
+            background: white !important; 
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          
+          @page { 
+            margin: 1cm; 
+            size: letter;
+          }
+          
+          .page-break { 
+            page-break-after: always; 
+            break-after: page;
+          }
+          .page-break:last-child { 
+            page-break-after: auto;
+            break-after: auto;
+          }
+          
+          .bg-white.rounded-2xl.shadow-xl {
+            padding: 0.5rem !important;
+            box-shadow: none !important;
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+          
+          .mb-6 { margin-bottom: 0.75rem !important; }
+          .mb-8 { margin-bottom: 1rem !important; }
+          .mt-12 { margin-top: 1.5rem !important; }
+          .mt-10 { margin-top: 1rem !important; }
+          .mt-8 { margin-top: 1rem !important; }
+          .my-4 { margin-top: 0.5rem !important; margin-bottom: 0.5rem !important; }
+          .pb-4 { padding-bottom: 0.5rem !important; }
+          .gap-6 { gap: 1rem !important; }
+          .gap-12 { gap: 2rem !important; }
+          
+          .h-20 { height: 3.5rem !important; }
+          
+          .text-2xl { font-size: 1.25rem !important; }
+          .text-xl { font-size: 1.1rem !important; }
+          .text-base { font-size: 0.9rem !important; }
+          .text-sm { font-size: 0.8rem !important; }
+          .text-xs { font-size: 0.7rem !important; }
+          
+          table th, table td { 
+            padding-top: 0.5rem !important; 
+            padding-bottom: 0.5rem !important; 
+          }
+          
+          img[alt*="firma"], img[alt*="Firma"] {
+            max-height: 3rem !important;
+          }
         }
       `}</style>
 
@@ -295,28 +420,24 @@ function FacturaMensual({ empresa, finanzas, escuelas, operaciones, mes, anio })
   )
 }
 
-function ConducesDiarios({ empresa, finanzas, escuelas, operaciones, recetas, fecha, usuario, onFirmar }) {
-  const fechaCorta = new Date(fecha + 'T12:00:00').toLocaleDateString('es-DO', {
-    day: '2-digit', month: '2-digit', year: 'numeric'
-  })
+function ConducesDiarios({ empresa, finanzas, escuelas, operaciones, recetas, fecha, usuario, onFirmar, tipoVista, mes, anio }) {
+  const operacionesAMostrar = tipoVista === 'dia' ? operaciones : operaciones
 
-  const escuelasConOperacion = escuelas
-    .map(escuela => {
-      const op = operaciones.find(o => o.escuela_id === escuela.id)
-      if (!op) return null
-      const recetaOverride = op.receta_id_override ? recetas.find(r => r.id === op.receta_id_override) : null
-      const recetaPlanificada = recetas.find(r => r.id === op.receta_id)
-      const receta = recetaOverride || recetaPlanificada
-      return { escuela, op, receta, esRecetaSustituida: !!recetaOverride }
-    })
-    .filter(item => item !== null)
-
-  if (escuelasConOperacion.length === 0) {
+  if (operacionesAMostrar.length === 0) {
+    const fechaCorta = tipoVista === 'dia' 
+      ? new Date(fecha + 'T12:00:00').toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      : `${MESES[mes]} ${anio}`
+    
     return (
       <div className="bg-white rounded-2xl shadow-xl p-12 text-center">
         <div className="text-6xl mb-4">📅</div>
         <h3 className="text-xl font-bold text-gray-900">Sin operaciones</h3>
-        <p className="text-gray-500 mt-2">No hay entregas registradas para el {fechaCorta}.</p>
+        <p className="text-gray-500 mt-2">
+          {tipoVista === 'dia' 
+            ? `No hay entregas registradas para el ${fechaCorta}.`
+            : `No hay entregas registradas en ${fechaCorta}.`
+          }
+        </p>
       </div>
     )
   }
@@ -349,8 +470,19 @@ function ConducesDiarios({ empresa, finanzas, escuelas, operaciones, recetas, fe
 
   return (
     <>
-      {escuelasConOperacion.map((item, idx) => {
-        const { escuela, op, receta, esRecetaSustituida } = item
+      {operacionesAMostrar.map((op, idx) => {
+        const escuela = escuelas.find(e => e.id === op.escuela_id)
+        if (!escuela) return null
+
+        const recetaOverride = op.receta_id_override ? recetas.find(r => r.id === op.receta_id_override) : null
+        const recetaPlanificada = recetas.find(r => r.id === op.receta_id)
+        const receta = recetaOverride || recetaPlanificada
+        const esRecetaSustituida = !!recetaOverride
+
+        const fechaConduce = new Date(op.fecha + 'T12:00:00').toLocaleDateString('es-DO', {
+          day: '2-digit', month: '2-digit', year: 'numeric'
+        })
+
         const numeroConduce = op.numero_conduce || String(4000 + idx + 1).padStart(4, '0')
         const horaRecepcion = formatearHoraRecepcion(op)
         const fechaRecepcion = formatearFechaRecepcion(op)
@@ -363,7 +495,7 @@ function ConducesDiarios({ empresa, finanzas, escuelas, operaciones, recetas, fe
         const puedeFirmarAhora = usuarioPuedeFirmar && directorFirmo && !propietarioFirmo
 
         return (
-          <div key={escuela.id} className={`bg-white rounded-2xl shadow-xl p-10 print:shadow-none print:p-6 mb-6 ${idx < escuelasConOperacion.length - 1 ? 'page-break' : ''}`}>
+          <div key={op.id} className={`bg-white rounded-2xl shadow-xl p-10 print:shadow-none print:p-6 mb-6 ${idx < operacionesAMostrar.length - 1 ? 'page-break' : ''}`}>
 
             <div className="text-center pb-4 mb-6 border-b-2 border-gray-900">
               <h1 className="text-2xl font-black text-gray-900 tracking-tight uppercase">{empresa?.nombre || 'Mi Cocina'}</h1>
@@ -387,7 +519,7 @@ function ConducesDiarios({ empresa, finanzas, escuelas, operaciones, recetas, fe
                   </div>
                   <div className="text-center">
                     <p className="text-[10px] text-indigo-600 font-bold tracking-widest">FECHA</p>
-                    <p className="text-base font-bold text-indigo-900 font-mono">{fechaCorta}</p>
+                    <p className="text-base font-bold text-indigo-900 font-mono">{fechaConduce}</p>
                   </div>
                 </div>
                 <CampoFormulario label="Cód. Centro" valor={escuela.codigo_centro || '—'} mono />
