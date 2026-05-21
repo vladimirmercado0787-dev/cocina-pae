@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
+import ModalNuevoContrato from './ModalNuevoContrato'
 
 function VistaContratos({ usuario, empresaId, onVolver }) {
   const [empresa, setEmpresa] = useState(null)
@@ -8,6 +9,10 @@ function VistaContratos({ usuario, empresaId, onVolver }) {
   const [cargando, setCargando] = useState(true)
   const [filtroEstado, setFiltroEstado] = useState('todos')
   const [busqueda, setBusqueda] = useState('')
+  
+  // Estado del modal
+  const [modalAbierto, setModalAbierto] = useState(false)
+  const [empleadoPreseleccionado, setEmpleadoPreseleccionado] = useState(null)
 
   useEffect(() => {
     if (empresaId) cargarDatos()
@@ -41,10 +46,9 @@ function VistaContratos({ usuario, empresaId, onVolver }) {
     }
 
     // Detectar empleados marcados como 'contrato_digital' SIN contrato creado
-    // Excluye al rol 'propietario' (no se contrata a sí mismo)
     const { data: empleadosDigital } = await supabase
       .from('usuarios')
-      .select('id, nombre, rol, sexo, foto_url, sueldo, frecuencia_pago, fecha_contratacion')
+      .select('id, nombre, rol, sexo, foto_url, sueldo, frecuencia_pago, fecha_contratacion, cedula')
       .eq('empresa_id', empresaId)
       .eq('activo', true)
       .eq('gestion_contrato', 'contrato_digital')
@@ -54,6 +58,8 @@ function VistaContratos({ usuario, empresaId, onVolver }) {
       const idsConContrato = (contratosData || []).map(c => c.usuario_id)
       const pendientes = empleadosDigital.filter(e => !idsConContrato.includes(e.id))
       setEmpleadosPendientes(pendientes)
+    } else {
+      setEmpleadosPendientes([])
     }
 
     setCargando(false)
@@ -81,6 +87,32 @@ function VistaContratos({ usuario, empresaId, onVolver }) {
         </div>
       </div>
     )
+  }
+
+  // Abrir modal con empleado preseleccionado
+  function abrirModalConEmpleado(empleado) {
+    setEmpleadoPreseleccionado(empleado)
+    setModalAbierto(true)
+  }
+
+  // Abrir modal sin empleado (selecciona uno en el wizard)
+  function abrirModalNuevo() {
+    setEmpleadoPreseleccionado(null)
+    setModalAbierto(true)
+  }
+
+  // Cerrar modal y recargar datos
+  function cerrarModal() {
+    setModalAbierto(false)
+    setEmpleadoPreseleccionado(null)
+  }
+
+  // Contrato creado exitosamente
+  function contratoCreado(nuevoContrato) {
+    setModalAbierto(false)
+    setEmpleadoPreseleccionado(null)
+    cargarDatos()
+    alert('✅ Contrato creado como borrador.\n\nProcede a la firma presencial cuando estés listo.')
   }
 
   // Helpers
@@ -160,7 +192,6 @@ function VistaContratos({ usuario, empresaId, onVolver }) {
   const totalBorradores = contratos.filter(c => c.estado === 'borrador' || c.estado === 'pendiente_firma').length
   const totalTerminados = contratos.filter(c => c.estado === 'terminado').length
 
-  // Placeholders para botones futuros
   function avisarProximamente(tarea) {
     alert(`⏳ ${tarea}\n\nEsta funcionalidad se construirá en la próxima fase del módulo.`)
   }
@@ -184,6 +215,18 @@ function VistaContratos({ usuario, empresaId, onVolver }) {
   return (
     <div className="w-full max-w-5xl">
       
+      {/* MODAL DEL WIZARD */}
+      {modalAbierto && (
+        <ModalNuevoContrato
+          empresaId={empresaId}
+          usuarioActual={usuario}
+          empleadoPreseleccionado={empleadoPreseleccionado}
+          empresa={empresa}
+          onCerrar={cerrarModal}
+          onContratoCreado={contratoCreado}
+        />
+      )}
+
       {/* HEADER */}
       <div className="bg-gradient-to-br from-purple-600 to-indigo-700 rounded-2xl p-6 mb-6 text-white">
         <div className="flex justify-between items-start mb-2">
@@ -245,7 +288,7 @@ function VistaContratos({ usuario, empresaId, onVolver }) {
                   </div>
                 </div>
                 <button
-                  onClick={() => avisarProximamente(`Crear contrato para ${emp.nombre}`)}
+                  onClick={() => abrirModalConEmpleado(emp)}
                   className="bg-yellow-600 hover:bg-yellow-700 text-white text-sm font-bold px-4 py-2 rounded-lg"
                 >
                   ➕ Crear contrato
@@ -324,7 +367,7 @@ function VistaContratos({ usuario, empresaId, onVolver }) {
           />
           
           <button
-            onClick={() => avisarProximamente('Wizard de creación de contrato')}
+            onClick={abrirModalNuevo}
             className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-5 py-2 rounded-lg flex items-center gap-2 whitespace-nowrap"
           >
             ➕ Nuevo Contrato
@@ -390,9 +433,7 @@ function VistaContratos({ usuario, empresaId, onVolver }) {
               >
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   
-                  {/* Info principal */}
                   <div className="flex items-start gap-4 flex-1 min-w-[280px]">
-                    {/* Avatar */}
                     <div className="w-14 h-14 rounded-full bg-purple-100 flex items-center justify-center text-2xl flex-shrink-0">
                       {empleado?.foto_url ? (
                         <img src={empleado.foto_url} alt="" className="w-14 h-14 rounded-full object-cover" />
@@ -401,7 +442,6 @@ function VistaContratos({ usuario, empresaId, onVolver }) {
                       )}
                     </div>
 
-                    {/* Datos */}
                     <div className="flex-1">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
                         <h3 className="font-bold text-lg text-gray-900">
@@ -453,7 +493,6 @@ function VistaContratos({ usuario, empresaId, onVolver }) {
                     </div>
                   </div>
 
-                  {/* Botones de acción */}
                   <div className="flex gap-2 flex-wrap">
                     {(contrato.estado === 'activo' || contrato.estado === 'terminado' || contrato.estado === 'renovado') && (
                       <>
@@ -475,16 +514,16 @@ function VistaContratos({ usuario, empresaId, onVolver }) {
                     {(contrato.estado === 'borrador' || contrato.estado === 'pendiente_firma') && (
                       <>
                         <button
-                          onClick={() => avisarProximamente('Continuar edición / firma del contrato')}
+                          onClick={() => avisarProximamente('Firma presencial — Fase 2D')}
                           className="bg-orange-600 hover:bg-orange-700 text-white text-sm font-bold px-3 py-2 rounded-lg"
                         >
-                          📝 Continuar
+                          ✍️ Firmar
                         </button>
                         <button
-                          onClick={() => avisarProximamente('Eliminar borrador')}
-                          className="bg-red-100 hover:bg-red-200 text-red-700 text-sm font-bold px-3 py-2 rounded-lg"
+                          onClick={() => avisarProximamente('Editar contrato — Fase 2D')}
+                          className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold px-3 py-2 rounded-lg"
                         >
-                          🗑️ Eliminar
+                          ✏️ Editar
                         </button>
                       </>
                     )}
