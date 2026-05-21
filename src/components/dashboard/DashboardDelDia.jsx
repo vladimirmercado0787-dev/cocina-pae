@@ -14,6 +14,7 @@ function DashboardDelDia({
   onIrInteligencia, 
   onIrDespacho, 
   onIrEmpleados,
+  onIrContratos,
   onIrCompras,
   onIrIngredientes,
   onIrGastos,
@@ -428,6 +429,11 @@ function DashboardDelDia({
             {onIrEmpleados && (
               <button onClick={onIrEmpleados} className="bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-sm px-4 py-2 rounded-lg">
                 👥 Empleados
+              </button>
+            )}
+            {onIrContratos && (
+              <button onClick={onIrContratos} className="bg-cyan-600 hover:bg-cyan-700 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md">
+                📄 Contratos
               </button>
             )}
             {onIrCatalogo && (

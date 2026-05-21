@@ -26,6 +26,7 @@ import VistaIngredientes from './components/ingredientes/VistaIngredientes'
 import VistaGastos from './components/gastos/VistaGastos'
 import VistaCatalogoRecetas from './components/catalogo/VistaCatalogoRecetas'
 import VistaHistorial from './components/historial/VistaHistorial'
+import VistaContratos from './components/contratos/VistaContratos'
 
 function App() {
   const [pasoActual, setPasoActual] = useState(1)
@@ -130,6 +131,10 @@ function App() {
   const puedeGestionarGastos = usuarioLogueado && 
     (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'secretaria')
 
+  // 🆕 Permiso para gestionar contratos (solo propietario y administrador)
+  const puedeGestionarContratos = usuarioLogueado && 
+    (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador')
+
   // 🆕 Permiso para ver el historial completo (admins) o solo el propio (todos)
   const puedeVerHistorial = usuarioLogueado !== null  // todos pueden ver, pero la vista filtra por rol
 
@@ -204,6 +209,11 @@ function App() {
               ? () => setVistaActual('empleados')
               : null
           }
+          onIrContratos={
+            puedeGestionarContratos
+              ? () => setVistaActual('contratos')
+              : null
+          }
           onIrProveedores={
             puedeGestionarProveedores
               ? () => setVistaActual('proveedores')
@@ -257,6 +267,11 @@ function App() {
         onIrEmpleados={
           puedeGestionarEmpleados
             ? () => setVistaActual('empleados')
+            : null
+        }
+        onIrContratos={
+          puedeGestionarContratos
+            ? () => setVistaActual('contratos')
             : null
         }
         onIrCompras={
@@ -388,6 +403,13 @@ function App() {
       )}
       {pasoActual === 7 && vistaActual === 'empleados' && usuarioLogueado && puedeGestionarEmpleados && (
         <VistaEmpleados 
+          usuario={usuarioLogueado}
+          empresaId={empresaActual?.id}
+          onVolver={() => setVistaActual('dashboard')}
+        />
+      )}
+      {pasoActual === 7 && vistaActual === 'contratos' && usuarioLogueado && puedeGestionarContratos && (
+        <VistaContratos 
           usuario={usuarioLogueado}
           empresaId={empresaActual?.id}
           onVolver={() => setVistaActual('dashboard')}
