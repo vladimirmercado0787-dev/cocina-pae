@@ -18,6 +18,7 @@ function ModalEmpleado({ empresaId, empleadoExistente, onCerrar, onGuardado }) {
     frecuencia_pago: '',
     foto_url: '',
     notas: '',
+    gestion_contrato: 'sin_contrato',
   })
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
@@ -39,6 +40,7 @@ function ModalEmpleado({ empresaId, empleadoExistente, onCerrar, onGuardado }) {
         frecuencia_pago: empleadoExistente.frecuencia_pago || '',
         foto_url: empleadoExistente.foto_url || '',
         notas: empleadoExistente.notas || '',
+        gestion_contrato: empleadoExistente.gestion_contrato || 'sin_contrato',
       })
     }
   }, [empleadoExistente, modoEdicion])
@@ -88,6 +90,7 @@ function ModalEmpleado({ empresaId, empleadoExistente, onCerrar, onGuardado }) {
       frecuencia_pago: form.frecuencia_pago || null,
       foto_url: form.foto_url.trim() || null,
       notas: form.notas.trim() || null,
+      gestion_contrato: form.gestion_contrato || 'sin_contrato',
     }
 
     let errorSupa = null
@@ -421,6 +424,109 @@ function ModalEmpleado({ empresaId, empleadoExistente, onCerrar, onGuardado }) {
                 {form.frecuencia_pago === 'semana' && 'cada semana'}
                 {form.frecuencia_pago === 'quincena' && 'cada quincena (15 y 30 del mes)'}
                 {form.frecuencia_pago === 'mes' && 'cada mes'}
+              </div>
+            )}
+          </div>
+
+          {/* NUEVA SECCIÓN: GESTIÓN DEL CONTRATO LABORAL */}
+          <div>
+            <p className="text-xs text-gray-500 font-semibold tracking-wider mb-3">
+              📄 GESTIÓN DEL CONTRATO LABORAL
+            </p>
+            <p className="text-xs text-gray-600 mb-3">
+              ¿Cómo manejarás el contrato de este empleado?
+            </p>
+            <div className="space-y-2">
+              
+              {/* Opción 1: Sin gestión */}
+              <label
+                className={`flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition-colors ${
+                  form.gestion_contrato === 'sin_contrato'
+                    ? 'border-yellow-400 bg-yellow-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="gestion_contrato"
+                  value="sin_contrato"
+                  checked={form.gestion_contrato === 'sin_contrato'}
+                  onChange={(e) => actualizarCampo('gestion_contrato', e.target.value)}
+                  className="mt-1"
+                />
+                <div className="flex-1">
+                  <div className="font-semibold text-sm text-gray-900">
+                    🟡 Sin gestión de contrato
+                  </div>
+                  <p className="text-xs text-gray-600 mt-1">
+                    Lo manejo por fuera de la app (recomendado si ya tienes tu propio proceso)
+                  </p>
+                </div>
+              </label>
+
+              {/* Opción 2: Generar contrato digital */}
+              <label
+                className={`flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition-colors ${
+                  form.gestion_contrato === 'contrato_digital'
+                    ? 'border-green-500 bg-green-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="gestion_contrato"
+                  value="contrato_digital"
+                  checked={form.gestion_contrato === 'contrato_digital'}
+                  onChange={(e) => actualizarCampo('gestion_contrato', e.target.value)}
+                  className="mt-1"
+                />
+                <div className="flex-1">
+                  <div className="font-semibold text-sm text-gray-900">
+                    🟢 Generar contrato digital
+                  </div>
+                  <p className="text-xs text-gray-600 mt-1">
+                    La app crea el contrato laboral y se firma digitalmente. Imprimible para archivo físico.
+                  </p>
+                </div>
+              </label>
+
+              {/* Opción 3: Contrato físico ya firmado */}
+              <label
+                className={`flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition-colors ${
+                  form.gestion_contrato === 'contrato_externo'
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="gestion_contrato"
+                  value="contrato_externo"
+                  checked={form.gestion_contrato === 'contrato_externo'}
+                  onChange={(e) => actualizarCampo('gestion_contrato', e.target.value)}
+                  className="mt-1"
+                />
+                <div className="flex-1">
+                  <div className="font-semibold text-sm text-gray-900">
+                    🔵 Contrato físico ya firmado
+                  </div>
+                  <p className="text-xs text-gray-600 mt-1">
+                    Solo registro al empleado, sin generar contrato en la app
+                  </p>
+                </div>
+              </label>
+
+            </div>
+
+            {/* Mensaje informativo según opción */}
+            {form.gestion_contrato === 'contrato_digital' && !modoEdicion && (
+              <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-3 text-xs text-green-800">
+                💡 Después de guardar al empleado, podrás crear su contrato laboral desde la vista de empleados.
+              </div>
+            )}
+            {form.gestion_contrato === 'contrato_digital' && modoEdicion && (
+              <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-3 text-xs text-green-800">
+                💡 Podrás generar el contrato desde la vista de empleados o desde la sección "Contratos".
               </div>
             )}
           </div>
