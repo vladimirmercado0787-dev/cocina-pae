@@ -12,7 +12,7 @@ function SeccionPropietario({ empresa, onActualizado, mostrarExito }) {
   })
   const [guardando, setGuardando] = useState(false)
   const [modalFirma, setModalFirma] = useState(false)
-  const [subiendoFirma, setSubiendoFirma] = useState(false)
+  const [guardandoFirma, setGuardandoFirma] = useState(false)
   const firmaRef = useRef(null)
 
   useEffect(() => {
@@ -44,59 +44,35 @@ function SeccionPropietario({ empresa, onActualizado, mostrarExito }) {
     return limpio.length === 11
   }
 
-  // Capturar firma y subir a Supabase Storage
+  // Capturar firma como base64 y guardar directo en BD
   async function guardarFirma() {
     if (firmaRef.current.isEmpty()) {
       alert('Por favor dibuja tu firma antes de guardar')
       return
     }
 
-    setSubiendoFirma(true)
+    setGuardandoFirma(true)
 
     try {
-      // Convertir canvas a blob PNG
-      const canvas = firmaRef.current.getCanvas()
-      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
+      // Convertir canvas a base64 PNG (mismo método que ModalEntregarYFirmar.jsx)
+      const firmaBase64 = firmaRef.current.toDataURL('image/png')
 
-      // Nombre único: documentos/{empresa_id}/firmas/propietario_{timestamp}.png
-      const timestamp = Date.now()
-      const ruta = `${empresa.id}/firmas/propietario_${timestamp}.png`
-
-      // Subir a bucket
-      const { error: errorUpload } = await supabase.storage
-        .from('documentos')
-        .upload(ruta, blob, {
-          contentType: 'image/png',
-          upsert: false,
-        })
-
-      if (errorUpload) throw errorUpload
-
-      // Obtener URL pública firmada
-      const { data: urlData } = await supabase.storage
-        .from('documentos')
-        .createSignedUrl(ruta, 60 * 60 * 24 * 365) // URL válida 1 año
-
-      if (!urlData?.signedUrl) throw new Error('No se pudo generar URL')
-
-      // Guardar URL en estado y BD
-      const nuevaUrl = urlData.signedUrl
-
-      const { error: errorUpdate } = await supabase
+      // Guardar directo en BD
+      const { error } = await supabase
         .from('empresas')
-        .update({ firma_propietario_url: nuevaUrl })
+        .update({ firma_propietario_url: firmaBase64 })
         .eq('id', empresa.id)
 
-      if (errorUpdate) throw errorUpdate
+      if (error) throw error
 
-      setDatos({ ...datos, firma_propietario_url: nuevaUrl })
+      setDatos({ ...datos, firma_propietario_url: firmaBase64 })
       setModalFirma(false)
       mostrarExito('Firma guardada exitosamente')
       if (onActualizado) onActualizado()
     } catch (error) {
       alert('Error guardando firma: ' + error.message)
     } finally {
-      setSubiendoFirma(false)
+      setGuardandoFirma(false)
     }
   }
 
@@ -355,17 +331,17 @@ function SeccionPropietario({ empresa, onActualizado, mostrarExito }) {
               <div className="flex gap-2">
                 <button
                   onClick={() => setModalFirma(false)}
-                  disabled={subiendoFirma}
+                  disabled={guardandoFirma}
                   className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold px-4 py-2 rounded-xl text-sm"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={guardarFirma}
-                  disabled={subiendoFirma}
+                  disabled={guardandoFirma}
                   className="bg-amber-600 hover:bg-amber-700 disabled:bg-gray-400 text-white font-semibold px-4 py-2 rounded-xl text-sm"
                 >
-                  {subiendoFirma ? '⏳ Subiendo...' : '💾 Guardar firma'}
+                  {guardandoFirma ? '⏳ Guardando...' : '💾 Guardar firma'}
                 </button>
               </div>
             </div>
