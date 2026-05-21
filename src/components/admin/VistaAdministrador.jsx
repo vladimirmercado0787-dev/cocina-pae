@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 
-function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario, onIrConfiguracion, onIrFactura, onIrCalculadora, onIrInteligencia, onIrDespacho, onIrEmpleados, onIrContratos, onIrProveedores, onIrCompras, onIrIngredientes, onVerComoSecretaria, onIrGastos }) {
+function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario, onIrConfiguracion, onIrFactura, onIrCalculadora, onIrInteligencia, onIrDespacho, onIrEmpleados, onIrContratos, onIrMiContrato, onIrProveedores, onIrCompras, onIrIngredientes, onVerComoSecretaria, onIrGastos }) {
   const [empresa, setEmpresa] = useState(null)
   const [escuelas, setEscuelas] = useState([])
   const [operaciones, setOperaciones] = useState([])
@@ -148,6 +148,14 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuar
                 className="bg-cyan-600 hover:bg-cyan-700 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md"
               >
                 📄 Contratos
+              </button>
+            )}
+            {onIrMiContrato && (
+              <button
+                onClick={onIrMiContrato}
+                className="bg-cyan-500 hover:bg-cyan-600 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md"
+              >
+                📋 Mi Contrato
               </button>
             )}
             {onIrIngredientes && (

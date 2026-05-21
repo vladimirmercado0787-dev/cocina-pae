@@ -27,6 +27,7 @@ import VistaGastos from './components/gastos/VistaGastos'
 import VistaCatalogoRecetas from './components/catalogo/VistaCatalogoRecetas'
 import VistaHistorial from './components/historial/VistaHistorial'
 import VistaContratos from './components/contratos/VistaContratos'
+import VistaMiContrato from './components/contratos/VistaMiContrato'
 
 function App() {
   const [pasoActual, setPasoActual] = useState(1)
@@ -131,12 +132,13 @@ function App() {
   const puedeGestionarGastos = usuarioLogueado && 
     (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'secretaria')
 
-  // 🆕 Permiso para gestionar contratos (solo propietario y administrador)
   const puedeGestionarContratos = usuarioLogueado && 
     (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador')
 
-  // 🆕 Permiso para ver el historial completo (admins) o solo el propio (todos)
-  const puedeVerHistorial = usuarioLogueado !== null  // todos pueden ver, pero la vista filtra por rol
+  // 🆕 Permiso para ver SU PROPIO contrato (todos los empleados activos)
+  const puedeVerMiContrato = usuarioLogueado && usuarioLogueado.rol !== 'propietario'
+
+  const puedeVerHistorial = usuarioLogueado !== null
 
   function renderPasoWizard() {
     if (pasoActual === 1) {
@@ -180,6 +182,7 @@ function App() {
           onIrGastos={() => setVistaActual('gastos')}
           onIrCatalogo={() => setVistaActual('catalogo_recetas')}
           onIrHistorial={() => setVistaActual('historial')}
+          onIrMiContrato={() => setVistaActual('mi_contrato')}
         />
       )
     }
@@ -212,6 +215,11 @@ function App() {
           onIrContratos={
             puedeGestionarContratos
               ? () => setVistaActual('contratos')
+              : null
+          }
+          onIrMiContrato={
+            puedeVerMiContrato
+              ? () => setVistaActual('mi_contrato')
               : null
           }
           onIrProveedores={
@@ -274,6 +282,11 @@ function App() {
             ? () => setVistaActual('contratos')
             : null
         }
+        onIrMiContrato={
+          puedeVerMiContrato
+            ? () => setVistaActual('mi_contrato')
+            : null
+        }
         onIrCompras={
           puedeGestionarCompras
             ? () => setVistaActual('compras')
@@ -314,9 +327,7 @@ function App() {
       {pasoActual < 7 && renderPasoWizard()}
       
       {pasoActual === 7 && vistaActual === 'login_empresa' && (
-        <LoginEmpresa 
-          onLoginExitoso={loginEmpresaExitoso}
-        />
+        <LoginEmpresa onLoginExitoso={loginEmpresaExitoso} />
       )}
       
       {pasoActual === 7 && vistaActual === 'seleccion_operador' && empresaLogueada && (
@@ -410,6 +421,13 @@ function App() {
       )}
       {pasoActual === 7 && vistaActual === 'contratos' && usuarioLogueado && puedeGestionarContratos && (
         <VistaContratos 
+          usuario={usuarioLogueado}
+          empresaId={empresaActual?.id}
+          onVolver={() => setVistaActual('dashboard')}
+        />
+      )}
+      {pasoActual === 7 && vistaActual === 'mi_contrato' && usuarioLogueado && puedeVerMiContrato && (
+        <VistaMiContrato 
           usuario={usuarioLogueado}
           empresaId={empresaActual?.id}
           onVolver={() => setVistaActual('dashboard')}

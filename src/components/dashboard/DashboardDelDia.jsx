@@ -15,6 +15,7 @@ function DashboardDelDia({
   onIrDespacho, 
   onIrEmpleados,
   onIrContratos,
+  onIrMiContrato,
   onIrCompras,
   onIrIngredientes,
   onIrGastos,
@@ -101,7 +102,6 @@ function DashboardDelDia({
       return
     }
 
-    // 📜 Registrar en historial
     await registrar({
       empresaId,
       usuario,
@@ -163,7 +163,6 @@ function DashboardDelDia({
       return
     }
 
-    // 📜 Registrar en historial (una entrada por escuela)
     const totalRaciones = escuelasPendientes.reduce((sum, e) => sum + (e.raciones_contractuales || 0), 0)
     
     await registrar({
@@ -190,7 +189,6 @@ function DashboardDelDia({
   async function marcarLista(operacion) {
     setProcesando(true)
     
-    // Buscar nombre de escuela para el historial
     const escuela = escuelas.find(e => e.id === operacion.escuela_id)
     const nombreEscuela = escuela?.nombre || 'Escuela'
     
@@ -209,7 +207,6 @@ function DashboardDelDia({
       return
     }
 
-    // 📜 Registrar en historial
     await registrar({
       empresaId,
       usuario,
@@ -265,7 +262,6 @@ function DashboardDelDia({
       return
     }
 
-    // 📜 Registrar en historial
     await registrar({
       empresaId,
       usuario,
@@ -292,7 +288,6 @@ function DashboardDelDia({
     await cargarDatos()
   }
 
-  // ─── CÁLCULOS PARA UI ────────────────────────────────────
   const totalRacionesHoy = operacionesHoy
     .filter(op => op.estado !== 'sin_clase')
     .reduce((sum, op) => sum + (op.raciones_planificadas || 0), 0)
@@ -319,14 +314,12 @@ function DashboardDelDia({
   const hayEscuelasIniciadas = operacionesPreparando.length > 0
   const mostrarBotonPesaje = todasDecididas && hayEscuelasIniciadas && !yaSePesoHoy
 
-  // LÓGICA DE DESPACHO/ENTREGA
   const escuelasEntregadas = operacionesHoy.filter(op => 
     op.estado === 'entregada' || op.estado === 'cerrada'
   ).length
   const escuelasEnCamino = operacionesHoy.filter(op => op.estado === 'despachando').length
   const escuelasOperativas = escuelas.length - operacionesHoy.filter(op => op.estado === 'sin_clase').length
   const todasEntregadas = escuelasOperativas > 0 && escuelasEntregadas >= escuelasOperativas
-  // Mostrar botón Despacho cuando: ya se pesó crudo + hay escuelas iniciadas + no todas entregadas
   const mostrarBotonDespacho = yaSePesoHoy && hayEscuelasIniciadas && !todasEntregadas
 
   if (cargando) {
@@ -338,7 +331,6 @@ function DashboardDelDia({
   return (
     <div className="w-full max-w-5xl">
       
-      {/* Modal Sin Clase */}
       {modalSinClase && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
@@ -380,7 +372,6 @@ function DashboardDelDia({
         </div>
       )}
 
-      {/* Modal de Pesaje Crudo (con modoEdicion) */}
       {modalPesajeAbierto && (
         <ModalPesajeCrudo
           empresaId={empresaId}
@@ -396,7 +387,6 @@ function DashboardDelDia({
         />
       )}
 
-      {/* Header con botones de navegación */}
       <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl p-6 mb-6 text-white">
         <div className="flex justify-between items-start mb-4">
           <div>
@@ -434,6 +424,11 @@ function DashboardDelDia({
             {onIrContratos && (
               <button onClick={onIrContratos} className="bg-cyan-600 hover:bg-cyan-700 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md">
                 📄 Contratos
+              </button>
+            )}
+            {onIrMiContrato && (
+              <button onClick={onIrMiContrato} className="bg-cyan-500 hover:bg-cyan-600 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md">
+                📋 Mi Contrato
               </button>
             )}
             {onIrCatalogo && (
@@ -489,7 +484,6 @@ function DashboardDelDia({
         </div>
       </div>
 
-      {/* Operaciones de hoy */}
       <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
         <p className="text-xs text-gray-500 font-semibold tracking-wider mb-4">
           📅 OPERACIONES DE HOY
@@ -512,7 +506,6 @@ function DashboardDelDia({
         </div>
       </div>
 
-      {/* Iniciar día completo (si hay escuelas pendientes) */}
       {escuelasPendientesCount > 0 && (
         <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl shadow-xl p-6 mb-6 text-white">
           <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -536,7 +529,6 @@ function DashboardDelDia({
         </div>
       )}
 
-      {/* Iniciar Pesaje Crudo */}
       {mostrarBotonPesaje && (
         <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl shadow-xl p-6 mb-6 text-white">
           <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -563,7 +555,6 @@ function DashboardDelDia({
         </div>
       )}
 
-      {/* Banner: pesaje crudo aprobado (con botón Editar) */}
       {yaSePesoHoy && hayEscuelasIniciadas && (
         <div className="bg-gradient-to-br from-emerald-500 to-green-600 rounded-2xl shadow-md p-4 mb-6 text-white">
           <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -587,7 +578,6 @@ function DashboardDelDia({
         </div>
       )}
 
-      {/* Despachar y Entregar */}
       {mostrarBotonDespacho && (
         <div className="bg-gradient-to-br from-orange-500 to-red-600 rounded-2xl shadow-xl p-6 mb-6 text-white">
           <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -613,7 +603,6 @@ function DashboardDelDia({
         </div>
       )}
 
-      {/* Banner: todas las escuelas entregadas y firmadas */}
       {todasEntregadas && (
         <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl shadow-md p-4 mb-6 text-white">
           <div className="flex items-center gap-3">
@@ -626,7 +615,6 @@ function DashboardDelDia({
         </div>
       )}
 
-      {/* Escuelas del día */}
       {escuelas.length > 0 && (
         <div className="bg-white rounded-2xl shadow-xl p-6">
           <p className="text-xs text-gray-500 font-semibold tracking-wider mb-4">

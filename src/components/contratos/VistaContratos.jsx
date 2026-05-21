@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import ModalNuevoContrato from './ModalNuevoContrato'
+import ModalFirmaPresencial from './ModalFirmaPresencial'
+import VistaDetalleContrato from './VistaDetalleContrato'
 
 function VistaContratos({ usuario, empresaId, onVolver }) {
   const [empresa, setEmpresa] = useState(null)
@@ -10,9 +12,11 @@ function VistaContratos({ usuario, empresaId, onVolver }) {
   const [filtroEstado, setFiltroEstado] = useState('todos')
   const [busqueda, setBusqueda] = useState('')
   
-  // Estado del modal
-  const [modalAbierto, setModalAbierto] = useState(false)
+  // Modales
+  const [modalNuevoAbierto, setModalNuevoAbierto] = useState(false)
   const [empleadoPreseleccionado, setEmpleadoPreseleccionado] = useState(null)
+  const [contratoParaFirmar, setContratoParaFirmar] = useState(null)
+  const [contratoParaVer, setContratoParaVer] = useState(null)
 
   useEffect(() => {
     if (empresaId) cargarDatos()
@@ -21,7 +25,6 @@ function VistaContratos({ usuario, empresaId, onVolver }) {
   async function cargarDatos() {
     setCargando(true)
 
-    // Cargar empresa
     const { data: empresaData } = await supabase
       .from('empresas')
       .select('*')
@@ -29,7 +32,6 @@ function VistaContratos({ usuario, empresaId, onVolver }) {
       .single()
     setEmpresa(empresaData)
 
-    // Cargar todos los contratos de la empresa con info del empleado
     const { data: contratosData, error: errorContratos } = await supabase
       .from('contratos_empleados')
       .select(`
@@ -45,7 +47,6 @@ function VistaContratos({ usuario, empresaId, onVolver }) {
       setContratos(contratosData || [])
     }
 
-    // Detectar empleados marcados como 'contrato_digital' SIN contrato creado
     const { data: empleadosDigital } = await supabase
       .from('usuarios')
       .select('id, nombre, rol, sexo, foto_url, sueldo, frecuencia_pago, fecha_contratacion, cedula')
@@ -65,7 +66,6 @@ function VistaContratos({ usuario, empresaId, onVolver }) {
     setCargando(false)
   }
 
-  // Validar permisos
   const puedeGestionar = usuario && 
     (usuario.rol === 'propietario' || usuario.rol === 'administrador')
 
@@ -89,33 +89,68 @@ function VistaContratos({ usuario, empresaId, onVolver }) {
     )
   }
 
-  // Abrir modal con empleado preseleccionado
+  // Si está viendo un contrato específico, mostrar la vista detalle
+  if (contratoParaVer) {
+    return (
+      <VistaDetalleContrato 
+        contratoId={contratoParaVer}
+        onVolver={() => {
+          setContratoParaVer(null)
+          cargarDatos()
+        }}
+      />
+    )
+  }
+
   function abrirModalConEmpleado(empleado) {
     setEmpleadoPreseleccionado(empleado)
-    setModalAbierto(true)
+    setModalNuevoAbierto(true)
   }
 
-  // Abrir modal sin empleado (selecciona uno en el wizard)
   function abrirModalNuevo() {
     setEmpleadoPreseleccionado(null)
-    setModalAbierto(true)
+    setModalNuevoAbierto(true)
   }
 
-  // Cerrar modal y recargar datos
-  function cerrarModal() {
-    setModalAbierto(false)
+  function cerrarModalNuevo() {
+    setModalNuevoAbierto(false)
     setEmpleadoPreseleccionado(null)
   }
 
-  // Contrato creado exitosamente
   function contratoCreado(nuevoContrato) {
-    setModalAbierto(false)
+    setModalNuevoAbierto(false)
     setEmpleadoPreseleccionado(null)
     cargarDatos()
-    alert('✅ Contrato creado como borrador.\n\nProcede a la firma presencial cuando estés listo.')
+    
+    if (confirm('✅ Contrato creado como borrador.\n\n¿Deseas firmarlo ahora?')) {
+      // Recargar y abrir modal de firma
+      setTimeout(async () => {
+        const { data } = await supabase
+          .from('contratos_empleados')
+          .select(`*, usuario:usuarios(id, nombre, rol, sexo, foto_url, cedula)`)
+          .eq('id', nuevoContrato.id)
+          .single()
+        if (data) {
+          setContratoParaFirmar(data)
+        }
+      }, 300)
+    }
   }
 
-  // Helpers
+  function abrirFirma(contrato) {
+    setContratoParaFirmar(contrato)
+  }
+
+  function cerrarFirma() {
+    setContratoParaFirmar(null)
+  }
+
+  function firmasCompletas() {
+    setContratoParaFirmar(null)
+    cargarDatos()
+    alert('✅ Contrato activado exitosamente.\n\nYa puedes imprimirlo para archivo físico.')
+  }
+
   function obtenerColorEstado(estado) {
     switch (estado) {
       case 'borrador': return 'bg-yellow-100 text-yellow-800 border-yellow-300'
@@ -174,7 +209,6 @@ function VistaContratos({ usuario, empresaId, onVolver }) {
     })
   }
 
-  // Filtrar contratos
   const contratosFiltrados = contratos.filter(c => {
     if (filtroEstado !== 'todos' && c.estado !== filtroEstado) return false
     if (busqueda.trim()) {
@@ -186,15 +220,10 @@ function VistaContratos({ usuario, empresaId, onVolver }) {
     return true
   })
 
-  // Contadores
   const totalContratos = contratos.length
   const totalActivos = contratos.filter(c => c.estado === 'activo').length
   const totalBorradores = contratos.filter(c => c.estado === 'borrador' || c.estado === 'pendiente_firma').length
   const totalTerminados = contratos.filter(c => c.estado === 'terminado').length
-
-  function avisarProximamente(tarea) {
-    alert(`⏳ ${tarea}\n\nEsta funcionalidad se construirá en la próxima fase del módulo.`)
-  }
 
   if (cargando) {
     return (
@@ -215,15 +244,26 @@ function VistaContratos({ usuario, empresaId, onVolver }) {
   return (
     <div className="w-full max-w-5xl">
       
-      {/* MODAL DEL WIZARD */}
-      {modalAbierto && (
+      {/* MODAL WIZARD NUEVO */}
+      {modalNuevoAbierto && (
         <ModalNuevoContrato
           empresaId={empresaId}
           usuarioActual={usuario}
           empleadoPreseleccionado={empleadoPreseleccionado}
           empresa={empresa}
-          onCerrar={cerrarModal}
+          onCerrar={cerrarModalNuevo}
           onContratoCreado={contratoCreado}
+        />
+      )}
+
+      {/* MODAL FIRMA PRESENCIAL */}
+      {contratoParaFirmar && (
+        <ModalFirmaPresencial
+          contrato={contratoParaFirmar}
+          empresa={empresa}
+          usuarioActual={usuario}
+          onCerrar={cerrarFirma}
+          onFirmasCompletas={firmasCompletas}
         />
       )}
 
@@ -250,7 +290,7 @@ function VistaContratos({ usuario, empresaId, onVolver }) {
         </div>
       </div>
 
-      {/* ALERTA: Empleados pendientes de contrato */}
+      {/* ALERTA PENDIENTES */}
       {empleadosPendientes.length > 0 && (
         <div className="bg-yellow-50 border-2 border-yellow-300 rounded-2xl p-5 mb-6">
           <div className="flex items-start gap-3 mb-3">
@@ -299,11 +339,9 @@ function VistaContratos({ usuario, empresaId, onVolver }) {
         </div>
       )}
 
-      {/* RESUMEN ESTADÍSTICAS */}
+      {/* RESUMEN */}
       <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-        <p className="text-xs text-gray-500 font-semibold tracking-wider mb-4">
-          📊 RESUMEN
-        </p>
+        <p className="text-xs text-gray-500 font-semibold tracking-wider mb-4">📊 RESUMEN</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <button
             onClick={() => setFiltroEstado('todos')}
@@ -355,7 +393,7 @@ function VistaContratos({ usuario, empresaId, onVolver }) {
         </div>
       </div>
 
-      {/* BARRA DE ACCIONES */}
+      {/* BARRA ACCIONES */}
       <div className="bg-white rounded-2xl shadow-xl p-4 mb-6">
         <div className="flex flex-wrap gap-3 items-center">
           <input
@@ -390,33 +428,22 @@ function VistaContratos({ usuario, empresaId, onVolver }) {
         )}
       </div>
 
-      {/* LISTA DE CONTRATOS */}
+      {/* LISTA */}
       {contratosFiltrados.length === 0 ? (
         <div className="bg-white rounded-2xl shadow-xl p-12 text-center">
           {contratos.length === 0 ? (
             <>
               <p className="text-6xl mb-4">📄</p>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">
-                Aún no hay contratos creados
-              </h3>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Aún no hay contratos creados</h3>
               <p className="text-gray-600 mb-6">
-                Los contratos laborales aparecerán aquí una vez que los crees desde el botón "➕ Nuevo Contrato" o desde la sección de Empleados.
+                Los contratos laborales aparecerán aquí una vez que los crees desde el botón "➕ Nuevo Contrato".
               </p>
-              {empleadosPendientes.length > 0 && (
-                <p className="text-yellow-700 text-sm bg-yellow-50 border border-yellow-200 rounded-lg p-3 inline-block">
-                  💡 Tienes {empleadosPendientes.length} empleado{empleadosPendientes.length > 1 ? 's' : ''} esperando contrato (ver arriba)
-                </p>
-              )}
             </>
           ) : (
             <>
               <p className="text-4xl mb-3">🔍</p>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">
-                No se encontraron contratos
-              </h3>
-              <p className="text-gray-600">
-                Prueba con otros términos de búsqueda o limpia los filtros.
-              </p>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">No se encontraron contratos</h3>
+              <p className="text-gray-600">Prueba con otros términos de búsqueda o limpia los filtros.</p>
             </>
           )}
         </div>
@@ -495,46 +522,29 @@ function VistaContratos({ usuario, empresaId, onVolver }) {
 
                   <div className="flex gap-2 flex-wrap">
                     {(contrato.estado === 'activo' || contrato.estado === 'terminado' || contrato.estado === 'renovado') && (
-                      <>
-                        <button
-                          onClick={() => avisarProximamente('Vista de detalle de contrato')}
-                          className="bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold px-3 py-2 rounded-lg"
-                        >
-                          📄 Ver
-                        </button>
-                        <button
-                          onClick={() => avisarProximamente('Generación de PDF para impresión')}
-                          className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-3 py-2 rounded-lg"
-                        >
-                          🖨️ Imprimir
-                        </button>
-                      </>
+                      <button
+                        onClick={() => setContratoParaVer(contrato.id)}
+                        className="bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold px-3 py-2 rounded-lg"
+                      >
+                        📄 Ver / Imprimir
+                      </button>
                     )}
 
                     {(contrato.estado === 'borrador' || contrato.estado === 'pendiente_firma') && (
                       <>
                         <button
-                          onClick={() => avisarProximamente('Firma presencial — Fase 2D')}
+                          onClick={() => abrirFirma(contrato)}
                           className="bg-orange-600 hover:bg-orange-700 text-white text-sm font-bold px-3 py-2 rounded-lg"
                         >
                           ✍️ Firmar
                         </button>
                         <button
-                          onClick={() => avisarProximamente('Editar contrato — Fase 2D')}
-                          className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold px-3 py-2 rounded-lg"
+                          onClick={() => setContratoParaVer(contrato.id)}
+                          className="bg-purple-100 hover:bg-purple-200 text-purple-700 text-sm font-bold px-3 py-2 rounded-lg"
                         >
-                          ✏️ Editar
+                          👁️ Ver
                         </button>
                       </>
-                    )}
-
-                    {contrato.estado === 'activo' && (
-                      <button
-                        onClick={() => avisarProximamente('Editar contrato activo')}
-                        className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold px-3 py-2 rounded-lg"
-                      >
-                        ✏️ Editar
-                      </button>
                     )}
                   </div>
                 </div>
