@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import SeccionMiCocina from './SeccionMiCocina'
+import SeccionPropietario from './SeccionPropietario'
 import SeccionEscuelas from './SeccionEscuelas'
 import SeccionPersonal from './SeccionPersonal'
 import SeccionFinanzas from './SeccionFinanzas'
@@ -10,6 +11,7 @@ import SeccionSeguridad from './SeccionSeguridad'
 
 const TABS = [
   { id: 'cocina', emoji: '🏢', label: 'Mi Cocina' },
+  { id: 'propietario', emoji: '👤', label: 'Datos del Propietario' },
   { id: 'escuelas', emoji: '🏫', label: 'Escuelas' },
   { id: 'ingredientes', emoji: '🥕', label: 'Ingredientes' },
   { id: 'menus', emoji: '🍽️', label: 'Menús y Recetas' },
@@ -51,6 +53,9 @@ function Configuracion({ usuario, empresaId, onVolver }) {
     
     if (tabActiva === 'cocina') {
       return <SeccionMiCocina empresa={empresa} onActualizado={cargarEmpresa} mostrarExito={mostrarExito} />
+    }
+    if (tabActiva === 'propietario') {
+      return <SeccionPropietario empresa={empresa} onActualizado={cargarEmpresa} mostrarExito={mostrarExito} />
     }
     if (tabActiva === 'escuelas') {
       return <SeccionEscuelas empresaId={empresaId} mostrarExito={mostrarExito} />
