@@ -1,11 +1,16 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
+import ModalPagarQuincena from './ModalPagarQuincena'
+import VistaHistorialNomina from './VistaHistorialNomina'
 
 function VistaNomina({ usuario, empresaId, onVolver }) {
   const [empresa, setEmpresa] = useState(null)
   const [empleados, setEmpleados] = useState([])
   const [pagosMesActual, setPagosMesActual] = useState([])
   const [cargando, setCargando] = useState(true)
+  const [modalPagoAbierto, setModalPagoAbierto] = useState(false)
+  const [verHistorial, setVerHistorial] = useState(false)
+  const [mensajeExito, setMensajeExito] = useState('')
 
   useEffect(() => {
     if (empresaId) cargarDatos()
@@ -14,7 +19,6 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
   async function cargarDatos() {
     setCargando(true)
 
-    // 1) Cargar empresa con su configuración de nómina
     const { data: empresaData } = await supabase
       .from('empresas')
       .select('*')
@@ -22,7 +26,6 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
       .single()
     setEmpresa(empresaData)
 
-    // 2) Cargar empleados activos con sueldo configurado (excluye propietario)
     const { data: empleadosData } = await supabase
       .from('usuarios')
       .select('*')
@@ -33,7 +36,6 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
       .order('nombre')
     setEmpleados(empleadosData || [])
 
-    // 3) Cargar pagos del mes actual
     const ahora = new Date()
     const año = ahora.getFullYear()
     const mes = ahora.getMonth() + 1
@@ -50,30 +52,37 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
     setCargando(false)
   }
 
+  function mostrarExito(msg) {
+    setMensajeExito(msg)
+    setTimeout(() => setMensajeExito(''), 4000)
+  }
+
+  function onPagoExitoso() {
+    setModalPagoAbierto(false)
+    mostrarExito('✅ Pago procesado correctamente y registrado en el historial')
+    cargarDatos()
+  }
+
   // ═══════════════════════════════════════════════════
   // 🧮 HELPERS DE CÁLCULO
   // ═══════════════════════════════════════════════════
 
-  // Normaliza el salario del empleado a "neto por quincena"
-  // (la BD puede tener semana/quincena/mes/dia)
   function salarioNetoQuincenal(empleado) {
     const sueldo = parseFloat(empleado.sueldo || 0)
     const freq = empleado.frecuencia_pago
     if (freq === 'mes') return sueldo / 2
     if (freq === 'quincena') return sueldo
-    if (freq === 'semana') return sueldo * 2.165 // ~2 semanas en quincena
-    if (freq === 'dia') return sueldo * 11 // ~11 días hábiles en quincena
+    if (freq === 'semana') return sueldo * 2.165
+    if (freq === 'dia') return sueldo * 11
     return sueldo
   }
 
-  // Calcula bruto a partir de neto y porcentaje de descuento de la empresa
   function calcularBruto(neto, porcentajeDescuento) {
     const factor = 1 - (parseFloat(porcentajeDescuento || 5.74) / 100)
     if (factor <= 0) return neto
     return Math.round((neto / factor) * 100) / 100
   }
 
-  // Determina la próxima quincena a pagar basado en la fecha actual
   function calcularProximoPeriodo() {
     if (!empresa) return null
 
@@ -88,13 +97,11 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
       const dia1 = empresa.nomina_dia_pago_1 || 15
       const dia2 = empresa.nomina_dia_pago_2 || 30
 
-      // Si estamos antes del primer pago del mes, próximo = 1ra quincena
       if (dia <= dia1) {
         const fechaPago = new Date(año, mes - 1, dia1)
         return {
           tipo_periodo: 'quincenal_1',
-          año,
-          mes,
+          año, mes,
           label: `1ra quincena de ${nombreMes(mes)} ${año}`,
           fecha_inicio: new Date(año, mes - 1, 1),
           fecha_fin: new Date(año, mes - 1, 15),
@@ -102,28 +109,24 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
         }
       }
 
-      // Si estamos entre día1 y día2, próximo = 2da quincena
       if (dia <= dia2) {
         const fechaPago = new Date(año, mes - 1, dia2)
         return {
           tipo_periodo: 'quincenal_2',
-          año,
-          mes,
+          año, mes,
           label: `2da quincena de ${nombreMes(mes)} ${año}`,
           fecha_inicio: new Date(año, mes - 1, 16),
-          fecha_fin: new Date(año, mes, 0), // último día del mes
+          fecha_fin: new Date(año, mes, 0),
           fecha_pago: fechaPago,
         }
       }
 
-      // Si pasamos el día2, próximo = 1ra quincena del MES SIGUIENTE
       const mesSig = mes === 12 ? 1 : mes + 1
       const añoSig = mes === 12 ? año + 1 : año
       const fechaPago = new Date(añoSig, mesSig - 1, dia1)
       return {
         tipo_periodo: 'quincenal_1',
-        año: añoSig,
-        mes: mesSig,
+        año: añoSig, mes: mesSig,
         label: `1ra quincena de ${nombreMes(mesSig)} ${añoSig}`,
         fecha_inicio: new Date(añoSig, mesSig - 1, 1),
         fecha_fin: new Date(añoSig, mesSig - 1, 15),
@@ -137,22 +140,19 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
         const fechaPago = new Date(año, mes - 1, diaP)
         return {
           tipo_periodo: 'mensual',
-          año,
-          mes,
+          año, mes,
           label: `${nombreMes(mes)} ${año}`,
           fecha_inicio: new Date(año, mes - 1, 1),
           fecha_fin: new Date(año, mes, 0),
           fecha_pago: fechaPago,
         }
       }
-      // Pasamos el día → próximo mes
       const mesSig = mes === 12 ? 1 : mes + 1
       const añoSig = mes === 12 ? año + 1 : año
       const fechaPago = new Date(añoSig, mesSig - 1, diaP)
       return {
         tipo_periodo: 'mensual',
-        año: añoSig,
-        mes: mesSig,
+        año: añoSig, mes: mesSig,
         label: `${nombreMes(mesSig)} ${añoSig}`,
         fecha_inicio: new Date(añoSig, mesSig - 1, 1),
         fecha_fin: new Date(añoSig, mesSig, 0),
@@ -160,7 +160,6 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
       }
     }
 
-    // Semanal: simplificado - próximo viernes
     if (frecuencia === 'semanal') {
       const proximoViernes = new Date(hoy)
       const diasHastaViernes = (5 - hoy.getDay() + 7) % 7 || 7
@@ -197,17 +196,13 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
 
   function formatearFecha(fecha) {
     return new Date(fecha).toLocaleDateString('es-DO', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric'
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
     })
   }
 
   function formatearMoneda(monto) {
     return Number(monto || 0).toLocaleString('es-DO', { 
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2 
+      minimumFractionDigits: 2, maximumFractionDigits: 2 
     })
   }
 
@@ -229,7 +224,6 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
   const proximoPeriodo = empresa ? calcularProximoPeriodo() : null
   const descuentoPct = parseFloat(empresa?.nomina_descuento_porcentaje || 5.74)
 
-  // Verifica si el próximo período ya fue pagado
   const periodoYaPagado = proximoPeriodo 
     ? pagosMesActual.some(p => 
         p.tipo_periodo === proximoPeriodo.tipo_periodo &&
@@ -239,7 +233,6 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
       )
     : false
 
-  // Total neto del próximo período (lo que se pagará)
   const totalNetoProximo = empleados.reduce((sum, emp) => 
     sum + salarioNetoQuincenal(emp), 0)
   
@@ -250,7 +243,6 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
 
   const totalAportes = totalBrutoProximo - totalNetoProximo
 
-  // Total mensual (2 quincenas para Doña Elba)
   const multiplicadorMes = empresa?.nomina_frecuencia === 'quincenal' ? 2 :
                           empresa?.nomina_frecuencia === 'semanal' ? 4.33 :
                           empresa?.nomina_frecuencia === 'mensual' ? 1 : 2
@@ -261,6 +253,16 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
   // ═══════════════════════════════════════════════════
   // 🎨 RENDER
   // ═══════════════════════════════════════════════════
+
+  // Si está viendo el historial, mostramos esa vista
+  if (verHistorial) {
+    return (
+      <VistaHistorialNomina 
+        empresaId={empresaId}
+        onVolver={() => setVerHistorial(false)}
+      />
+    )
+  }
 
   if (cargando) {
     return (
@@ -276,6 +278,25 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
 
   return (
     <div className="w-full max-w-5xl">
+
+      {/* Toast de éxito */}
+      {mensajeExito && (
+        <div className="fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-xl shadow-2xl z-[60] animate-pulse">
+          {mensajeExito}
+        </div>
+      )}
+
+      {/* Modal de Pagar Quincena */}
+      {modalPagoAbierto && proximoPeriodo && (
+        <ModalPagarQuincena
+          empresa={empresa}
+          empleados={empleados}
+          periodo={proximoPeriodo}
+          usuarioActual={usuario}
+          onCerrar={() => setModalPagoAbierto(false)}
+          onPagoExitoso={onPagoExitoso}
+        />
+      )}
 
       {/* HEADER */}
       <div className="bg-gradient-to-br from-pink-600 to-rose-700 rounded-2xl p-6 mb-6 text-white">
@@ -319,7 +340,7 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
 
       {empleados.length > 0 && (
         <>
-          {/* PRÓXIMA QUINCENA A PAGAR */}
+          {/* PRÓXIMA QUINCENA */}
           {proximoPeriodo && (
             <div className={`rounded-2xl p-6 mb-6 text-white shadow-xl ${
               periodoYaPagado 
@@ -361,7 +382,7 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
               {!periodoYaPagado && (
                 <div className="mt-4 pt-4 border-t border-white/20">
                   <button
-                    onClick={() => avisarProximamente('Pagar Quincena')}
+                    onClick={() => setModalPagoAbierto(true)}
                     className="bg-white hover:bg-gray-100 text-blue-700 font-bold px-6 py-3 rounded-xl shadow-lg w-full md:w-auto"
                   >
                     💸 Pagar esta {labelFrecuencia}
@@ -437,7 +458,6 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
                     key={emp.id} 
                     className="border border-gray-200 rounded-xl p-4 hover:bg-gray-50 transition flex items-center gap-4"
                   >
-                    {/* Avatar */}
                     <div className="w-12 h-12 rounded-full bg-pink-100 flex items-center justify-center text-2xl flex-shrink-0">
                       {emp.foto_url ? (
                         <img src={emp.foto_url} alt="" className="w-12 h-12 rounded-full object-cover" />
@@ -446,7 +466,6 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
                       )}
                     </div>
 
-                    {/* Info empleado */}
                     <div className="flex-1 min-w-0">
                       <p className="font-bold text-gray-900">{emp.nombre}</p>
                       <p className="text-xs text-gray-600 capitalize">
@@ -455,7 +474,6 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
                       </p>
                     </div>
 
-                    {/* Salario */}
                     <div className="text-right">
                       <p className="text-sm text-gray-600">
                         Neto/{labelFrecuencia}
@@ -482,13 +500,13 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               
               <button
-                onClick={() => avisarProximamente('Historial de Pagos')}
-                className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-4 py-3 rounded-xl flex items-center gap-3"
+                onClick={() => setVerHistorial(true)}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-4 py-3 rounded-xl flex items-center gap-3 border border-slate-200"
               >
                 <span className="text-2xl">📜</span>
                 <div className="text-left">
                   <p className="font-bold">Historial de pagos</p>
-                  <p className="text-xs text-gray-600">Ver pagos anteriores</p>
+                  <p className="text-xs text-slate-600">Ver pagos anteriores</p>
                 </div>
               </button>
 
