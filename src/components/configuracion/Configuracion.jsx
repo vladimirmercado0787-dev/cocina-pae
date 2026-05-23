@@ -8,6 +8,7 @@ import SeccionFinanzas from './SeccionFinanzas'
 import SeccionMenusRecetas from './SeccionMenusRecetas'
 import SeccionIngredientes from './SeccionIngredientes'
 import SeccionSeguridad from './SeccionSeguridad'
+import SeccionNomina from './SeccionNomina'
 
 const TABS = [
   { id: 'cocina', emoji: '🏢', label: 'Mi Cocina' },
@@ -16,7 +17,8 @@ const TABS = [
   { id: 'ingredientes', emoji: '🥕', label: 'Ingredientes' },
   { id: 'menus', emoji: '🍽️', label: 'Menús y Recetas' },
   { id: 'personal', emoji: '👥', label: 'Personal' },
-  { id: 'finanzas', emoji: '💰', label: 'Finanzas' },
+  { id: 'nomina', emoji: '💰', label: 'Nómina' },
+  { id: 'finanzas', emoji: '📊', label: 'Finanzas' },
   { id: 'seguridad', emoji: '🔐', label: 'Seguridad' },
 ]
 
@@ -68,6 +70,9 @@ function Configuracion({ usuario, empresaId, onVolver }) {
     }
     if (tabActiva === 'personal') {
       return <SeccionPersonal empresaId={empresaId} mostrarExito={mostrarExito} />
+    }
+    if (tabActiva === 'nomina') {
+      return <SeccionNomina empresa={empresa} onActualizado={cargarEmpresa} mostrarExito={mostrarExito} />
     }
     if (tabActiva === 'finanzas') {
       return <SeccionFinanzas empresaId={empresaId} mostrarExito={mostrarExito} />
