@@ -19,6 +19,7 @@ function DashboardDelDia({
   onIrCompras,
   onIrIngredientes,
   onIrGastos,
+  onIrNomina,
   onIrCatalogo,
   onIrHistorial,
   onVerComoSecretaria 
@@ -454,6 +455,11 @@ function DashboardDelDia({
             {onIrGastos && (
               <button onClick={onIrGastos} className="bg-rose-600 hover:bg-rose-700 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md">
                 💸 Gastos
+              </button>
+            )}
+            {onIrNomina && (
+              <button onClick={onIrNomina} className="bg-pink-600 hover:bg-pink-700 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md">
+                💵 Nómina
               </button>
             )}
             {onIrCalculadora && (

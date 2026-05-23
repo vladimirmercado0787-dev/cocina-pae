@@ -28,6 +28,7 @@ import VistaCatalogoRecetas from './components/catalogo/VistaCatalogoRecetas'
 import VistaHistorial from './components/historial/VistaHistorial'
 import VistaContratos from './components/contratos/VistaContratos'
 import VistaMiContrato from './components/contratos/VistaMiContrato'
+import VistaNomina from './components/nomina/VistaNomina'
 
 function App() {
   const [pasoActual, setPasoActual] = useState(1)
@@ -143,6 +144,10 @@ function App() {
   const puedeGestionarContratos = usuarioLogueado && 
     (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador')
 
+  // 🟢 Nómina: propietario, administrador, secretaria, contador
+  const puedeGestionarNomina = usuarioLogueado && 
+    (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'secretaria' || usuarioLogueado.rol === 'contador')
+
   // 🔵 Configuración: NO el contador (solo el dueño/admin configura)
   const puedeConfigurar = usuarioLogueado && 
     (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador')
@@ -196,6 +201,7 @@ function App() {
           onIrCompras={() => setVistaActual('compras')}
           onIrIngredientes={() => setVistaActual('ingredientes')}
           onIrGastos={() => setVistaActual('gastos')}
+          onIrNomina={() => setVistaActual('nomina')}
           onIrCatalogo={() => setVistaActual('catalogo_recetas')}
           onIrHistorial={() => setVistaActual('historial')}
           onIrMiContrato={() => setVistaActual('mi_contrato')}
@@ -260,6 +266,11 @@ function App() {
           onIrGastos={
             puedeGestionarGastos
               ? () => setVistaActual('gastos')
+              : null
+          }
+          onIrNomina={
+            puedeGestionarNomina
+              ? () => setVistaActual('nomina')
               : null
           }
           onVerComoSecretaria={
@@ -334,6 +345,11 @@ function App() {
             ? () => setVistaActual('gastos')
             : null
         }
+        onIrNomina={
+          puedeGestionarNomina
+            ? () => setVistaActual('nomina')
+            : null
+        }
         onVerComoSecretaria={
           usuarioLogueado.rol === 'propietario'
             ? () => setVistaActual('vista_secretaria_admin')
@@ -401,6 +417,7 @@ function App() {
           onIrCompras={() => setVistaActual('compras')}
           onIrIngredientes={() => setVistaActual('ingredientes')}
           onIrGastos={() => setVistaActual('gastos')}
+          onIrNomina={() => setVistaActual('nomina')}
           onIrCatalogo={() => setVistaActual('catalogo_recetas')}
           onIrHistorial={() => setVistaActual('historial')}
           onVolverAlPanel={() => setVistaActual('dashboard')}
@@ -496,6 +513,13 @@ function App() {
       )}
       {pasoActual === 7 && vistaActual === 'gastos' && usuarioLogueado && puedeGestionarGastos && (
         <VistaGastos 
+          usuario={usuarioLogueado}
+          empresaId={empresaActual?.id}
+          onVolver={() => setVistaActual('dashboard')}
+        />
+      )}
+      {pasoActual === 7 && vistaActual === 'nomina' && usuarioLogueado && puedeGestionarNomina && (
+        <VistaNomina 
           usuario={usuarioLogueado}
           empresaId={empresaActual?.id}
           onVolver={() => setVistaActual('dashboard')}

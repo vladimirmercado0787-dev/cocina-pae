@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 
-function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario, onIrConfiguracion, onIrFactura, onIrCalculadora, onIrInteligencia, onIrDespacho, onIrEmpleados, onIrContratos, onIrMiContrato, onIrProveedores, onIrCompras, onIrIngredientes, onVerComoSecretaria, onIrGastos, onIrCatalogo, onIrHistorial }) {
+function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario, onIrConfiguracion, onIrFactura, onIrCalculadora, onIrInteligencia, onIrDespacho, onIrEmpleados, onIrContratos, onIrMiContrato, onIrProveedores, onIrCompras, onIrIngredientes, onVerComoSecretaria, onIrGastos, onIrNomina, onIrCatalogo, onIrHistorial }) {
   const [empresa, setEmpresa] = useState(null)
   const [escuelas, setEscuelas] = useState([])
   const [operaciones, setOperaciones] = useState([])
@@ -208,6 +208,14 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuar
                 className="bg-rose-500 hover:bg-rose-600 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md"
               >
                 💰 Gastos
+              </button>
+            )}
+            {onIrNomina && (
+              <button
+                onClick={onIrNomina}
+                className="bg-pink-600 hover:bg-pink-700 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md"
+              >
+                💵 Nómina
               </button>
             )}
             {onIrCalculadora && (
