@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import ModalPagarQuincena from './ModalPagarQuincena'
 import VistaHistorialNomina from './VistaHistorialNomina'
+import VistaBonificaciones from './VistaBonificaciones'
 
 function VistaNomina({ usuario, empresaId, onVolver }) {
   const [empresa, setEmpresa] = useState(null)
@@ -10,6 +11,7 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
   const [cargando, setCargando] = useState(true)
   const [modalPagoAbierto, setModalPagoAbierto] = useState(false)
   const [verHistorial, setVerHistorial] = useState(false)
+  const [verBonificaciones, setVerBonificaciones] = useState(false)
   const [mensajeExito, setMensajeExito] = useState('')
 
   useEffect(() => {
@@ -63,10 +65,6 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
     cargarDatos()
   }
 
-  // ═══════════════════════════════════════════════════
-  // 🧮 HELPERS DE CÁLCULO
-  // ═══════════════════════════════════════════════════
-
   function salarioNetoQuincenal(empleado) {
     const sueldo = parseFloat(empleado.sueldo || 0)
     const freq = empleado.frecuencia_pago
@@ -85,12 +83,10 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
 
   function calcularProximoPeriodo() {
     if (!empresa) return null
-
     const hoy = new Date()
     const dia = hoy.getDate()
     const mes = hoy.getMonth() + 1
     const año = hoy.getFullYear()
-
     const frecuencia = empresa.nomina_frecuencia || 'quincenal'
 
     if (frecuencia === 'quincenal') {
@@ -98,65 +94,58 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
       const dia2 = empresa.nomina_dia_pago_2 || 30
 
       if (dia <= dia1) {
-        const fechaPago = new Date(año, mes - 1, dia1)
         return {
           tipo_periodo: 'quincenal_1',
           año, mes,
           label: `1ra quincena de ${nombreMes(mes)} ${año}`,
           fecha_inicio: new Date(año, mes - 1, 1),
           fecha_fin: new Date(año, mes - 1, 15),
-          fecha_pago: fechaPago,
+          fecha_pago: new Date(año, mes - 1, dia1),
         }
       }
-
       if (dia <= dia2) {
-        const fechaPago = new Date(año, mes - 1, dia2)
         return {
           tipo_periodo: 'quincenal_2',
           año, mes,
           label: `2da quincena de ${nombreMes(mes)} ${año}`,
           fecha_inicio: new Date(año, mes - 1, 16),
           fecha_fin: new Date(año, mes, 0),
-          fecha_pago: fechaPago,
+          fecha_pago: new Date(año, mes - 1, dia2),
         }
       }
-
       const mesSig = mes === 12 ? 1 : mes + 1
       const añoSig = mes === 12 ? año + 1 : año
-      const fechaPago = new Date(añoSig, mesSig - 1, dia1)
       return {
         tipo_periodo: 'quincenal_1',
         año: añoSig, mes: mesSig,
         label: `1ra quincena de ${nombreMes(mesSig)} ${añoSig}`,
         fecha_inicio: new Date(añoSig, mesSig - 1, 1),
         fecha_fin: new Date(añoSig, mesSig - 1, 15),
-        fecha_pago: fechaPago,
+        fecha_pago: new Date(añoSig, mesSig - 1, dia1),
       }
     }
 
     if (frecuencia === 'mensual') {
       const diaP = empresa.nomina_dia_pago_1 || 30
       if (dia <= diaP) {
-        const fechaPago = new Date(año, mes - 1, diaP)
         return {
           tipo_periodo: 'mensual',
           año, mes,
           label: `${nombreMes(mes)} ${año}`,
           fecha_inicio: new Date(año, mes - 1, 1),
           fecha_fin: new Date(año, mes, 0),
-          fecha_pago: fechaPago,
+          fecha_pago: new Date(año, mes - 1, diaP),
         }
       }
       const mesSig = mes === 12 ? 1 : mes + 1
       const añoSig = mes === 12 ? año + 1 : año
-      const fechaPago = new Date(añoSig, mesSig - 1, diaP)
       return {
         tipo_periodo: 'mensual',
         año: añoSig, mes: mesSig,
         label: `${nombreMes(mesSig)} ${añoSig}`,
         fecha_inicio: new Date(añoSig, mesSig - 1, 1),
         fecha_fin: new Date(añoSig, mesSig, 0),
-        fecha_pago: fechaPago,
+        fecha_pago: new Date(añoSig, mesSig - 1, diaP),
       }
     }
 
@@ -189,9 +178,7 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
     hoy.setHours(0, 0, 0, 0)
     const pago = new Date(fechaPago)
     pago.setHours(0, 0, 0, 0)
-    const diffMs = pago - hoy
-    const dias = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
-    return dias
+    return Math.ceil((pago - hoy) / (1000 * 60 * 60 * 24))
   }
 
   function formatearFecha(fecha) {
@@ -217,10 +204,6 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
     alert(`⏳ ${funcion}\n\nEsta funcionalidad se construirá en la próxima fase del módulo.`)
   }
 
-  // ═══════════════════════════════════════════════════
-  // 🧮 CÁLCULOS PARA UI
-  // ═══════════════════════════════════════════════════
-
   const proximoPeriodo = empresa ? calcularProximoPeriodo() : null
   const descuentoPct = parseFloat(empresa?.nomina_descuento_porcentaje || 5.74)
 
@@ -233,14 +216,11 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
       )
     : false
 
-  const totalNetoProximo = empleados.reduce((sum, emp) => 
-    sum + salarioNetoQuincenal(emp), 0)
-  
+  const totalNetoProximo = empleados.reduce((sum, emp) => sum + salarioNetoQuincenal(emp), 0)
   const totalBrutoProximo = empleados.reduce((sum, emp) => {
     const neto = salarioNetoQuincenal(emp)
     return sum + calcularBruto(neto, descuentoPct)
   }, 0)
-
   const totalAportes = totalBrutoProximo - totalNetoProximo
 
   const multiplicadorMes = empresa?.nomina_frecuencia === 'quincenal' ? 2 :
@@ -250,16 +230,22 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
   const totalMensualBruto = totalBrutoProximo * multiplicadorMes
   const totalMensualAportes = totalAportes * multiplicadorMes
 
-  // ═══════════════════════════════════════════════════
-  // 🎨 RENDER
-  // ═══════════════════════════════════════════════════
-
-  // Si está viendo el historial, mostramos esa vista
+  // Sub-vistas
   if (verHistorial) {
     return (
       <VistaHistorialNomina 
         empresaId={empresaId}
         onVolver={() => setVerHistorial(false)}
+      />
+    )
+  }
+
+  if (verBonificaciones) {
+    return (
+      <VistaBonificaciones 
+        empresaId={empresaId}
+        usuarioActual={usuario}
+        onVolver={() => setVerBonificaciones(false)}
       />
     )
   }
@@ -279,14 +265,12 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
   return (
     <div className="w-full max-w-5xl">
 
-      {/* Toast de éxito */}
       {mensajeExito && (
         <div className="fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-xl shadow-2xl z-[60] animate-pulse">
           {mensajeExito}
         </div>
       )}
 
-      {/* Modal de Pagar Quincena */}
       {modalPagoAbierto && proximoPeriodo && (
         <ModalPagarQuincena
           empresa={empresa}
@@ -321,7 +305,6 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
         </div>
       </div>
 
-      {/* ALERTA: SI NO HAY EMPLEADOS */}
       {empleados.length === 0 && (
         <div className="bg-yellow-50 border-2 border-yellow-300 rounded-2xl p-6 mb-6 text-center">
           <p className="text-4xl mb-2">⚠️</p>
@@ -332,15 +315,11 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
             Para usar el módulo de nómina, primero debes registrar empleados activos 
             y configurar su sueldo en el módulo de Empleados.
           </p>
-          <p className="text-xs text-yellow-700">
-            💡 Ve a Empleados → editar empleado → configurar sueldo y frecuencia.
-          </p>
         </div>
       )}
 
       {empleados.length > 0 && (
         <>
-          {/* PRÓXIMA QUINCENA */}
           {proximoPeriodo && (
             <div className={`rounded-2xl p-6 mb-6 text-white shadow-xl ${
               periodoYaPagado 
@@ -352,9 +331,7 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
                   <p className="text-xs opacity-80 tracking-wider mb-1">
                     {periodoYaPagado ? '✅ ÚLTIMO PAGO PROCESADO' : '📅 PRÓXIMA QUINCENA A PAGAR'}
                   </p>
-                  <h3 className="text-2xl font-bold">
-                    {proximoPeriodo.label}
-                  </h3>
+                  <h3 className="text-2xl font-bold">{proximoPeriodo.label}</h3>
                   <p className="text-sm opacity-90 mt-1">
                     📆 Fecha de pago: {formatearFecha(proximoPeriodo.fecha_pago)}
                   </p>
@@ -400,13 +377,11 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
             </div>
           )}
 
-          {/* RESUMEN MENSUAL */}
           <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
             <p className="text-xs text-gray-500 font-semibold tracking-wider mb-4">
               📊 RESUMEN MENSUAL ESTIMADO
             </p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              
               <div className="bg-green-50 border border-green-200 rounded-xl p-4">
                 <p className="text-xs text-green-700 font-semibold tracking-wider mb-1">TOTAL NETO</p>
                 <p className="text-xl font-bold text-green-900">
@@ -414,7 +389,6 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
                 </p>
                 <p className="text-xs text-green-600 mt-1">a empleados</p>
               </div>
-
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                 <p className="text-xs text-blue-700 font-semibold tracking-wider mb-1">TOTAL BRUTO</p>
                 <p className="text-xl font-bold text-blue-900">
@@ -422,7 +396,6 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
                 </p>
                 <p className="text-xs text-blue-600 mt-1">incluye aportes</p>
               </div>
-
               <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
                 <p className="text-xs text-purple-700 font-semibold tracking-wider mb-1">APORTES</p>
                 <p className="text-xl font-bold text-purple-900">
@@ -430,19 +403,14 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
                 </p>
                 <p className="text-xs text-purple-600 mt-1">TSS + AFP ({descuentoPct}%)</p>
               </div>
-
               <div className="bg-pink-50 border border-pink-200 rounded-xl p-4">
                 <p className="text-xs text-pink-700 font-semibold tracking-wider mb-1">EMPLEADOS</p>
-                <p className="text-xl font-bold text-pink-900">
-                  {empleados.length}
-                </p>
+                <p className="text-xl font-bold text-pink-900">{empleados.length}</p>
                 <p className="text-xs text-pink-600 mt-1">en nómina activa</p>
               </div>
-
             </div>
           </div>
 
-          {/* LISTA DE EMPLEADOS */}
           <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
             <p className="text-xs text-gray-500 font-semibold tracking-wider mb-4">
               👥 EMPLEADOS EN NÓMINA
@@ -465,7 +433,6 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
                         obtenerAvatar(emp)
                       )}
                     </div>
-
                     <div className="flex-1 min-w-0">
                       <p className="font-bold text-gray-900">{emp.nombre}</p>
                       <p className="text-xs text-gray-600 capitalize">
@@ -473,17 +440,13 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
                         {emp.frecuencia_pago && ` · pago ${emp.frecuencia_pago}`}
                       </p>
                     </div>
-
                     <div className="text-right">
-                      <p className="text-sm text-gray-600">
-                        Neto/{labelFrecuencia}
-                      </p>
+                      <p className="text-sm text-gray-600">Neto/{labelFrecuencia}</p>
                       <p className="text-lg font-bold text-green-700">
                         RD$ {formatearMoneda(netoQ)}
                       </p>
                       <p className="text-xs text-gray-500">
-                        Bruto: RD$ {formatearMoneda(brutoQ)} · 
-                        Aporte: RD$ {formatearMoneda(aporteQ)}
+                        Bruto: RD$ {formatearMoneda(brutoQ)} · Aporte: RD$ {formatearMoneda(aporteQ)}
                       </p>
                     </div>
                   </div>
@@ -492,7 +455,6 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
             </div>
           </div>
 
-          {/* HERRAMIENTAS */}
           <div className="bg-white rounded-2xl shadow-xl p-6">
             <p className="text-xs text-gray-500 font-semibold tracking-wider mb-4">
               ⚖️ HERRAMIENTAS
@@ -511,7 +473,7 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
               </button>
 
               <button
-                onClick={() => avisarProximamente('Bonificaciones Extra')}
+                onClick={() => setVerBonificaciones(true)}
                 className="bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold px-4 py-3 rounded-xl flex items-center gap-3 border border-amber-200"
               >
                 <span className="text-2xl">🎁</span>
