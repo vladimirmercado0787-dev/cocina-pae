@@ -4,6 +4,7 @@ import ModalPagarQuincena from './ModalPagarQuincena'
 import VistaHistorialNomina from './VistaHistorialNomina'
 import VistaBonificaciones from './VistaBonificaciones'
 import VistaRegaliaPascual from './VistaRegaliaPascual'
+import CalculadoraLiquidacion from './CalculadoraLiquidacion'
 
 function VistaNomina({ usuario, empresaId, onVolver }) {
   const [empresa, setEmpresa] = useState(null)
@@ -14,6 +15,7 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
   const [verHistorial, setVerHistorial] = useState(false)
   const [verBonificaciones, setVerBonificaciones] = useState(false)
   const [verRegalia, setVerRegalia] = useState(false)
+  const [verLiquidacion, setVerLiquidacion] = useState(false)
   const [mensajeExito, setMensajeExito] = useState('')
 
   useEffect(() => {
@@ -208,10 +210,6 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
     return emp.nombre?.charAt(0)?.toUpperCase() || '?'
   }
 
-  function avisarProximamente(funcion) {
-    alert(`⏳ ${funcion}\n\nEsta funcionalidad se construirá en la próxima fase del módulo.`)
-  }
-
   // ═══════════════════════════════════════════════════
   // 🧮 CÁLCULOS PARA UI
   // ═══════════════════════════════════════════════════
@@ -271,6 +269,16 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
         empresaId={empresaId}
         usuarioActual={usuario}
         onVolver={() => setVerRegalia(false)}
+      />
+    )
+  }
+
+  if (verLiquidacion) {
+    return (
+      <CalculadoraLiquidacion 
+        empresaId={empresaId}
+        usuarioActual={usuario}
+        onVolver={() => setVerLiquidacion(false)}
       />
     )
   }
@@ -527,7 +535,7 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
               </button>
 
               <button
-                onClick={() => avisarProximamente('Calculadora de Liquidación')}
+                onClick={() => setVerLiquidacion(true)}
                 className="bg-purple-50 hover:bg-purple-100 text-purple-900 font-bold px-4 py-3 rounded-xl flex items-center gap-3 border border-purple-200"
               >
                 <span className="text-2xl">⚖️</span>
