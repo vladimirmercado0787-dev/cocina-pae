@@ -111,34 +111,50 @@ function App() {
   }
 
   // === PERMISOS ===
+  // 🔵 Inteligencia: NO el contador (es estrategia interna del negocio)
   const puedeVerInteligencia = usuarioLogueado && 
     (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'secretaria')
 
+  // 🔵 Despacho: NO el contador (es operativo)
   const puedeDespachar = usuarioLogueado && 
     ['propietario', 'administrador', 'jefa_cocina', 'ayudante', 'despachador', 'secretaria'].includes(usuarioLogueado.rol)
 
+  // 🟢 Empleados: SÍ el contador (necesita ver totales de nómina para reportes)
   const puedeGestionarEmpleados = usuarioLogueado && 
-    (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador')
+    (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'contador')
 
+  // 🟢 Proveedores: SÍ el contador (necesita RNC para reporte 606 DGII)
   const puedeGestionarProveedores = usuarioLogueado && 
-    (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'secretaria')
+    (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'secretaria' || usuarioLogueado.rol === 'contador')
 
+  // 🟢 Compras: SÍ el contador (necesita facturas con NCF para reporte 606)
   const puedeGestionarCompras = usuarioLogueado && 
-    (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'secretaria')
+    (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'secretaria' || usuarioLogueado.rol === 'contador')
 
+  // 🔵 Ingredientes: NO el contador (es inventario operativo)
   const puedeGestionarIngredientes = usuarioLogueado && 
     (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'secretaria' || usuarioLogueado.rol === 'jefa_cocina')
 
+  // 🟢 Gastos: SÍ el contador (necesita gastos con RNC/NCF para reporte 606)
   const puedeGestionarGastos = usuarioLogueado && 
-    (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'secretaria')
+    (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'secretaria' || usuarioLogueado.rol === 'contador')
 
+  // 🔵 Contratos: NO el contador (es RRHH, no contabilidad)
   const puedeGestionarContratos = usuarioLogueado && 
     (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador')
 
-  // 🆕 Permiso para ver SU PROPIO contrato (todos los empleados activos)
-  const puedeVerMiContrato = usuarioLogueado && usuarioLogueado.rol !== 'propietario'
+  // 🔵 Configuración: NO el contador (solo el dueño/admin configura)
+  const puedeConfigurar = usuarioLogueado && 
+    (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador')
 
+  // 🟢 Catálogo de Recetas: TODOS los usuarios activos (incluye contador)
+  const puedeVerCatalogo = usuarioLogueado !== null
+
+  // 🟢 Historial: TODOS los usuarios activos (incluye contador - útil para auditoría)
   const puedeVerHistorial = usuarioLogueado !== null
+
+  // Mi Contrato: todos menos propietario
+  const puedeVerMiContrato = usuarioLogueado && usuarioLogueado.rol !== 'propietario'
 
   function renderPasoWizard() {
     if (pasoActual === 1) {
@@ -194,7 +210,11 @@ function App() {
           empresaId={empresaActual?.id}
           onCerrarSesion={cerrarSesionTotal}
           onCambiarUsuario={cambiarDeUsuario}
-          onIrConfiguracion={() => setVistaActual('configuracion')}
+          onIrConfiguracion={
+            puedeConfigurar
+              ? () => setVistaActual('configuracion')
+              : null
+          }
           onIrFactura={() => setVistaActual('factura')}
           onIrCalculadora={() => setVistaActual('calculadora')}
           onIrInteligencia={
@@ -247,8 +267,16 @@ function App() {
               ? () => setVistaActual('vista_secretaria_admin')
               : null
           }
-          onIrCatalogo={() => setVistaActual('catalogo_recetas')}
-          onIrHistorial={() => setVistaActual('historial')}
+          onIrCatalogo={
+            puedeVerCatalogo
+              ? () => setVistaActual('catalogo_recetas')
+              : null
+          }
+          onIrHistorial={
+            puedeVerHistorial
+              ? () => setVistaActual('historial')
+              : null
+          }
         />
       )
     }
@@ -259,7 +287,11 @@ function App() {
         empresaId={empresaActual?.id}
         onCerrarSesion={cerrarSesionTotal}
         onCambiarUsuario={cambiarDeUsuario}
-        onIrConfiguracion={() => setVistaActual('configuracion')}
+        onIrConfiguracion={
+          puedeConfigurar
+            ? () => setVistaActual('configuracion')
+            : null
+        }
         onIrCierre={() => setVistaActual('cierre')}
         onIrCalculadora={() => setVistaActual('calculadora')}
         onIrInteligencia={
@@ -307,8 +339,16 @@ function App() {
             ? () => setVistaActual('vista_secretaria_admin')
             : null
         }
-        onIrCatalogo={() => setVistaActual('catalogo_recetas')}
-        onIrHistorial={() => setVistaActual('historial')}
+        onIrCatalogo={
+          puedeVerCatalogo
+            ? () => setVistaActual('catalogo_recetas')
+            : null
+        }
+        onIrHistorial={
+          puedeVerHistorial
+            ? () => setVistaActual('historial')
+            : null
+        }
       />
     )
   }
@@ -368,7 +408,7 @@ function App() {
         />
       )}
       
-      {pasoActual === 7 && vistaActual === 'despacho' && usuarioLogueado && (
+      {pasoActual === 7 && vistaActual === 'despacho' && usuarioLogueado && puedeDespachar && (
         <VistaDespachador 
           usuario={usuarioLogueado}
           empresaId={empresaActual?.id}
@@ -377,7 +417,7 @@ function App() {
           onVolver={() => setVistaActual('dashboard')}
         />
       )}
-      {pasoActual === 7 && vistaActual === 'configuracion' && usuarioLogueado && (
+      {pasoActual === 7 && vistaActual === 'configuracion' && usuarioLogueado && puedeConfigurar && (
         <Configuracion 
           usuario={usuarioLogueado}
           empresaId={empresaActual?.id}
@@ -461,13 +501,13 @@ function App() {
           onVolver={() => setVistaActual('dashboard')}
         />
       )}
-      {pasoActual === 7 && vistaActual === 'catalogo_recetas' && usuarioLogueado && (
+      {pasoActual === 7 && vistaActual === 'catalogo_recetas' && usuarioLogueado && puedeVerCatalogo && (
         <VistaCatalogoRecetas 
           empresa_id={empresaActual?.id}
           onVolver={() => setVistaActual('dashboard')}
         />
       )}
-      {pasoActual === 7 && vistaActual === 'historial' && usuarioLogueado && (
+      {pasoActual === 7 && vistaActual === 'historial' && usuarioLogueado && puedeVerHistorial && (
         <VistaHistorial 
           usuario={usuarioLogueado}
           empresaId={empresaActual?.id}

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 
-function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario, onIrConfiguracion, onIrFactura, onIrCalculadora, onIrInteligencia, onIrDespacho, onIrEmpleados, onIrContratos, onIrMiContrato, onIrProveedores, onIrCompras, onIrIngredientes, onVerComoSecretaria, onIrGastos }) {
+function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario, onIrConfiguracion, onIrFactura, onIrCalculadora, onIrInteligencia, onIrDespacho, onIrEmpleados, onIrContratos, onIrMiContrato, onIrProveedores, onIrCompras, onIrIngredientes, onVerComoSecretaria, onIrGastos, onIrCatalogo, onIrHistorial }) {
   const [empresa, setEmpresa] = useState(null)
   const [escuelas, setEscuelas] = useState([])
   const [operaciones, setOperaciones] = useState([])
@@ -93,6 +93,10 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuar
     return <div className="text-center py-12 text-gray-500">Cargando finanzas...</div>
   }
 
+  // Etiqueta dinámica según el rol
+  const tituloVista = usuario.rol === 'contador' ? 'VISTA CONTADOR' : 'VISTA ADMINISTRADOR'
+  const emojiVista = usuario.rol === 'contador' ? '🧮' : '💼'
+
   return (
     <div className="w-full max-w-5xl">
       
@@ -100,10 +104,10 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuar
         <div className="flex justify-between items-start mb-4">
           <div>
             <p className="text-green-100 text-xs font-semibold tracking-wider">
-              VISTA ADMINISTRADOR
+              {tituloVista}
             </p>
             <h2 className="text-3xl font-bold mt-1">
-              💼 {usuario.nombre.split(' ')[0]}
+              {emojiVista} {usuario.nombre.split(' ')[0]}
             </h2>
             <p className="text-green-200 mt-1">
               {empresa?.nombre} · {mesNombre.charAt(0).toUpperCase() + mesNombre.slice(1)}
@@ -156,6 +160,22 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuar
                 className="bg-cyan-500 hover:bg-cyan-600 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md"
               >
                 📋 Mi Contrato
+              </button>
+            )}
+            {onIrCatalogo && (
+              <button
+                onClick={onIrCatalogo}
+                className="bg-teal-600 hover:bg-teal-700 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md"
+              >
+                📋 Catálogo
+              </button>
+            )}
+            {onIrHistorial && (
+              <button
+                onClick={onIrHistorial}
+                className="bg-slate-700 hover:bg-slate-800 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md"
+              >
+                📜 Historial
               </button>
             )}
             {onIrIngredientes && (
