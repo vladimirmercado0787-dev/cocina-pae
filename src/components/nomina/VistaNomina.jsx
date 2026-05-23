@@ -3,6 +3,7 @@ import { supabase } from '../../supabaseClient'
 import ModalPagarQuincena from './ModalPagarQuincena'
 import VistaHistorialNomina from './VistaHistorialNomina'
 import VistaBonificaciones from './VistaBonificaciones'
+import VistaRegaliaPascual from './VistaRegaliaPascual'
 
 function VistaNomina({ usuario, empresaId, onVolver }) {
   const [empresa, setEmpresa] = useState(null)
@@ -12,6 +13,7 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
   const [modalPagoAbierto, setModalPagoAbierto] = useState(false)
   const [verHistorial, setVerHistorial] = useState(false)
   const [verBonificaciones, setVerBonificaciones] = useState(false)
+  const [verRegalia, setVerRegalia] = useState(false)
   const [mensajeExito, setMensajeExito] = useState('')
 
   useEffect(() => {
@@ -65,6 +67,10 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
     cargarDatos()
   }
 
+  // ═══════════════════════════════════════════════════
+  // 🧮 HELPERS DE CÁLCULO
+  // ═══════════════════════════════════════════════════
+
   function salarioNetoQuincenal(empleado) {
     const sueldo = parseFloat(empleado.sueldo || 0)
     const freq = empleado.frecuencia_pago
@@ -83,10 +89,12 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
 
   function calcularProximoPeriodo() {
     if (!empresa) return null
+
     const hoy = new Date()
     const dia = hoy.getDate()
     const mes = hoy.getMonth() + 1
     const año = hoy.getFullYear()
+
     const frecuencia = empresa.nomina_frecuencia || 'quincenal'
 
     if (frecuencia === 'quincenal') {
@@ -204,6 +212,10 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
     alert(`⏳ ${funcion}\n\nEsta funcionalidad se construirá en la próxima fase del módulo.`)
   }
 
+  // ═══════════════════════════════════════════════════
+  // 🧮 CÁLCULOS PARA UI
+  // ═══════════════════════════════════════════════════
+
   const proximoPeriodo = empresa ? calcularProximoPeriodo() : null
   const descuentoPct = parseFloat(empresa?.nomina_descuento_porcentaje || 5.74)
 
@@ -230,7 +242,10 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
   const totalMensualBruto = totalBrutoProximo * multiplicadorMes
   const totalMensualAportes = totalAportes * multiplicadorMes
 
-  // Sub-vistas
+  // ═══════════════════════════════════════════════════
+  // 🎨 SUB-VISTAS
+  // ═══════════════════════════════════════════════════
+
   if (verHistorial) {
     return (
       <VistaHistorialNomina 
@@ -246,6 +261,16 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
         empresaId={empresaId}
         usuarioActual={usuario}
         onVolver={() => setVerBonificaciones(false)}
+      />
+    )
+  }
+
+  if (verRegalia) {
+    return (
+      <VistaRegaliaPascual 
+        empresaId={empresaId}
+        usuarioActual={usuario}
+        onVolver={() => setVerRegalia(false)}
       />
     )
   }
@@ -315,11 +340,15 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
             Para usar el módulo de nómina, primero debes registrar empleados activos 
             y configurar su sueldo en el módulo de Empleados.
           </p>
+          <p className="text-xs text-yellow-700">
+            💡 Ve a Empleados → editar empleado → configurar sueldo y frecuencia.
+          </p>
         </div>
       )}
 
       {empleados.length > 0 && (
         <>
+          {/* PRÓXIMA QUINCENA */}
           {proximoPeriodo && (
             <div className={`rounded-2xl p-6 mb-6 text-white shadow-xl ${
               periodoYaPagado 
@@ -377,6 +406,7 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
             </div>
           )}
 
+          {/* RESUMEN MENSUAL */}
           <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
             <p className="text-xs text-gray-500 font-semibold tracking-wider mb-4">
               📊 RESUMEN MENSUAL ESTIMADO
@@ -411,6 +441,7 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
             </div>
           </div>
 
+          {/* LISTA DE EMPLEADOS */}
           <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
             <p className="text-xs text-gray-500 font-semibold tracking-wider mb-4">
               👥 EMPLEADOS EN NÓMINA
@@ -455,6 +486,7 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
             </div>
           </div>
 
+          {/* HERRAMIENTAS */}
           <div className="bg-white rounded-2xl shadow-xl p-6">
             <p className="text-xs text-gray-500 font-semibold tracking-wider mb-4">
               ⚖️ HERRAMIENTAS
@@ -484,7 +516,7 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
               </button>
 
               <button
-                onClick={() => avisarProximamente('Proyección de Regalía Pascual')}
+                onClick={() => setVerRegalia(true)}
                 className="bg-red-50 hover:bg-red-100 text-red-900 font-bold px-4 py-3 rounded-xl flex items-center gap-3 border border-red-200"
               >
                 <span className="text-2xl">🎄</span>
