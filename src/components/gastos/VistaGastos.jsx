@@ -7,6 +7,17 @@ const MESES = [
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
 ]
 
+// ═══════════════════════════════════════════════════
+// 🔗 MAPA DE ORÍGENES (ecosistema)
+// ═══════════════════════════════════════════════════
+const ORIGENES_INFO = {
+  manual: { emoji: '✋', label: 'Manual', color: 'gray', descripcion: 'Registrado manualmente' },
+  nomina_pago: { emoji: '💸', label: 'Nómina', color: 'blue', descripcion: 'Generado desde pago de nómina' },
+  nomina_bonificacion: { emoji: '🎁', label: 'Bonificación', color: 'purple', descripcion: 'Generado desde bonificación' },
+  nomina_liquidacion: { emoji: '📋', label: 'Liquidación', color: 'indigo', descripcion: 'Generado desde liquidación de empleado' },
+  compra_inventario: { emoji: '📦', label: 'Compra', color: 'amber', descripcion: 'Generado desde compra de inventario' },
+}
+
 function VistaGastos({ usuario, empresaId, onVolver }) {
   const [gastos, setGastos] = useState([])
   const [categorias, setCategorias] = useState([])
@@ -20,6 +31,7 @@ function VistaGastos({ usuario, empresaId, onVolver }) {
   const [filtroCategoria, setFiltroCategoria] = useState('')
   const [filtroBusqueda, setFiltroBusqueda] = useState('')
   const [filtroPagado, setFiltroPagado] = useState('todos') // todos | pagado | pendiente
+  const [filtroOrigen, setFiltroOrigen] = useState('todos') // todos | manual | automatico
   
   // Modal
   const [modalAbierto, setModalAbierto] = useState(false)
@@ -70,11 +82,27 @@ function VistaGastos({ usuario, empresaId, onVolver }) {
     return proveedores.find(p => p.id === provId)
   }
 
+  // ═══════════════════════════════════════════════════
+  // 🔗 Helper: determinar si un gasto es automático
+  // ═══════════════════════════════════════════════════
+  function esAutomatico(gasto) {
+    return gasto.origen && gasto.origen !== 'manual' && gasto.origen !== null
+  }
+
+  function getOrigenInfo(gasto) {
+    const origen = gasto.origen || 'manual'
+    return ORIGENES_INFO[origen] || ORIGENES_INFO.manual
+  }
+
   // Filtros aplicados
   const gastosFiltrados = gastos.filter(g => {
     if (filtroCategoria && g.categoria_id !== filtroCategoria) return false
     if (filtroPagado === 'pagado' && !g.pagado) return false
     if (filtroPagado === 'pendiente' && g.pagado) return false
+    
+    // Filtro por origen
+    if (filtroOrigen === 'manual' && esAutomatico(g)) return false
+    if (filtroOrigen === 'automatico' && !esAutomatico(g)) return false
     
     if (filtroBusqueda.trim()) {
       const q = filtroBusqueda.toLowerCase()
@@ -95,6 +123,8 @@ function VistaGastos({ usuario, empresaId, onVolver }) {
   const totalPendiente = totalMes - totalPagado
   const cantidadGastos = gastosFiltrados.length
   const conRncCount = gastosFiltrados.filter(g => g.con_rnc).length
+  const automaticosCount = gastosFiltrados.filter(g => esAutomatico(g)).length
+  const automaticosMonto = gastosFiltrados.filter(g => esAutomatico(g)).reduce((sum, g) => sum + parseFloat(g.total || 0), 0)
 
   // Agregaciones por categoría
   const gastosPorCategoria = categorias.map(cat => {
@@ -161,8 +191,8 @@ function VistaGastos({ usuario, empresaId, onVolver }) {
         </div>
       </div>
 
-      {/* STATS */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      {/* STATS - Ahora con 5 tarjetas */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
         <div className="bg-white rounded-xl shadow-sm p-4">
           <p className="text-xs text-gray-500 font-semibold tracking-wider">TOTAL MES</p>
           <p className="text-2xl font-bold text-gray-900 mt-1">
@@ -188,6 +218,14 @@ function VistaGastos({ usuario, empresaId, onVolver }) {
           <p className="text-xs text-purple-700 font-semibold tracking-wider">CON RNC</p>
           <p className="text-2xl font-bold text-purple-900 mt-1">{conRncCount}</p>
           <p className="text-xs text-purple-600 mt-1">para 606 DGII</p>
+        </div>
+        {/* 🔗 NUEVA TARJETA - AUTOMÁTICOS */}
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <p className="text-xs text-blue-700 font-semibold tracking-wider">🔗 AUTOMÁTICOS</p>
+          <p className="text-2xl font-bold text-blue-900 mt-1">{automaticosCount}</p>
+          <p className="text-xs text-blue-600 mt-1">
+            RD$ {automaticosMonto.toLocaleString('es-DO', { maximumFractionDigits: 0 })}
+          </p>
         </div>
       </div>
 
@@ -228,7 +266,7 @@ function VistaGastos({ usuario, empresaId, onVolver }) {
         </div>
       )}
 
-      {/* FILTROS */}
+      {/* FILTROS - Ahora con filtro de origen */}
       <div className="bg-white rounded-xl shadow-sm p-4 mb-4 flex flex-wrap gap-3">
         <input
           type="text"
@@ -252,9 +290,19 @@ function VistaGastos({ usuario, empresaId, onVolver }) {
           onChange={(e) => setFiltroPagado(e.target.value)}
           className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
         >
-          <option value="todos">Todos</option>
+          <option value="todos">Todos los estados</option>
           <option value="pagado">✅ Pagados</option>
           <option value="pendiente">⏰ Pendientes</option>
+        </select>
+        {/* 🔗 NUEVO FILTRO DE ORIGEN */}
+        <select
+          value={filtroOrigen}
+          onChange={(e) => setFiltroOrigen(e.target.value)}
+          className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+        >
+          <option value="todos">Todos los orígenes</option>
+          <option value="manual">✋ Solo manuales</option>
+          <option value="automatico">🔗 Solo automáticos</option>
         </select>
       </div>
 
@@ -290,6 +338,7 @@ function VistaGastos({ usuario, empresaId, onVolver }) {
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 tracking-wider">PROVEEDOR</th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 tracking-wider">MONTO</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 tracking-wider">RNC</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 tracking-wider">ORIGEN</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 tracking-wider">ESTADO</th>
                 <th className="px-4 py-3"></th>
               </tr>
@@ -299,9 +348,14 @@ function VistaGastos({ usuario, empresaId, onVolver }) {
                 const cat = getCategoria(g.categoria_id)
                 const prov = getProveedor(g.proveedor_id)
                 const fechaFormat = new Date(g.fecha + 'T12:00:00').toLocaleDateString('es-DO', { day: '2-digit', month: 'short' })
+                const auto = esAutomatico(g)
+                const origenInfo = getOrigenInfo(g)
 
                 return (
-                  <tr key={g.id} className="hover:bg-gray-50">
+                  <tr 
+                    key={g.id} 
+                    className={`hover:bg-gray-50 ${auto ? 'bg-blue-50/30' : ''}`}
+                  >
                     <td className="px-4 py-3">
                       <p className="text-sm text-gray-900 font-mono">{fechaFormat}</p>
                     </td>
@@ -349,6 +403,21 @@ function VistaGastos({ usuario, empresaId, onVolver }) {
                         <span className="text-xs text-gray-400">—</span>
                       )}
                     </td>
+                    {/* 🔗 NUEVA COLUMNA - ORIGEN */}
+                    <td className="px-4 py-3 text-center">
+                      {auto ? (
+                        <span 
+                          className={`text-xs bg-${origenInfo.color}-100 text-${origenInfo.color}-800 px-2 py-1 rounded-full font-semibold inline-flex items-center gap-1`}
+                          title={origenInfo.descripcion}
+                        >
+                          🔗 {origenInfo.label}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-500">
+                          ✋ Manual
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-center">
                       {g.pagado ? (
                         <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-semibold">
@@ -361,12 +430,21 @@ function VistaGastos({ usuario, empresaId, onVolver }) {
                       )}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <button
-                        onClick={() => { setGastoEditando(g); setModalAbierto(true); }}
-                        className="text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1 rounded font-semibold"
-                      >
-                        ✏️ Editar
-                      </button>
+                      {auto ? (
+                        <span 
+                          className="text-xs text-gray-400 px-2 py-1 inline-flex items-center gap-1"
+                          title="Este gasto se generó automáticamente desde otro módulo. No se puede editar directamente para mantener la trazabilidad."
+                        >
+                          🔒 Auto
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => { setGastoEditando(g); setModalAbierto(true); }}
+                          className="text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1 rounded font-semibold"
+                        >
+                          ✏️ Editar
+                        </button>
+                      )}
                     </td>
                   </tr>
                 )

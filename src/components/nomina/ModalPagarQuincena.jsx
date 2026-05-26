@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
+import { crearGastosDesdeNomina } from '../../utils/gastosAutomaticos'
 
 function ModalPagarQuincena({ 
   empresa, 
@@ -199,6 +200,43 @@ function ModalPagarQuincena({
         // Si falla el insert de detalles, eliminar la cabecera para no dejar inconsistencia
         await supabase.from('pagos_nomina').delete().eq('id', pagoCreado.id)
         throw new Error('Error al guardar detalles: ' + errorDetalles.message)
+      }
+
+      // ═══════════════════════════════════════════════════
+      // 🔗 INT-001: Generar gastos automáticos del ecosistema
+      // ───────────────────────────────────────────────────
+      // Filosofía: "si me rompo el pie derecho, cojeo y camino
+      // con el izquierdo". El pago de nómina trae 2 gastos
+      // automáticos al módulo de Gastos.
+      //
+      // IMPORTANTE: si falla la creación de gastos, NO revertimos
+      // el pago (ya fue exitoso). Solo logueamos el error para
+      // poder regenerarlos manualmente después.
+      // ═══════════════════════════════════════════════════
+      const descripcionPeriodo = periodo?.label || 
+        `${periodo?.tipo_periodo || 'Período'} ${periodo?.mes || ''}/${periodo?.año || ''}`
+
+      const resultadoGastos = await crearGastosDesdeNomina({
+        empresaId: empresa.id,
+        pagoNominaId: pagoCreado.id,
+        fechaPago: periodo.fecha_pago.toISOString().split('T')[0],
+        totalNeto: totalNeto,
+        totalAportes: totalAportes,
+        descripcionPeriodo: descripcionPeriodo,
+        registradoPor: usuarioActual?.id,
+        registradoPorNombre: usuarioActual?.nombre || 'Sistema',
+      })
+
+      if (!resultadoGastos.success) {
+        // No bloqueamos el éxito del pago — solo avisamos en consola
+        console.warn(
+          '⚠️ Pago de nómina OK, pero falló crear gastos automáticos:',
+          resultadoGastos.error
+        )
+      } else {
+        console.log(
+          `✅ Ecosistema conectado: ${resultadoGastos.gastos.length} gasto(s) automático(s) creado(s) desde nómina`
+        )
       }
 
       // Éxito
@@ -483,6 +521,20 @@ function ModalPagarQuincena({
                   <span>Costo total (con aportes):</span>
                   <span>RD$ {formatearMoneda(totalBruto)}</span>
                 </div>
+              </div>
+
+              {/* 🔗 Aviso de conexión con Gastos */}
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <p className="text-sm font-semibold text-blue-900 mb-2">
+                  🔗 Conexión automática con Gastos
+                </p>
+                <p className="text-xs text-blue-800">
+                  Al confirmar, se crearán automáticamente <strong>2 gastos</strong> en el módulo de Gastos:
+                </p>
+                <ul className="text-xs text-blue-800 mt-2 space-y-1 ml-4">
+                  <li>💰 <strong>Sueldos y Salarios:</strong> RD$ {formatearMoneda(totalNeto)}</li>
+                  <li>🏛️ <strong>Aportes Patronales (TSS+AFP):</strong> RD$ {formatearMoneda(totalAportes)}</li>
+                </ul>
               </div>
 
               {error && (
