@@ -29,6 +29,7 @@ import VistaHistorial from './components/historial/VistaHistorial'
 import VistaContratos from './components/contratos/VistaContratos'
 import VistaMiContrato from './components/contratos/VistaMiContrato'
 import VistaNomina from './components/nomina/VistaNomina'
+import MisRecibos from './components/nomina/MisRecibos'
 
 function App() {
   const [pasoActual, setPasoActual] = useState(1)
@@ -161,6 +162,9 @@ function App() {
   // Mi Contrato: todos menos propietario
   const puedeVerMiContrato = usuarioLogueado && usuarioLogueado.rol !== 'propietario'
 
+  // 🆕 INT-007: Mis Recibos - todos menos propietario (empleados ven sus pagos)
+  const puedeVerMisRecibos = usuarioLogueado && usuarioLogueado.rol !== 'propietario'
+
   function renderPasoWizard() {
     if (pasoActual === 1) {
       return <Paso1MiCocina onAvanzar={avanzarPaso} empresaActual={empresaActual} setEmpresaActual={setEmpresaActual} />
@@ -205,6 +209,11 @@ function App() {
           onIrCatalogo={() => setVistaActual('catalogo_recetas')}
           onIrHistorial={() => setVistaActual('historial')}
           onIrMiContrato={() => setVistaActual('mi_contrato')}
+          onIrMisRecibos={
+            puedeVerMisRecibos
+              ? () => setVistaActual('mis_recibos')
+              : null
+          }
         />
       )
     }
@@ -246,6 +255,11 @@ function App() {
           onIrMiContrato={
             puedeVerMiContrato
               ? () => setVistaActual('mi_contrato')
+              : null
+          }
+          onIrMisRecibos={
+            puedeVerMisRecibos
+              ? () => setVistaActual('mis_recibos')
               : null
           }
           onIrProveedores={
@@ -328,6 +342,11 @@ function App() {
         onIrMiContrato={
           puedeVerMiContrato
             ? () => setVistaActual('mi_contrato')
+            : null
+        }
+        onIrMisRecibos={
+          puedeVerMisRecibos
+            ? () => setVistaActual('mis_recibos')
             : null
         }
         onIrCompras={
@@ -485,6 +504,13 @@ function App() {
       )}
       {pasoActual === 7 && vistaActual === 'mi_contrato' && usuarioLogueado && puedeVerMiContrato && (
         <VistaMiContrato 
+          usuario={usuarioLogueado}
+          empresaId={empresaActual?.id}
+          onVolver={() => setVistaActual('dashboard')}
+        />
+      )}
+      {pasoActual === 7 && vistaActual === 'mis_recibos' && usuarioLogueado && puedeVerMisRecibos && (
+        <MisRecibos 
           usuario={usuarioLogueado}
           empresaId={empresaActual?.id}
           onVolver={() => setVistaActual('dashboard')}

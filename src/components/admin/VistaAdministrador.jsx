@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 
-function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario, onIrConfiguracion, onIrFactura, onIrCalculadora, onIrInteligencia, onIrDespacho, onIrEmpleados, onIrContratos, onIrMiContrato, onIrProveedores, onIrCompras, onIrIngredientes, onVerComoSecretaria, onIrGastos, onIrNomina, onIrCatalogo, onIrHistorial }) {
+function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario, onIrConfiguracion, onIrFactura, onIrCalculadora, onIrInteligencia, onIrDespacho, onIrEmpleados, onIrContratos, onIrMiContrato, onIrMisRecibos, onIrProveedores, onIrCompras, onIrIngredientes, onVerComoSecretaria, onIrGastos, onIrNomina, onIrCatalogo, onIrHistorial }) {
   const [empresa, setEmpresa] = useState(null)
   const [escuelas, setEscuelas] = useState([])
   const [operaciones, setOperaciones] = useState([])
@@ -93,7 +93,6 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuar
     return <div className="text-center py-12 text-gray-500">Cargando finanzas...</div>
   }
 
-  // Etiqueta dinámica según el rol
   const tituloVista = usuario.rol === 'contador' ? 'VISTA CONTADOR' : 'VISTA ADMINISTRADOR'
   const emojiVista = usuario.rol === 'contador' ? '🧮' : '💼'
 
@@ -160,6 +159,14 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuar
                 className="bg-cyan-500 hover:bg-cyan-600 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md"
               >
                 📋 Mi Contrato
+              </button>
+            )}
+            {onIrMisRecibos && (
+              <button
+                onClick={onIrMisRecibos}
+                className="bg-emerald-500 hover:bg-emerald-600 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md"
+              >
+                💰 Mis Recibos
               </button>
             )}
             {onIrCatalogo && (

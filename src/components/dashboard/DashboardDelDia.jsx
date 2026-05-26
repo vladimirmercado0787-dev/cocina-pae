@@ -16,6 +16,7 @@ function DashboardDelDia({
   onIrEmpleados,
   onIrContratos,
   onIrMiContrato,
+  onIrMisRecibos,
   onIrCompras,
   onIrIngredientes,
   onIrGastos,
@@ -58,7 +59,6 @@ function DashboardDelDia({
       .eq('fecha', fechaHoy)
     setOperacionesHoy(opsData || [])
 
-    // Detectar si ya se pesó crudo hoy
     const { count: countCrudo } = await supabase
       .from('movimientos_inventario')
       .select('id', { count: 'exact', head: true })
@@ -430,6 +430,11 @@ function DashboardDelDia({
             {onIrMiContrato && (
               <button onClick={onIrMiContrato} className="bg-cyan-500 hover:bg-cyan-600 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md">
                 📋 Mi Contrato
+              </button>
+            )}
+            {onIrMisRecibos && (
+              <button onClick={onIrMisRecibos} className="bg-emerald-500 hover:bg-emerald-600 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md">
+                💰 Mis Recibos
               </button>
             )}
             {onIrCatalogo && (

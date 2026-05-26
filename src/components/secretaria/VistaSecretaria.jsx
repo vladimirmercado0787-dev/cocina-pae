@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 
-function VistaSecretaria({ usuario, empresaId, onCerrarSesion, onCambiarUsuario, onIrCalculadora, onIrInteligencia, onIrDespacho, onIrFactura, onIrProveedores, onIrCompras, onIrGastos, onIrIngredientes, onIrEmpleados, onIrMiContrato, onVolverAlPanel, modoAdmin = false }) {
+function VistaSecretaria({ usuario, empresaId, onCerrarSesion, onCambiarUsuario, onIrCalculadora, onIrInteligencia, onIrDespacho, onIrFactura, onIrProveedores, onIrCompras, onIrGastos, onIrIngredientes, onIrEmpleados, onIrMiContrato, onIrMisRecibos, onVolverAlPanel, modoAdmin = false }) {
   const [empresa, setEmpresa] = useState(null)
   const [escuelas, setEscuelas] = useState([])
   const [operaciones, setOperaciones] = useState([])
@@ -50,7 +50,6 @@ function VistaSecretaria({ usuario, empresaId, onCerrarSesion, onCambiarUsuario,
     setCargando(false)
   }
 
-  // === CÁLCULOS ===
   const totalRacionesDia = escuelas.reduce((sum, e) => sum + (e.raciones_contractuales || 0), 0)
   const facturacionDiaria = escuelas.reduce((sum, e) => sum + ((e.raciones_contractuales || 0) * (parseFloat(e.precio_racion) || 0)), 0)
   const facturacionMensual = facturacionDiaria * 22
@@ -104,7 +103,6 @@ function VistaSecretaria({ usuario, empresaId, onCerrarSesion, onCambiarUsuario,
   return (
     <div className="w-full max-w-6xl">
       
-      {/* AVISO modo admin */}
       {modoAdmin && (
         <div className="bg-blue-100 border-2 border-blue-300 rounded-2xl p-4 mb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -129,7 +127,6 @@ function VistaSecretaria({ usuario, empresaId, onCerrarSesion, onCambiarUsuario,
         </div>
       )}
 
-      {/* HEADER ROSADO */}
       <div className="bg-gradient-to-br from-pink-600 to-rose-700 rounded-2xl p-6 mb-6 text-white">
         <div className="flex justify-between items-start mb-4">
           <div>
@@ -174,6 +171,14 @@ function VistaSecretaria({ usuario, empresaId, onCerrarSesion, onCambiarUsuario,
                 className="bg-cyan-500 hover:bg-cyan-600 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md"
               >
                 📋 Mi Contrato
+              </button>
+            )}
+            {onIrMisRecibos && (
+              <button
+                onClick={onIrMisRecibos}
+                className="bg-emerald-500 hover:bg-emerald-600 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md"
+              >
+                💰 Mis Recibos
               </button>
             )}
             {onIrIngredientes && (
@@ -227,7 +232,6 @@ function VistaSecretaria({ usuario, empresaId, onCerrarSesion, onCambiarUsuario,
           </div>
         </div>
 
-        {/* BOTONES DE SESIÓN (solo si no es modo admin) */}
         {!modoAdmin && (
           <div className="grid grid-cols-2 gap-2">
             <button
