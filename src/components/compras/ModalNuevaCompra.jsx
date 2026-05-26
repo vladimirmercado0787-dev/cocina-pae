@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
+import { crearGastoDesdeCompra } from '../../utils/gastosAutomaticos'
 import ProveedorSelector from './ProveedorSelector'
 import ItemCompra from './ItemCompra'
 
@@ -263,6 +264,39 @@ function ModalNuevaCompra({ empresaId, usuario, proveedores, onCerrar, onGuardad
           })
           .eq('id', it.ingrediente_id)
       }
+    }
+
+    // === 4. INT-004: CREAR GASTO AUTOMÁTICO ===
+    const resultadoGasto = await crearGastoDesdeCompra({
+      empresaId: empresaId,
+      compraId: compraCreada.id,
+      fechaCompra: fecha,
+      categoriaCompra: categoria,
+      proveedorNombre: proveedorSeleccionado.nombre,
+      numeroFactura: numeroFactura.trim() || null,
+      ncf: conRNC ? ncf.trim() : null,
+      conRNC: conRNC,
+      subtotal: subtotalFinal,
+      itbis: itbisFinal,
+      total: totalFinal,
+      aplicaItbis: aplicaItbisFinal,
+      pagada: pagada,
+      fechaPago: pagada ? fechaPago : null,
+      metodoPago: pagada ? metodoPago : null,
+      registradoPor: usuario.id,
+      registradoPorNombre: usuario.nombre || 'Sistema',
+    })
+
+    if (!resultadoGasto.success) {
+      console.warn(
+        '⚠️ Compra guardada OK pero falló crear gasto automático:',
+        resultadoGasto.error
+      )
+      // No bloqueamos: la compra ya está guardada
+    } else {
+      console.log(
+        '✅ Ecosistema conectado: gasto automático creado desde compra'
+      )
     }
 
     setGuardando(false)
@@ -657,6 +691,21 @@ function ModalNuevaCompra({ empresaId, usuario, proveedores, onCerrar, onGuardad
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
             />
           </div>
+
+          {/* 🔗 AVISO DE ECOSISTEMA (INT-004) */}
+          {totalFinal > 0 && (
+            <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-3">
+              <p className="text-xs font-bold text-amber-900 mb-1">
+                🔗 Al guardar esta compra se ejecutarán automáticamente:
+              </p>
+              <ul className="text-xs text-amber-800 space-y-0.5 ml-4">
+                {modo === 'detallado' && (
+                  <li>📦 <strong>Actualizar stock</strong> de los ingredientes en inventario</li>
+                )}
+                <li>💰 <strong>Crear gasto automático</strong> de RD$ {totalFinal.toLocaleString('es-DO', { minimumFractionDigits: 2 })} en módulo Gastos</li>
+              </ul>
+            </div>
+          )}
 
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
