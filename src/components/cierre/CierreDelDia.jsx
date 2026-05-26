@@ -13,6 +13,9 @@ function CierreDelDia({ usuario, empresaId, onVolver }) {
   const [firmandoMasivo, setFirmandoMasivo] = useState(false)
   const [notasCierre, setNotasCierre] = useState('')
   const [sobrantes, setSobrantes] = useState({})
+  
+  // 🆕 INT-006: Modal de validación de firmas
+  const [mostrarModalFirmas, setMostrarModalFirmas] = useState(false)
 
   const fechaHoy = new Date().toISOString().split('T')[0]
   const fechaTexto = new Date().toLocaleDateString('es-DO', { 
@@ -120,25 +123,34 @@ function CierreDelDia({ usuario, empresaId, onVolver }) {
     await cargarDatos()
   }
 
-  async function cerrarDia() {
-    // 🆕 Validar firmas antes de cerrar
-    const opsSinFirmaPropietario = operaciones.filter(op => 
-      op.firma_imagen &&                  // Director firmó
-      !op.firma_propietario_at &&          // Pero propietario NO firmó
-      op.estado !== 'sin_clase'
-    )
+  // 🆕 INT-006: Click en "Cerrar día" → muestra modal de validación
+  function iniciarCierreDia() {
+    setMostrarModalFirmas(true)
+  }
 
-    let mensajeConfirmacion = '¿Cerrar el día completo? Esto marcará todas las operaciones como cerradas y guardará los pesajes de sobrantes ingresados. No podrá deshacerse.'
-    
-    if (opsSinFirmaPropietario.length > 0) {
-      mensajeConfirmacion = `⚠️ ATENCIÓN: Hay ${opsSinFirmaPropietario.length} conduce(s) sin firmar por el propietario.\n\n¿Cerrar el día de todas formas?\n\nPodrás firmarlos después desde la vista de Conduces.`
-    }
-
-    if (!confirm(mensajeConfirmacion)) {
-      return
-    }
-
+  // 🆕 INT-006: Confirmación final del cierre (desde el modal)
+  async function ejecutarCierreDia() {
+    setMostrarModalFirmas(false)
     setCerrando(true)
+
+    // Calcular conduces con firmas pendientes para el log
+    const opsConductos = operaciones.filter(op => op.estado !== 'sin_clase')
+    const opsSinFirmaDirector = opsConductos.filter(op => !op.firma_imagen)
+    const opsSinFirmaPropietario = opsConductos.filter(op => 
+      op.firma_imagen && !op.firma_propietario_at
+    )
+    
+    // Construir nota automática con info de firmas pendientes
+    let notasFinales = notasCierre || ''
+    if (opsSinFirmaDirector.length > 0 || opsSinFirmaPropietario.length > 0) {
+      const avisoAuditoria = `[CIERRE CON FIRMAS PENDIENTES] ` +
+        `Director: ${opsSinFirmaDirector.length} sin firmar · ` +
+        `Propietario: ${opsSinFirmaPropietario.length} sin firmar · ` +
+        `Cerrado por ${usuario.nombre || 'Sistema'} el ${new Date().toISOString()}`
+      notasFinales = notasFinales 
+        ? `${notasFinales}\n\n${avisoAuditoria}`
+        : avisoAuditoria
+    }
 
     const opsAbiertas = operaciones.filter(op => op.estado !== 'cerrada' && op.estado !== 'sin_clase')
     
@@ -148,7 +160,7 @@ function CierreDelDia({ usuario, empresaId, onVolver }) {
 
       const datos = { 
         estado: 'cerrada',
-        notas_dia: notasCierre || op.notas_dia
+        notas_dia: notasFinales || op.notas_dia
       }
 
       if (pesoNum && pesoNum > 0) {
@@ -219,14 +231,18 @@ function CierreDelDia({ usuario, empresaId, onVolver }) {
     op.estado === 'entregada' || op.estado === 'cerrada'
   )
 
-  // 🆕 Cálculos de firmas
+  // Cálculos de firmas (existentes + INT-006)
   const opsConductos = operaciones.filter(op => op.estado !== 'sin_clase')
   const opsDirectorFirmo = opsConductos.filter(op => !!op.firma_imagen)
   const opsPropietarioFirmo = opsConductos.filter(op => !!op.firma_propietario_at)
   const opsListasParaFirma = opsConductos.filter(op => 
     op.firma_imagen && !op.firma_propietario_at
   )
+  const opsSinFirmaDirector = opsConductos.filter(op => !op.firma_imagen)
   const usuarioPuedeFirmar = usuario && ROLES_PUEDEN_FIRMAR.includes(usuario.rol)
+  
+  // 🆕 INT-006: ¿Hay firmas pendientes en total?
+  const hayFirmasPendientes = opsListasParaFirma.length > 0 || opsSinFirmaDirector.length > 0
 
   return (
     <div className="w-full max-w-5xl">
@@ -271,7 +287,7 @@ function CierreDelDia({ usuario, empresaId, onVolver }) {
         </div>
       </div>
 
-      {/* 🆕 SECCIÓN DE FIRMAS - Solo si hay conduces */}
+      {/* SECCIÓN DE FIRMAS - Solo si hay conduces */}
       {opsConductos.length > 0 && (
         <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border-2 border-blue-200">
           <div className="flex items-start justify-between mb-4">
@@ -383,7 +399,7 @@ function CierreDelDia({ usuario, empresaId, onVolver }) {
 
           {opsListasParaFirma.length === 0 && opsConductos.length > 0 && (
             <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
-              {opsPropietarioFirmo.length === opsConductos.length ? (
+              {opsPropietarioFirmo.length === opsConductos.length && opsDirectorFirmo.length === opsConductos.length ? (
                 <p className="text-sm text-green-800 font-bold">
                   ✅ Todos los conduces tienen ambas firmas aplicadas
                 </p>
@@ -583,15 +599,232 @@ function CierreDelDia({ usuario, empresaId, onVolver }) {
         </div>
       )}
 
+      {/* 🆕 INT-006: Banner amarillo si hay firmas pendientes */}
+      {puedeCerrarDia && hayFirmasPendientes && (
+        <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 mb-4">
+          <div className="flex items-start gap-3">
+            <span className="text-3xl">⚠️</span>
+            <div className="flex-1">
+              <p className="font-bold text-amber-900">
+                Atención: Firmas pendientes detectadas
+              </p>
+              <div className="text-sm text-amber-800 mt-1 space-y-0.5">
+                {opsSinFirmaDirector.length > 0 && (
+                  <p>• {opsSinFirmaDirector.length} conduce(s) sin firma del Director del Centro</p>
+                )}
+                {opsListasParaFirma.length > 0 && (
+                  <p>• {opsListasParaFirma.length} conduce(s) sin firma del Propietario</p>
+                )}
+              </div>
+              <p className="text-xs text-amber-700 mt-2">
+                Puedes cerrar el día de todas formas, pero quedará registrado para auditoría INABIE.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Botón gigante de cerrar */}
       {puedeCerrarDia && (
         <button
-          onClick={cerrarDia}
+          onClick={iniciarCierreDia}
           disabled={cerrando}
           className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white font-bold text-xl py-5 rounded-2xl shadow-xl"
         >
           {cerrando ? '⏳ Cerrando día...' : '🔒 Cerrar día completo'}
         </button>
+      )}
+
+      {/* 🆕 INT-006: MODAL DE VALIDACIÓN DE FIRMAS AL CERRAR DÍA */}
+      {mostrarModalFirmas && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col">
+            
+            {/* HEADER del modal */}
+            <div className={`text-white rounded-t-2xl p-6 text-center ${
+              hayFirmasPendientes 
+                ? 'bg-gradient-to-br from-amber-500 to-orange-600' 
+                : 'bg-gradient-to-br from-green-600 to-emerald-700'
+            }`}>
+              <p className="text-5xl mb-2">
+                {hayFirmasPendientes ? '⚠️' : '✅'}
+              </p>
+              <h3 className="text-2xl font-bold">
+                {hayFirmasPendientes 
+                  ? '¿Cerrar día con firmas pendientes?' 
+                  : '¿Cerrar el día?'}
+              </h3>
+              <p className="text-white/80 text-sm mt-1">
+                {hayFirmasPendientes 
+                  ? 'Hay conduces sin firmar' 
+                  : 'Todas las firmas están aplicadas'}
+              </p>
+            </div>
+
+            {/* BODY del modal */}
+            <div className="p-6 space-y-4 overflow-y-auto">
+              
+              {/* Resumen visual */}
+              <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+                <p className="text-xs text-gray-500 font-semibold tracking-wider">
+                  📊 RESUMEN DEL DÍA
+                </p>
+                
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-gray-600">Conduces:</p>
+                    <p className="text-lg font-bold text-gray-900">{opsConductos.length}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Raciones:</p>
+                    <p className="text-lg font-bold text-blue-600">{totalRacionesEntregadas.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Facturación:</p>
+                    <p className="text-lg font-bold text-green-600">RD$ {facturacionDia.toLocaleString('es-DO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Horario:</p>
+                    <p className="text-sm font-bold text-gray-900">{horaInicioDia} → {horaCierreDia}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Estado de firmas */}
+              <div className="space-y-2">
+                <p className="text-xs text-gray-500 font-semibold tracking-wider">
+                  🖊️ ESTADO DE FIRMAS
+                </p>
+                
+                <div className={`flex items-start gap-3 p-3 rounded-lg ${
+                  opsDirectorFirmo.length === opsConductos.length 
+                    ? 'bg-green-50 border border-green-200' 
+                    : 'bg-amber-50 border border-amber-200'
+                }`}>
+                  <span className="text-xl">
+                    {opsDirectorFirmo.length === opsConductos.length ? '✅' : '⚠️'}
+                  </span>
+                  <div className="flex-1">
+                    <p className="font-bold text-sm">
+                      Firma del Director del Centro
+                    </p>
+                    <p className="text-xs text-gray-700">
+                      {opsDirectorFirmo.length} de {opsConductos.length} conduces firmados
+                    </p>
+                    {opsSinFirmaDirector.length > 0 && (
+                      <p className="text-xs text-amber-800 mt-1 font-medium">
+                        {opsSinFirmaDirector.length} pendiente(s) por firmar
+                      </p>
+                    )}
+                  </div>
+                </div>
+                
+                <div className={`flex items-start gap-3 p-3 rounded-lg ${
+                  opsPropietarioFirmo.length === opsConductos.length 
+                    ? 'bg-green-50 border border-green-200' 
+                    : 'bg-amber-50 border border-amber-200'
+                }`}>
+                  <span className="text-xl">
+                    {opsPropietarioFirmo.length === opsConductos.length ? '✅' : '⚠️'}
+                  </span>
+                  <div className="flex-1">
+                    <p className="font-bold text-sm">
+                      Firma del Propietario
+                    </p>
+                    <p className="text-xs text-gray-700">
+                      {opsPropietarioFirmo.length} de {opsConductos.length} conduces firmados
+                    </p>
+                    {opsListasParaFirma.length > 0 && (
+                      <p className="text-xs text-amber-800 mt-1 font-medium">
+                        {opsListasParaFirma.length} listo(s) para tu firma
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Aviso de auditoría si hay pendientes */}
+              {hayFirmasPendientes && (
+                <div className="bg-amber-50 border border-amber-300 rounded-lg p-3">
+                  <p className="text-xs font-bold text-amber-900 mb-1">
+                    ⚖️ Aviso de Auditoría INABIE
+                  </p>
+                  <p className="text-xs text-amber-800">
+                    Si cierras el día con firmas pendientes, se registrará una nota 
+                    automática en el cierre indicando cuántas firmas faltaron y quién 
+                    cerró el día. Esto queda para auditoría.
+                  </p>
+                </div>
+              )}
+
+              {/* BOTONES */}
+              <div className="space-y-2 pt-2">
+                {/* Si hay firmas pendientes Y el usuario puede firmar */}
+                {opsListasParaFirma.length > 0 && usuarioPuedeFirmar && (
+                  <button
+                    onClick={() => {
+                      setMostrarModalFirmas(false)
+                      firmarTodosComoPropietario()
+                    }}
+                    disabled={cerrando || firmandoMasivo}
+                    className="w-full p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition disabled:opacity-50 text-left"
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="text-2xl">🖊️</span>
+                      <div>
+                        <p className="font-bold">Firmar pendientes primero</p>
+                        <p className="text-xs font-normal text-blue-100 mt-1">
+                          Recomendado · Firma los {opsListasParaFirma.length} conduce(s) listos antes de cerrar
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                )}
+
+                {/* Botón principal: Cerrar día */}
+                <button
+                  onClick={ejecutarCierreDia}
+                  disabled={cerrando}
+                  className={`w-full p-3 rounded-xl font-bold text-sm transition disabled:opacity-50 text-left text-white ${
+                    hayFirmasPendientes 
+                      ? 'bg-red-600 hover:bg-red-700' 
+                      : 'bg-green-600 hover:bg-green-700'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="text-2xl">
+                      {hayFirmasPendientes ? '⚠️' : '🔒'}
+                    </span>
+                    <div>
+                      <p className="font-bold">
+                        {hayFirmasPendientes 
+                          ? 'Cerrar día con firmas pendientes' 
+                          : 'Cerrar día completo'}
+                      </p>
+                      <p className={`text-xs font-normal mt-1 ${
+                        hayFirmasPendientes ? 'text-red-100' : 'text-green-100'
+                      }`}>
+                        {hayFirmasPendientes 
+                          ? 'Tú asumes el riesgo · Queda registrado en auditoría' 
+                          : 'Todas las firmas listas · Acción irreversible'}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+
+                {/* Botón cancelar */}
+                <button
+                  onClick={() => setMostrarModalFirmas(false)}
+                  disabled={cerrando}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-100 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
       )}
 
     </div>
