@@ -2,7 +2,7 @@
 // 📌 gastosAutomaticos.js
 // ───────────────────────────────────────────────────────────
 // Helper para crear gastos automáticos desde otros módulos
-// del ecosistema (Nómina, Bonificaciones, Compras, etc.)
+// del ecosistema (Nómina, Bonificaciones, Liquidaciones, Compras)
 //
 // FILOSOFÍA:
 // "Si me rompo el pie derecho, cojeo y camino con el izquierdo.
@@ -10,6 +10,7 @@
 //
 // Bloque 6D — INT-001: Pago Nómina → Gasto automático
 // Bloque 6D — INT-002: Bonificación → Gasto automático
+// Bloque 6D — INT-003: Liquidación → Gasto automático
 // ═══════════════════════════════════════════════════════════
 
 import { supabase } from '../supabaseClient';
@@ -43,12 +44,20 @@ const ETIQUETAS_TIPO_BONO = {
   otro: 'Bonificación Extra',
 };
 
+// ───────────────────────────────────────────────────────────
+// 🏷️ ETIQUETAS DESCRIPTIVAS DE RAZONES DE LIQUIDACIÓN
+// ───────────────────────────────────────────────────────────
+const ETIQUETAS_RAZON_LIQUIDACION = {
+  terminacion_natural: 'Terminación natural del contrato',
+  renuncia: 'Renuncia voluntaria',
+  despido_justa: 'Despido con causa justa',
+  despido_sin_causa: 'Despido sin causa (desahucio)',
+  despido_anticipado_obra: 'Despido anticipado en obra/servicio',
+  mutuo_acuerdo: 'Mutuo acuerdo',
+};
+
 // ═══════════════════════════════════════════════════════════
 // 💰 crearGastosDesdeNomina  (INT-001)
-// ───────────────────────────────────────────────────────────
-// Crea 2 gastos automáticos cuando se paga una quincena:
-//   1) Sueldos y Salarios (NETO pagado a empleados)
-//   2) Aportes Patronales (TSS + AFP — costo del patrono)
 // ═══════════════════════════════════════════════════════════
 export async function crearGastosDesdeNomina({
   empresaId,
@@ -60,7 +69,6 @@ export async function crearGastosDesdeNomina({
   registradoPor,
   registradoPorNombre,
 }) {
-  // ─── Validaciones básicas ───
   if (!empresaId || !pagoNominaId || !fechaPago) {
     return {
       success: false,
@@ -76,10 +84,8 @@ export async function crearGastosDesdeNomina({
     return { success: false, error: 'totalAportes inválido' };
   }
 
-  // ─── Construir los 2 gastos ───
   const gastosACrear = [];
 
-  // Gasto 1: Sueldos y Salarios (NETO)
   if (totalNeto > 0) {
     gastosACrear.push({
       empresa_id: empresaId,
@@ -100,7 +106,6 @@ export async function crearGastosDesdeNomina({
     });
   }
 
-  // Gasto 2: Aportes Patronales (TSS + AFP)
   if (totalAportes > 0) {
     gastosACrear.push({
       empresa_id: empresaId,
@@ -140,20 +145,11 @@ export async function crearGastosDesdeNomina({
   }
 
   console.log(`✅ ${data.length} gasto(s) automático(s) creado(s) desde nómina:`, data);
-
   return { success: true, gastos: data };
 }
 
 // ═══════════════════════════════════════════════════════════
 // 🎁 crearGastoDesdeBonificacion  (INT-002)
-// ───────────────────────────────────────────────────────────
-// Crea 1 gasto automático cuando se registra una bonificación
-// extra fuera del ciclo de quincena (Navidad, cumpleaños,
-// productividad, reconocimiento, etc.)
-//
-// Va a la categoría "Sueldos y Salarios" porque contablemente
-// es el mismo bucket, pero con origen "nomina_bonificacion"
-// para trazabilidad y filtrado.
 // ═══════════════════════════════════════════════════════════
 export async function crearGastoDesdeBonificacion({
   empresaId,
@@ -166,7 +162,6 @@ export async function crearGastoDesdeBonificacion({
   registradoPor,
   registradoPorNombre,
 }) {
-  // ─── Validaciones básicas ───
   if (!empresaId || !bonificacionId || !fechaPago) {
     return {
       success: false,
@@ -181,7 +176,6 @@ export async function crearGastoDesdeBonificacion({
     };
   }
 
-  // ─── Construir descripción legible ───
   const etiquetaTipo = ETIQUETAS_TIPO_BONO[tipo] || 'Bonificación Extra';
   const tituloLimpio = titulo?.trim() || etiquetaTipo;
   
@@ -191,7 +185,6 @@ export async function crearGastoDesdeBonificacion({
 
   const descripcion = `${tituloLimpio} (${cantidadTexto})`;
 
-  // ─── Insertar gasto ───
   const nuevoGasto = {
     empresa_id: empresaId,
     categoria_id: CATEGORIA_SUELDOS_ID,
@@ -202,7 +195,7 @@ export async function crearGastoDesdeBonificacion({
     itbis: 0,
     total: montoTotal,
     forma_pago: 'efectivo',
-    pagado: true, // las bonificaciones se registran ya pagadas
+    pagado: true,
     notas: `Generado automáticamente desde módulo de Bonificaciones (tipo: ${tipo})`,
     registrado_por: registradoPor || null,
     registrado_por_nombre: registradoPorNombre || 'Sistema',
@@ -222,15 +215,85 @@ export async function crearGastoDesdeBonificacion({
   }
 
   console.log('✅ Gasto automático creado desde bonificación:', data);
+  return { success: true, gasto: data };
+}
 
+// ═══════════════════════════════════════════════════════════
+// ⚖️ crearGastoDesdeLiquidacion  (INT-003)
+// ───────────────────────────────────────────────────────────
+// Crea 1 gasto automático cuando se procesa una liquidación.
+// Va a "Sueldos y Salarios" (bucket contable nominal) con
+// origen "nomina_liquidacion" para diferenciación visual.
+// ═══════════════════════════════════════════════════════════
+export async function crearGastoDesdeLiquidacion({
+  empresaId,
+  liquidacionId,
+  fechaTerminacion,
+  empleadoNombre,
+  razonTerminacion,
+  montoTotal,
+  registradoPor,
+  registradoPorNombre,
+}) {
+  if (!empresaId || !liquidacionId || !fechaTerminacion) {
+    return {
+      success: false,
+      error: 'Faltan datos requeridos (empresaId, liquidacionId, fechaTerminacion)',
+    };
+  }
+
+  if (montoTotal == null || montoTotal <= 0) {
+    return {
+      success: false,
+      error: 'montoTotal debe ser mayor a cero',
+    };
+  }
+
+  if (!empleadoNombre) {
+    return {
+      success: false,
+      error: 'empleadoNombre es requerido',
+    };
+  }
+
+  const razonTexto = ETIQUETAS_RAZON_LIQUIDACION[razonTerminacion] || 'Liquidación laboral';
+  const descripcion = `Liquidación: ${empleadoNombre} — ${razonTexto}`;
+
+  const nuevoGasto = {
+    empresa_id: empresaId,
+    categoria_id: CATEGORIA_SUELDOS_ID,
+    descripcion: descripcion,
+    fecha: fechaTerminacion,
+    subtotal: montoTotal,
+    aplica_itbis: false,
+    itbis: 0,
+    total: montoTotal,
+    forma_pago: 'efectivo',
+    pagado: true,
+    notas: `Generado automáticamente desde Calculadora de Liquidación. Razón: ${razonTexto}`,
+    registrado_por: registradoPor || null,
+    registrado_por_nombre: registradoPorNombre || 'Sistema',
+    origen: ORIGEN.NOMINA_LIQUIDACION,
+    referencia_id: liquidacionId,
+  };
+
+  const { data, error } = await supabase
+    .from('gastos')
+    .insert([nuevoGasto])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('❌ Error creando gasto desde liquidación:', error);
+    return { success: false, error: error.message };
+  }
+
+  console.log('✅ Gasto automático creado desde liquidación:', data);
   return { success: true, gasto: data };
 }
 
 // ═══════════════════════════════════════════════════════════
 // 🔍 buscarGastosPorReferencia
-// ───────────────────────────────────────────────────────────
-// Útil para mostrar "este pago/bono generó estos gastos"
-// o para revertir/eliminar gastos cuando se anula.
 // ═══════════════════════════════════════════════════════════
 export async function buscarGastosPorReferencia(referenciaId) {
   if (!referenciaId) {
@@ -252,9 +315,6 @@ export async function buscarGastosPorReferencia(referenciaId) {
 
 // ═══════════════════════════════════════════════════════════
 // 🗑️ eliminarGastosPorReferencia
-// ───────────────────────────────────────────────────────────
-// Para cuando se anula un pago/bono: borrar los gastos
-// automáticos que se habían generado.
 // ═══════════════════════════════════════════════════════════
 export async function eliminarGastosPorReferencia(referenciaId) {
   if (!referenciaId) {

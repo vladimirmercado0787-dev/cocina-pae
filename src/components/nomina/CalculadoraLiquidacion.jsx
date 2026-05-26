@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
+import { crearGastoDesdeLiquidacion } from '../../utils/gastosAutomaticos'
 
 const TIPOS_CONTRATO_INFO = {
   'indefinido': { 
@@ -64,7 +65,14 @@ function CalculadoraLiquidacion({ empresaId, usuarioActual, onVolver }) {
   const [tipoContrato, setTipoContrato] = useState('indefinido')
   const [fechaInicioContrato, setFechaInicioContrato] = useState('')
   const [fechaFinContrato, setFechaFinContrato] = useState('')
+  const [notasLiquidacion, setNotasLiquidacion] = useState('')
   const [cargando, setCargando] = useState(true)
+  
+  // Estados para el flujo de procesamiento
+  const [mostrarConfirmacion, setMostrarConfirmacion] = useState(false)
+  const [procesando, setProcesando] = useState(false)
+  const [error, setError] = useState('')
+  const [liquidacionExitosa, setLiquidacionExitosa] = useState(null)
 
   useEffect(() => {
     if (empresaId) cargarDatos()
@@ -98,7 +106,6 @@ function CalculadoraLiquidacion({ empresaId, usuarioActual, onVolver }) {
     const emp = empleados.find(e => e.id === empleadoId)
     setEmpleadoSeleccionado(emp)
     
-    // Cargar contrato del empleado si tiene
     const { data: contratoData } = await supabase
       .from('contratos')
       .select('*')
@@ -113,9 +120,8 @@ function CalculadoraLiquidacion({ empresaId, usuarioActual, onVolver }) {
       setFechaInicioContrato(contratoData.fecha_inicio || '')
       setFechaFinContrato(contratoData.fecha_fin || '')
     } else {
-      // Sin contrato digital, usar valores por defecto
       setTipoContrato('indefinido')
-      setFechaInicioContrato(emp.fecha_ingreso || '')
+      setFechaInicioContrato(emp.fecha_ingreso || emp.fecha_contratacion || '')
       setFechaFinContrato('')
     }
   }
@@ -136,7 +142,7 @@ function CalculadoraLiquidacion({ empresaId, usuarioActual, onVolver }) {
   }
 
   function salarioDiario(emp) {
-    return salarioMensual(emp) / 23.83 // promedio días laborables/mes
+    return salarioMensual(emp) / 23.83
   }
 
   function calcularTiempo() {
@@ -188,6 +194,7 @@ function CalculadoraLiquidacion({ empresaId, usuarioActual, onVolver }) {
     let result = {
       tiempo,
       salariosDiario: salDiario,
+      salariosMensual: salMensual,
       salariosPendientes: 0,
       regaliaProporcional: 0,
       vacaciones: 0,
@@ -210,11 +217,9 @@ function CalculadoraLiquidacion({ empresaId, usuarioActual, onVolver }) {
       }
     }
 
-    // ─── 1. SALARIOS PENDIENTES (siempre aplican) ───
-    result.salariosPendientes = salDiario * 5 // estimado de 5 días pendientes
+    result.salariosPendientes = salDiario * 5
     result.aplica.salariosPendientes = true
 
-    // ─── 2. REGALÍA PROPORCIONAL (siempre, si tiene 3+ meses año actual) ───
     const inicioAñoActual = new Date(new Date(fechaSalida).getFullYear(), 0, 1)
     const inicioConteo = new Date(fechaInicioContrato) > inicioAñoActual 
       ? new Date(fechaInicioContrato) 
@@ -230,7 +235,6 @@ function CalculadoraLiquidacion({ empresaId, usuarioActual, onVolver }) {
       result.alertas.push('⚠️ Empleado con menos de 3 meses este año: no aplica regalía')
     }
 
-    // ─── 3. VACACIONES (solo si tiene 1+ año) ───
     if (tiempo.años >= 1 && tipoContrato === 'indefinido') {
       if (tiempo.años >= 10) result.diasVacaciones = 24
       else if (tiempo.años >= 5) result.diasVacaciones = 18
@@ -244,7 +248,6 @@ function CalculadoraLiquidacion({ empresaId, usuarioActual, onVolver }) {
       result.alertas.push('ℹ️ Vacaciones requieren mínimo 1 año trabajando')
     }
 
-    // ─── 4. PREAVISO (solo indefinido + despido sin causa) ───
     if (tipoContrato === 'indefinido' && razonSalida === 'despido_sin_causa') {
       if (tiempo.totalDias >= 30 && tiempo.totalDias < 180) {
         result.diasPreaviso = 7
@@ -257,7 +260,6 @@ function CalculadoraLiquidacion({ empresaId, usuarioActual, onVolver }) {
       result.aplica.preaviso = true
     }
 
-    // ─── 5. CESANTÍA (solo indefinido + despido sin causa) ───
     if (tipoContrato === 'indefinido' && razonSalida === 'despido_sin_causa') {
       if (tiempo.totalDias >= 90 && tiempo.totalDias < 180) {
         result.diasCesantia = 6
@@ -272,7 +274,6 @@ function CalculadoraLiquidacion({ empresaId, usuarioActual, onVolver }) {
       result.aplica.cesantia = true
     }
 
-    // ─── 6. SALARIOS FALTANTES (Art. 95 - obra/servicio con despido anticipado) ───
     if (tipoContrato === 'obra_servicio' && razonSalida === 'despido_anticipado_obra' && fechaFinContrato) {
       const finContrato = new Date(fechaFinContrato)
       const salida = new Date(fechaSalida)
@@ -289,7 +290,6 @@ function CalculadoraLiquidacion({ empresaId, usuarioActual, onVolver }) {
       }
     }
 
-    // Total
     result.total = result.salariosPendientes + 
                   result.regaliaProporcional + 
                   result.vacaciones + 
@@ -297,7 +297,6 @@ function CalculadoraLiquidacion({ empresaId, usuarioActual, onVolver }) {
                   result.cesantia + 
                   result.salariosFaltantes
 
-    // Alertas adicionales según razón
     if (razonSalida === 'renuncia') {
       result.alertas.push('ℹ️ En renuncia voluntaria solo aplica regalía proporcional y vacaciones acumuladas')
     }
@@ -311,13 +310,7 @@ function CalculadoraLiquidacion({ empresaId, usuarioActual, onVolver }) {
     return result
   }
 
-  function generarCartaLiquidacion() {
-    const liq = calcularLiquidacion()
-    if (!liq) {
-      alert('Completa todos los datos primero')
-      return
-    }
-
+  function generarCartaLiquidacion(liq) {
     const empleadoNombre = empleadoSeleccionado.nombre
     const empresaNombre = empresa?.nombre || 'La Empresa'
     const fechaHoy = new Date().toLocaleDateString('es-DO', {
@@ -378,7 +371,6 @@ ${new Date().toLocaleString('es-DO')}
 ═══════════════════════════════════════════
 `
 
-    // Abrir nueva ventana con la carta
     const ventana = window.open('', '_blank')
     ventana.document.write(`
       <html>
@@ -402,12 +394,203 @@ ${new Date().toLocaleString('es-DO')}
     `)
   }
 
+  // ═══════════════════════════════════════════════════
+  // 💾 PROCESAMIENTO COMPLETO DE LA LIQUIDACIÓN
+  // ═══════════════════════════════════════════════════
+  
+  async function procesarLiquidacion() {
+    setError('')
+    setProcesando(true)
+    
+    const liq = calcularLiquidacion()
+    if (!liq) {
+      setError('No se puede procesar: datos incompletos')
+      setProcesando(false)
+      return
+    }
+    
+    try {
+      // ─── 1. INSERT en tabla liquidaciones ───
+      const nuevaLiquidacion = {
+        empresa_id: empresaId,
+        usuario_id: empleadoSeleccionado.id,
+        empleado_nombre: empleadoSeleccionado.nombre,
+        empleado_cedula: empleadoSeleccionado.cedula || null,
+        empleado_rol: empleadoSeleccionado.rol || null,
+        empleado_sueldo: parseFloat(empleadoSeleccionado.sueldo || 0),
+        empleado_frecuencia_pago: empleadoSeleccionado.frecuencia_pago || null,
+        empleado_fecha_contratacion: fechaInicioContrato || null,
+        fecha_terminacion: fechaSalida,
+        razon_terminacion: razonSalida,
+        razon_descripcion: RAZONES_SALIDA.find(r => r.value === razonSalida)?.label || null,
+        años_servicio: liq.tiempo.años + (liq.tiempo.meses / 12),
+        meses_servicio: Math.round(liq.tiempo.totalMeses),
+        dias_servicio: liq.tiempo.totalDias,
+        monto_salarios_pendientes: liq.salariosPendientes,
+        monto_regalia_proporcional: liq.regaliaProporcional,
+        monto_vacaciones: liq.vacaciones,
+        monto_preaviso: liq.preaviso,
+        monto_cesantia: liq.cesantia,
+        monto_salarios_faltantes: liq.salariosFaltantes,
+        detalle_calculo: {
+          tipo_contrato: tipoContrato,
+          fecha_inicio: fechaInicioContrato,
+          fecha_fin: fechaFinContrato || null,
+          salario_diario: liq.salariosDiario,
+          salario_mensual: liq.salariosMensual,
+          dias_vacaciones: liq.diasVacaciones,
+          dias_preaviso: liq.diasPreaviso,
+          dias_cesantia: liq.diasCesantia,
+          meses_salarios_faltantes: liq.mesesParaSalariosFaltantes,
+          aplica: liq.aplica,
+          alertas: liq.alertas,
+        },
+        monto_total: liq.total,
+        estado: 'pagada',
+        forma_pago: 'efectivo',
+        notas: notasLiquidacion?.trim() || null,
+        procesado_por_usuario_id: usuarioActual?.id || null,
+        procesado_por_nombre: usuarioActual?.nombre || 'Sistema',
+      }
+      
+      const { data: liqCreada, error: errorLiq } = await supabase
+        .from('liquidaciones')
+        .insert([nuevaLiquidacion])
+        .select()
+        .single()
+      
+      if (errorLiq) {
+        throw new Error('Error al guardar liquidación: ' + errorLiq.message)
+      }
+      
+      // ─── 2. Soft-delete del empleado (activo = false) ───
+      const { error: errorEmpleado } = await supabase
+        .from('usuarios')
+        .update({ 
+          activo: false,
+          fecha_salida: fechaSalida,
+        })
+        .eq('id', empleadoSeleccionado.id)
+      
+      if (errorEmpleado) {
+        // Logueamos pero no bloqueamos: la liquidación ya quedó registrada
+        console.warn('⚠️ Liquidación guardada pero falló desactivar empleado:', errorEmpleado.message)
+      }
+      
+      // ─── 3. INT-003: Generar gasto automático ───
+      const resultadoGasto = await crearGastoDesdeLiquidacion({
+        empresaId: empresaId,
+        liquidacionId: liqCreada.id,
+        fechaTerminacion: fechaSalida,
+        empleadoNombre: empleadoSeleccionado.nombre,
+        razonTerminacion: razonSalida,
+        montoTotal: liq.total,
+        registradoPor: usuarioActual?.id,
+        registradoPorNombre: usuarioActual?.nombre || 'Sistema',
+      })
+      
+      if (!resultadoGasto.success) {
+        console.warn(
+          '⚠️ Liquidación OK pero falló crear gasto automático:',
+          resultadoGasto.error
+        )
+      } else {
+        console.log(
+          '✅ Ecosistema conectado: gasto automático creado desde liquidación'
+        )
+      }
+      
+      // ─── 4. ÉXITO ───
+      setLiquidacionExitosa({
+        ...liqCreada,
+        liquidacionCalculada: liq,
+      })
+      setMostrarConfirmacion(false)
+      setProcesando(false)
+      
+    } catch (e) {
+      console.error('❌ Error procesando liquidación:', e)
+      setError(e.message)
+      setProcesando(false)
+    }
+  }
+
   const liquidacion = empleadoSeleccionado && razonSalida ? calcularLiquidacion() : null
 
   if (cargando) {
     return (
       <div className="w-full max-w-5xl">
         <div className="text-center py-12 text-gray-500">⏳ Cargando calculadora...</div>
+      </div>
+    )
+  }
+
+  // ═══════════════════════════════════════════════════
+  // 🎉 PANTALLA DE ÉXITO (después de procesar)
+  // ═══════════════════════════════════════════════════
+  if (liquidacionExitosa) {
+    return (
+      <div className="w-full max-w-3xl">
+        <div className="bg-gradient-to-br from-green-600 to-emerald-700 rounded-2xl p-8 mb-6 text-white text-center">
+          <p className="text-6xl mb-3">✅</p>
+          <h2 className="text-3xl font-bold mb-2">Liquidación Procesada</h2>
+          <p className="text-green-100">
+            {liquidacionExitosa.empleado_nombre} ha sido liquidado(a) exitosamente
+          </p>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
+          <p className="text-xs text-gray-500 font-semibold tracking-wider mb-3">
+            📋 RESUMEN DEL PROCESO
+          </p>
+          
+          <div className="space-y-3">
+            <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg">
+              <span className="text-2xl">📝</span>
+              <div className="flex-1">
+                <p className="font-bold text-blue-900">Liquidación registrada</p>
+                <p className="text-xs text-blue-700">
+                  Guardada en histórico para auditoría legal
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-start gap-3 p-3 bg-orange-50 rounded-lg">
+              <span className="text-2xl">🔒</span>
+              <div className="flex-1">
+                <p className="font-bold text-orange-900">Empleado desactivado</p>
+                <p className="text-xs text-orange-700">
+                  {liquidacionExitosa.empleado_nombre} ya no aparece en la lista de empleados activos
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-start gap-3 p-3 bg-green-50 rounded-lg">
+              <span className="text-2xl">🔗</span>
+              <div className="flex-1">
+                <p className="font-bold text-green-900">Gasto automático creado</p>
+                <p className="text-xs text-green-700">
+                  RD$ {formatearMoneda(liquidacionExitosa.monto_total)} registrado en módulo de Gastos
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col md:flex-row gap-3">
+          <button
+            onClick={() => generarCartaLiquidacion(liquidacionExitosa.liquidacionCalculada)}
+            className="flex-1 bg-purple-700 hover:bg-purple-800 text-white font-bold px-6 py-4 rounded-xl shadow-lg"
+          >
+            📄 Imprimir carta de liquidación
+          </button>
+          <button
+            onClick={onVolver}
+            className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold px-6 py-4 rounded-xl"
+          >
+            ← Volver al panel
+          </button>
+        </div>
       </div>
     )
   }
@@ -426,7 +609,7 @@ ${new Date().toLocaleString('es-DO')}
               ⚖️ Liquidación de Empleado
             </h2>
             <p className="text-purple-200 mt-1 text-sm">
-              Calcula prestaciones laborales según ley dominicana
+              Calcula y procesa prestaciones laborales según ley dominicana
             </p>
           </div>
           <button
@@ -561,19 +744,39 @@ ${new Date().toLocaleString('es-DO')}
         </div>
       )}
 
-      {/* PASO 3: FECHA SALIDA */}
+      {/* PASO 3: FECHA SALIDA Y NOTAS */}
       {razonSalida && (
         <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
           <p className="text-xs text-gray-500 font-semibold tracking-wider mb-3">
-            PASO 3 — FECHA DE SALIDA
+            PASO 3 — FECHA Y NOTAS
           </p>
           
-          <input
-            type="date"
-            value={fechaSalida}
-            onChange={(e) => setFechaSalida(e.target.value)}
-            className="w-full md:w-auto px-3 py-2 border border-gray-300 rounded-lg text-base font-semibold"
-          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Fecha de salida
+              </label>
+              <input
+                type="date"
+                value={fechaSalida}
+                onChange={(e) => setFechaSalida(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-base font-semibold"
+              />
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">
+              Notas adicionales (opcional)
+            </label>
+            <textarea
+              value={notasLiquidacion}
+              onChange={(e) => setNotasLiquidacion(e.target.value)}
+              rows={2}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              placeholder="Cualquier comentario sobre esta liquidación..."
+            />
+          </div>
         </div>
       )}
 
@@ -647,19 +850,111 @@ ${new Date().toLocaleString('es-DO')}
             </div>
           )}
 
-          {/* BOTÓN GENERAR CARTA */}
-          <div className="text-center">
-            <button
-              onClick={generarCartaLiquidacion}
-              className="bg-purple-700 hover:bg-purple-800 text-white font-bold px-8 py-4 rounded-xl shadow-lg text-lg"
-            >
-              📄 Generar carta de liquidación
-            </button>
-            <p className="text-xs text-gray-500 mt-2">
-              Abre en nueva ventana para imprimir
+          {/* 🔗 AVISO DE ECOSISTEMA */}
+          <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 mb-6">
+            <p className="text-sm font-bold text-amber-900 mb-2">
+              🔗 Al procesar esta liquidación se ejecutarán 3 acciones:
             </p>
+            <ul className="text-xs text-amber-800 space-y-1 ml-4">
+              <li>📝 <strong>Registrar liquidación</strong> en el histórico legal</li>
+              <li>🔒 <strong>Desactivar al empleado</strong> (soft-delete, queda en histórico)</li>
+              <li>💰 <strong>Crear gasto automático</strong> de RD$ {formatearMoneda(liquidacion.total)} en Sueldos y Salarios</li>
+            </ul>
+          </div>
+
+          {/* BOTONES DE ACCIÓN */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+            <button
+              onClick={() => generarCartaLiquidacion(liquidacion)}
+              className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold px-6 py-4 rounded-xl"
+            >
+              📄 Vista previa de carta
+            </button>
+            <button
+              onClick={() => setMostrarConfirmacion(true)}
+              className="bg-purple-700 hover:bg-purple-800 text-white font-bold px-6 py-4 rounded-xl shadow-lg"
+            >
+              ⚖️ Procesar liquidación
+            </button>
           </div>
         </>
+      )}
+
+      {/* MODAL DE CONFIRMACIÓN */}
+      {mostrarConfirmacion && liquidacion && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+            
+            <div className="bg-gradient-to-br from-red-600 to-rose-700 text-white rounded-t-2xl p-6 text-center">
+              <p className="text-5xl mb-2">⚠️</p>
+              <h3 className="text-2xl font-bold">¿Confirmar liquidación?</h3>
+              <p className="text-red-100 text-sm mt-1">Esta acción es irreversible</p>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-700">Empleado:</span>
+                  <span className="font-bold">{empleadoSeleccionado.nombre}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-700">Razón:</span>
+                  <span className="font-bold text-right text-xs">
+                    {RAZONES_SALIDA.find(r => r.value === razonSalida)?.label.replace(/^\W+\s/, '')}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-700">Fecha salida:</span>
+                  <span className="font-bold">{formatearFecha(fechaSalida)}</span>
+                </div>
+                <div className="flex justify-between text-lg pt-2 border-t border-gray-300">
+                  <span className="font-bold">TOTAL:</span>
+                  <span className="font-bold text-green-700">
+                    RD$ {formatearMoneda(liquidacion.total)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900">
+                <p className="font-bold mb-1">Al confirmar:</p>
+                <ul className="space-y-0.5 ml-3">
+                  <li>📝 Se guarda en histórico de liquidaciones</li>
+                  <li>🔒 {empleadoSeleccionado.nombre} queda desactivado</li>
+                  <li>💰 Se crea gasto automático en módulo Gastos</li>
+                </ul>
+              </div>
+
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
+                  ⚠️ {error}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setMostrarConfirmacion(false); setError('') }}
+                  disabled={procesando}
+                  className="flex-1 px-4 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-xl disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={procesarLiquidacion}
+                  disabled={procesando}
+                  className="flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {procesando ? (
+                    <>
+                      <span className="animate-spin">⏳</span> Procesando...
+                    </>
+                  ) : (
+                    <>✓ CONFIRMAR</>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>
