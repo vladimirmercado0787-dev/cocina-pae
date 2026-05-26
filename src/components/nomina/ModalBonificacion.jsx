@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
+import { crearGastoDesdeBonificacion } from '../../utils/gastosAutomaticos'
 
 const TIPOS_BONO = [
   { value: 'navideño', label: '🎄 Navideño', color: 'red' },
@@ -144,12 +145,48 @@ function ModalBonificacion({ empresa, usuarioActual, onCerrar, onExito }) {
         notas: notas.trim() || null,
       }
 
-      const { error: errorInsert } = await supabase
+      // ⚠️ IMPORTANTE: Agregamos .select().single() para obtener el ID
+      const { data: bonificacionCreada, error: errorInsert } = await supabase
         .from('bonificaciones_extra')
         .insert([nuevaBoni])
+        .select()
+        .single()
 
       if (errorInsert) {
         throw new Error(errorInsert.message)
+      }
+
+      // ═══════════════════════════════════════════════════
+      // 🔗 INT-002: Generar gasto automático del ecosistema
+      // ───────────────────────────────────────────────────
+      // Filosofía: "una acción trae consecuencias en todo el
+      // ecosistema". La bonificación genera 1 gasto en módulo
+      // de Gastos (categoría Sueldos y Salarios).
+      //
+      // IMPORTANTE: si falla la creación del gasto, NO revertimos
+      // la bonificación (ya está registrada). Solo logueamos.
+      // ═══════════════════════════════════════════════════
+      const resultadoGasto = await crearGastoDesdeBonificacion({
+        empresaId: empresa.id,
+        bonificacionId: bonificacionCreada.id,
+        fechaPago: fechaPago,
+        titulo: titulo.trim(),
+        tipo: tipo,
+        montoTotal: totalBono,
+        cantidadEmpleados: asignacionesIncluidas.length,
+        registradoPor: usuarioActual?.id,
+        registradoPorNombre: usuarioActual?.nombre || 'Sistema',
+      })
+
+      if (!resultadoGasto.success) {
+        console.warn(
+          '⚠️ Bonificación OK, pero falló crear gasto automático:',
+          resultadoGasto.error
+        )
+      } else {
+        console.log(
+          '✅ Ecosistema conectado: gasto automático creado desde bonificación'
+        )
       }
 
       setProcesando(false)
@@ -348,6 +385,21 @@ function ModalBonificacion({ empresa, usuarioActual, onCerrar, onExito }) {
               placeholder="Cualquier nota sobre esta bonificación..."
             />
           </div>
+
+          {/* 🔗 AVISO DE CONEXIÓN AUTOMÁTICA CON GASTOS */}
+          {totalBono > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <p className="text-sm font-semibold text-blue-900 mb-2">
+                🔗 Conexión automática con Gastos
+              </p>
+              <p className="text-xs text-blue-800">
+                Al procesar, se creará automáticamente <strong>1 gasto</strong> en el módulo de Gastos:
+              </p>
+              <ul className="text-xs text-blue-800 mt-2 space-y-1 ml-4">
+                <li>💰 <strong>Sueldos y Salarios:</strong> RD$ {formatearMoneda(totalBono)} ({asignacionesIncluidas.length} {asignacionesIncluidas.length === 1 ? 'empleado' : 'empleados'})</li>
+              </ul>
+            </div>
+          )}
 
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
