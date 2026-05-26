@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import ModalEmpleado from './ModalEmpleado'
+import CalculadoraLiquidacion from '../nomina/CalculadoraLiquidacion'
 
 function VistaEmpleados({ usuario, empresaId, onVolver }) {
   const [empleados, setEmpleados] = useState([])
@@ -9,6 +10,10 @@ function VistaEmpleados({ usuario, empresaId, onVolver }) {
   
   // Estado del modal: null = cerrado, {} = crear nuevo, {empleado} = editar
   const [modalEmpleado, setModalEmpleado] = useState(null)
+  
+  // INT-005: Estado para mostrar la calculadora de liquidación
+  // Si tiene un empleado, se muestra la calculadora; si es null, se muestra la lista
+  const [empleadoParaLiquidar, setEmpleadoParaLiquidar] = useState(null)
 
   useEffect(() => {
     cargarEmpleados()
@@ -37,6 +42,18 @@ function VistaEmpleados({ usuario, empresaId, onVolver }) {
 
     setEmpleados(data || [])
     setCargando(false)
+  }
+
+  // INT-005: Función que se ejecuta cuando el usuario hace click
+  // en "Ir a Calculadora de Liquidación" desde el ModalEmpleado
+  function handleIrALiquidacion(empleado) {
+    setEmpleadoParaLiquidar(empleado)
+  }
+
+  // INT-005: Cuando termina la liquidación, volver a la vista de empleados
+  function handleVolverDeLiquidacion() {
+    setEmpleadoParaLiquidar(null)
+    cargarEmpleados()
   }
 
   function obtenerAvatar(empleado) {
@@ -72,6 +89,19 @@ function VistaEmpleados({ usuario, empresaId, onVolver }) {
   function formatearSueldo(sueldo) {
     if (!sueldo) return 'No definido'
     return `RD$ ${Number(sueldo).toLocaleString('es-DO', { minimumFractionDigits: 2 })}`
+  }
+
+  // INT-005: Si hay un empleado seleccionado para liquidar,
+  // mostramos la Calculadora de Liquidación en su lugar
+  if (empleadoParaLiquidar) {
+    return (
+      <CalculadoraLiquidacion
+        empresaId={empresaId}
+        usuarioActual={usuario}
+        onVolver={handleVolverDeLiquidacion}
+        empleadoPreseleccionado={empleadoParaLiquidar}
+      />
+    )
   }
 
   return (
@@ -196,6 +226,7 @@ function VistaEmpleados({ usuario, empresaId, onVolver }) {
           empleadoExistente={modalEmpleado.id ? modalEmpleado : null}
           onCerrar={() => setModalEmpleado(null)}
           onGuardado={() => cargarEmpleados()}
+          onIrALiquidacion={handleIrALiquidacion}
         />
       )}
 

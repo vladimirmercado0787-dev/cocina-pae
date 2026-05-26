@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 
-function ModalEmpleado({ empresaId, empleadoExistente, onCerrar, onGuardado }) {
+function ModalEmpleado({ empresaId, empleadoExistente, onCerrar, onGuardado, onIrALiquidacion }) {
   const modoEdicion = !!empleadoExistente
 
   const [form, setForm] = useState({
@@ -120,18 +120,33 @@ function ModalEmpleado({ empresaId, empleadoExistente, onCerrar, onGuardado }) {
     onCerrar()
   }
 
-  // === DAR DE BAJA / REACTIVAR ===
-  async function darDeBaja() {
+  // ═══════════════════════════════════════════════════
+  // INT-005: IR A CALCULADORA DE LIQUIDACIÓN
+  // ═══════════════════════════════════════════════════
+  function irACalculadoraLiquidacion() {
+    if (onIrALiquidacion && empleadoExistente) {
+      onCerrar()
+      onIrALiquidacion(empleadoExistente)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════
+  // DESACTIVAR SIN LIQUIDAR (cuando ya pagó por fuera)
+  // ═══════════════════════════════════════════════════
+  async function desactivarSinLiquidar() {
     setGuardando(true)
     setError('')
 
     const { error: errUpdate } = await supabase
       .from('usuarios')
-      .update({ activo: false })
+      .update({ 
+        activo: false,
+        fecha_salida: new Date().toISOString().split('T')[0],
+      })
       .eq('id', empleadoExistente.id)
 
     if (errUpdate) {
-      setError('Error al dar de baja: ' + errUpdate.message)
+      setError('Error al desactivar: ' + errUpdate.message)
       setGuardando(false)
       return
     }
@@ -428,7 +443,7 @@ function ModalEmpleado({ empresaId, empleadoExistente, onCerrar, onGuardado }) {
             )}
           </div>
 
-          {/* NUEVA SECCIÓN: GESTIÓN DEL CONTRATO LABORAL */}
+          {/* GESTIÓN DEL CONTRATO LABORAL */}
           <div>
             <p className="text-xs text-gray-500 font-semibold tracking-wider mb-3">
               📄 GESTIÓN DEL CONTRATO LABORAL
@@ -438,7 +453,6 @@ function ModalEmpleado({ empresaId, empleadoExistente, onCerrar, onGuardado }) {
             </p>
             <div className="space-y-2">
               
-              {/* Opción 1: Sin gestión */}
               <label
                 className={`flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition-colors ${
                   form.gestion_contrato === 'sin_contrato'
@@ -464,7 +478,6 @@ function ModalEmpleado({ empresaId, empleadoExistente, onCerrar, onGuardado }) {
                 </div>
               </label>
 
-              {/* Opción 2: Generar contrato digital */}
               <label
                 className={`flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition-colors ${
                   form.gestion_contrato === 'contrato_digital'
@@ -490,7 +503,6 @@ function ModalEmpleado({ empresaId, empleadoExistente, onCerrar, onGuardado }) {
                 </div>
               </label>
 
-              {/* Opción 3: Contrato físico ya firmado */}
               <label
                 className={`flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition-colors ${
                   form.gestion_contrato === 'contrato_externo'
@@ -518,7 +530,6 @@ function ModalEmpleado({ empresaId, empleadoExistente, onCerrar, onGuardado }) {
 
             </div>
 
-            {/* Mensaje informativo según opción */}
             {form.gestion_contrato === 'contrato_digital' && !modoEdicion && (
               <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-3 text-xs text-green-800">
                 💡 Después de guardar al empleado, podrás crear su contrato laboral desde la vista de empleados.
@@ -575,12 +586,16 @@ function ModalEmpleado({ empresaId, empleadoExistente, onCerrar, onGuardado }) {
             </div>
           )}
 
-          {/* SECCIÓN ZONA PELIGROSA — solo en modo edición */}
+          {/* ════════════════════════════════════════════════ */}
+          {/* INT-005: ZONA PELIGROSA REFACTORIZADA             */}
+          {/* Ahora con cumplimiento legal Art. 75-95           */}
+          {/* ════════════════════════════════════════════════ */}
           {modoEdicion && !empleadoInactivo && (
             <div className="border-t-2 border-red-200 pt-4 mt-4">
               <p className="text-xs text-red-600 font-semibold tracking-wider mb-2">
                 ⚠️ ZONA PELIGROSA
               </p>
+              
               {!confirmandoBaja ? (
                 <button
                   onClick={() => setConfirmandoBaja(true)}
@@ -592,27 +607,69 @@ function ModalEmpleado({ empresaId, empleadoExistente, onCerrar, onGuardado }) {
               ) : (
                 <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4">
                   <p className="text-sm font-bold text-red-900 mb-2">
-                    ¿Seguro que quieres dar de baja a {form.nombre}?
+                    ¿Dar de baja a {form.nombre}?
                   </p>
-                  <p className="text-xs text-red-700 mb-3">
-                    El empleado no será borrado. Quedará marcado como inactivo y su historial se conservará para reportes. Puedes reactivarlo en cualquier momento.
+                  
+                  {/* AVISO LEGAL */}
+                  <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-3 mb-3">
+                    <p className="text-xs font-bold text-yellow-900 mb-1">
+                      ⚖️ AVISO LEGAL — Código de Trabajo Dominicano
+                    </p>
+                    <p className="text-xs text-yellow-800">
+                      Según los Artículos 75, 76, 80, 87 y 95, todo empleado tiene derecho 
+                      a una liquidación que incluya preaviso, cesantía, vacaciones, regalía 
+                      y salarios pendientes según corresponda.
+                    </p>
+                  </div>
+
+                  <p className="text-xs text-gray-700 mb-3">
+                    Elige cómo proceder:
                   </p>
-                  <div className="flex gap-2">
+
+                  <div className="space-y-2 mb-3">
+                    {/* OPCIÓN 1: IR A CALCULADORA (RECOMENDADA) */}
                     <button
-                      onClick={() => setConfirmandoBaja(false)}
+                      onClick={irACalculadoraLiquidacion}
                       disabled={guardando}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 text-sm font-medium hover:bg-gray-100"
+                      className="w-full p-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-sm transition disabled:opacity-50 text-left"
                     >
-                      Cancelar
+                      <div className="flex items-start gap-3">
+                        <span className="text-2xl">⚖️</span>
+                        <div>
+                          <p className="font-bold">Ir a Calculadora de Liquidación</p>
+                          <p className="text-xs font-normal text-purple-100 mt-1">
+                            Recomendado · Calcula automáticamente todo lo que la ley exige pagar
+                          </p>
+                        </div>
+                      </div>
                     </button>
+
+                    {/* OPCIÓN 2: SOLO DESACTIVAR (RIESGOSA) */}
                     <button
-                      onClick={darDeBaja}
+                      onClick={desactivarSinLiquidar}
                       disabled={guardando}
-                      className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-bold transition disabled:opacity-50"
+                      className="w-full p-3 bg-white border-2 border-red-300 hover:border-red-500 hover:bg-red-50 text-red-700 rounded-lg text-sm transition disabled:opacity-50 text-left"
                     >
-                      {guardando ? '⏳ Procesando...' : '🚫 Sí, dar de baja'}
+                      <div className="flex items-start gap-3">
+                        <span className="text-2xl">⚠️</span>
+                        <div>
+                          <p className="font-bold">Solo desactivar sin liquidar</p>
+                          <p className="text-xs font-normal text-red-600 mt-1">
+                            Solo si ya pagaste la liquidación por fuera. Tú asumes el riesgo legal.
+                          </p>
+                        </div>
+                      </div>
                     </button>
                   </div>
+
+                  {/* BOTÓN CANCELAR */}
+                  <button
+                    onClick={() => setConfirmandoBaja(false)}
+                    disabled={guardando}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-700 text-sm font-medium hover:bg-gray-100 disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
                 </div>
               )}
             </div>
