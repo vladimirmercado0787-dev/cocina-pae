@@ -32,7 +32,7 @@ import VistaNomina from './components/nomina/VistaNomina'
 import MisRecibos from './components/nomina/MisRecibos'
 
 function App() {
-  const [pasoActual, setPasoActual] = useState(1)
+  const [pasoActual, setPasoActual] = useState(7)
   const [empresaActual, setEmpresaActual] = useState(null)
   const [empresaLogueada, setEmpresaLogueada] = useState(null)
   const [usuarioLogueado, setUsuarioLogueado] = useState(null)
@@ -41,32 +41,34 @@ function App() {
   const [cargando, setCargando] = useState(true)
 
   useEffect(() => {
-    verificarEstadoApp()
+    verificarSesionExistente()
   }, [])
 
-  async function verificarEstadoApp() {
+  async function verificarSesionExistente() {
     setCargando(true)
-    
-    const { data: empresas } = await supabase
-      .from('empresas')
-      .select('*')
-      .limit(1)
-    
-    if (empresas && empresas.length > 0) {
-      setEmpresaActual(empresas[0])
-      
-      const { data: usuarios } = await supabase
-        .from('usuarios')
+
+    const { data: { session } } = await supabase.auth.getSession()
+
+    if (session?.user) {
+      const { data: empresa, error } = await supabase
+        .from('empresas')
         .select('*')
-        .eq('empresa_id', empresas[0].id)
-        .limit(1)
-      
-      if (usuarios && usuarios.length > 0) {
-        setPasoActual(7)
+        .eq('auth_user_id', session.user.id)
+        .single()
+
+      if (empresa && !error) {
+        setEmpresaLogueada(empresa)
+        setEmpresaActual(empresa)
+        setVistaActual('seleccion_operador')
+      } else {
+        console.warn('Sesión activa pero empresa no encontrada. Cerrando sesión.')
+        await supabase.auth.signOut()
         setVistaActual('login_empresa')
       }
+    } else {
+      setVistaActual('login_empresa')
     }
-    
+
     setCargando(false)
   }
 
@@ -100,10 +102,12 @@ function App() {
     setVistaActual('seleccion_operador')
   }
 
-  function cerrarSesionTotal() {
+  async function cerrarSesionTotal() {
+    await supabase.auth.signOut()
     setUsuarioLogueado(null)
     setUsuarioSeleccionado(null)
     setEmpresaLogueada(null)
+    setEmpresaActual(null)
     setVistaActual('login_empresa')
   }
 
@@ -113,56 +117,39 @@ function App() {
   }
 
   // === PERMISOS ===
-  // 🔵 Inteligencia: NO el contador (es estrategia interna del negocio)
   const puedeVerInteligencia = usuarioLogueado && 
     (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'secretaria')
 
-  // 🔵 Despacho: NO el contador (es operativo)
   const puedeDespachar = usuarioLogueado && 
     ['propietario', 'administrador', 'jefa_cocina', 'ayudante', 'despachador', 'secretaria'].includes(usuarioLogueado.rol)
 
-  // 🟢 Empleados: SÍ el contador (necesita ver totales de nómina para reportes)
   const puedeGestionarEmpleados = usuarioLogueado && 
     (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'contador')
 
-  // 🟢 Proveedores: SÍ el contador (necesita RNC para reporte 606 DGII)
   const puedeGestionarProveedores = usuarioLogueado && 
     (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'secretaria' || usuarioLogueado.rol === 'contador')
 
-  // 🟢 Compras: SÍ el contador (necesita facturas con NCF para reporte 606)
   const puedeGestionarCompras = usuarioLogueado && 
     (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'secretaria' || usuarioLogueado.rol === 'contador')
 
-  // 🔵 Ingredientes: NO el contador (es inventario operativo)
   const puedeGestionarIngredientes = usuarioLogueado && 
     (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'secretaria' || usuarioLogueado.rol === 'jefa_cocina')
 
-  // 🟢 Gastos: SÍ el contador (necesita gastos con RNC/NCF para reporte 606)
   const puedeGestionarGastos = usuarioLogueado && 
     (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'secretaria' || usuarioLogueado.rol === 'contador')
 
-  // 🔵 Contratos: NO el contador (es RRHH, no contabilidad)
   const puedeGestionarContratos = usuarioLogueado && 
     (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador')
 
-  // 🟢 Nómina: propietario, administrador, secretaria, contador
   const puedeGestionarNomina = usuarioLogueado && 
     (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'secretaria' || usuarioLogueado.rol === 'contador')
 
-  // 🔵 Configuración: NO el contador (solo el dueño/admin configura)
   const puedeConfigurar = usuarioLogueado && 
     (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador')
 
-  // 🟢 Catálogo de Recetas: TODOS los usuarios activos (incluye contador)
   const puedeVerCatalogo = usuarioLogueado !== null
-
-  // 🟢 Historial: TODOS los usuarios activos (incluye contador - útil para auditoría)
   const puedeVerHistorial = usuarioLogueado !== null
-
-  // Mi Contrato: todos menos propietario
   const puedeVerMiContrato = usuarioLogueado && usuarioLogueado.rol !== 'propietario'
-
-  // 🆕 INT-007: Mis Recibos - todos menos propietario (empleados ven sus pagos)
   const puedeVerMisRecibos = usuarioLogueado && usuarioLogueado.rol !== 'propietario'
 
   function renderPasoWizard() {
@@ -390,16 +377,25 @@ function App() {
 
   if (cargando) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center">
-        <p className="text-gray-500">Cargando...</p>
+      <div style={{
+        minHeight: '100vh',
+        background: 'var(--color-bg-primary, #0a1410)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
+        <p style={{ color: 'var(--color-text-muted, rgba(255,255,255,0.5))' }}>Cargando...</p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
-      
-      {pasoActual < 7 && renderPasoWizard()}
+    <>
+      {pasoActual < 7 && (
+        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
+          {renderPasoWizard()}
+        </div>
+      )}
       
       {pasoActual === 7 && vistaActual === 'login_empresa' && (
         <LoginEmpresa onLoginExitoso={loginEmpresaExitoso} />
@@ -409,6 +405,7 @@ function App() {
         <SeleccionOperador 
           empresaId={empresaLogueada.id}
           onSeleccionar={seleccionarUsuario}
+          onCerrarSesion={cerrarSesionTotal}
         />
       )}
       
@@ -420,151 +417,191 @@ function App() {
         />
       )}
       
-      {pasoActual === 7 && vistaActual === 'dashboard' && usuarioLogueado && renderVistaSegunRol()}
+      {pasoActual === 7 && vistaActual === 'dashboard' && usuarioLogueado && (
+        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
+          {renderVistaSegunRol()}
+        </div>
+      )}
       
       {pasoActual === 7 && vistaActual === 'vista_secretaria_admin' && usuarioLogueado && (
-        <VistaSecretaria 
-          usuario={usuarioLogueado}
-          empresaId={empresaActual?.id}
-          onCerrarSesion={cerrarSesionTotal}
-          onCambiarUsuario={cambiarDeUsuario}
-          onIrFactura={() => setVistaActual('factura')}
-          onIrCalculadora={() => setVistaActual('calculadora')}
-          onIrInteligencia={() => setVistaActual('inteligencia')}
-          onIrDespacho={() => setVistaActual('despacho')}
-          onIrProveedores={() => setVistaActual('proveedores')}
-          onIrCompras={() => setVistaActual('compras')}
-          onIrIngredientes={() => setVistaActual('ingredientes')}
-          onIrGastos={() => setVistaActual('gastos')}
-          onIrNomina={() => setVistaActual('nomina')}
-          onIrCatalogo={() => setVistaActual('catalogo_recetas')}
-          onIrHistorial={() => setVistaActual('historial')}
-          onVolverAlPanel={() => setVistaActual('dashboard')}
-          modoAdmin={true}
-        />
+        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
+          <VistaSecretaria 
+            usuario={usuarioLogueado}
+            empresaId={empresaActual?.id}
+            onCerrarSesion={cerrarSesionTotal}
+            onCambiarUsuario={cambiarDeUsuario}
+            onIrFactura={() => setVistaActual('factura')}
+            onIrCalculadora={() => setVistaActual('calculadora')}
+            onIrInteligencia={() => setVistaActual('inteligencia')}
+            onIrDespacho={() => setVistaActual('despacho')}
+            onIrProveedores={() => setVistaActual('proveedores')}
+            onIrCompras={() => setVistaActual('compras')}
+            onIrIngredientes={() => setVistaActual('ingredientes')}
+            onIrGastos={() => setVistaActual('gastos')}
+            onIrNomina={() => setVistaActual('nomina')}
+            onIrCatalogo={() => setVistaActual('catalogo_recetas')}
+            onIrHistorial={() => setVistaActual('historial')}
+            onVolverAlPanel={() => setVistaActual('dashboard')}
+            modoAdmin={true}
+          />
+        </div>
       )}
       
       {pasoActual === 7 && vistaActual === 'despacho' && usuarioLogueado && puedeDespachar && (
-        <VistaDespachador 
-          usuario={usuarioLogueado}
-          empresaId={empresaActual?.id}
-          onCerrarSesion={cerrarSesionTotal}
-          onCambiarUsuario={cambiarDeUsuario}
-          onVolver={() => setVistaActual('dashboard')}
-        />
+        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
+          <VistaDespachador 
+            usuario={usuarioLogueado}
+            empresaId={empresaActual?.id}
+            onCerrarSesion={cerrarSesionTotal}
+            onCambiarUsuario={cambiarDeUsuario}
+            onVolver={() => setVistaActual('dashboard')}
+          />
+        </div>
       )}
       {pasoActual === 7 && vistaActual === 'configuracion' && usuarioLogueado && puedeConfigurar && (
-        <Configuracion 
-          usuario={usuarioLogueado}
-          empresaId={empresaActual?.id}
-          onVolver={() => setVistaActual('dashboard')}
-        />
+        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
+          <Configuracion 
+            usuario={usuarioLogueado}
+            empresaId={empresaActual?.id}
+            onVolver={() => setVistaActual('dashboard')}
+          />
+        </div>
       )}
       {pasoActual === 7 && vistaActual === 'cierre' && usuarioLogueado && (
-        <CierreDelDia 
-          usuario={usuarioLogueado}
-          empresaId={empresaActual?.id}
-          onVolver={() => setVistaActual('dashboard')}
-        />
+        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
+          <CierreDelDia 
+            usuario={usuarioLogueado}
+            empresaId={empresaActual?.id}
+            onVolver={() => setVistaActual('dashboard')}
+          />
+        </div>
       )}
       {pasoActual === 7 && vistaActual === 'factura' && usuarioLogueado && (
-        <FacturaInabie 
-          usuario={usuarioLogueado}
-          empresaId={empresaActual?.id}
-          onVolver={() => setVistaActual('dashboard')}
-        />
+        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
+          <FacturaInabie 
+            usuario={usuarioLogueado}
+            empresaId={empresaActual?.id}
+            onVolver={() => setVistaActual('dashboard')}
+          />
+        </div>
       )}
       {pasoActual === 7 && vistaActual === 'calculadora' && usuarioLogueado && (
-        <CalculadoraProduccion 
-          usuario={usuarioLogueado}
-          empresaId={empresaActual?.id}
-          onVolver={() => setVistaActual('dashboard')}
-        />
+        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
+          <CalculadoraProduccion 
+            usuario={usuarioLogueado}
+            empresaId={empresaActual?.id}
+            onVolver={() => setVistaActual('dashboard')}
+          />
+        </div>
       )}
       {pasoActual === 7 && vistaActual === 'inteligencia' && usuarioLogueado && puedeVerInteligencia && (
-        <InteligenciaOperativa 
-          usuario={usuarioLogueado}
-          empresaId={empresaActual?.id}
-          onVolver={() => setVistaActual('dashboard')}
-        />
+        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
+          <InteligenciaOperativa 
+            usuario={usuarioLogueado}
+            empresaId={empresaActual?.id}
+            onVolver={() => setVistaActual('dashboard')}
+          />
+        </div>
       )}
       {pasoActual === 7 && vistaActual === 'empleados' && usuarioLogueado && puedeGestionarEmpleados && (
-        <VistaEmpleados 
-          usuario={usuarioLogueado}
-          empresaId={empresaActual?.id}
-          onVolver={() => setVistaActual('dashboard')}
-        />
+        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
+          <VistaEmpleados 
+            usuario={usuarioLogueado}
+            empresaId={empresaActual?.id}
+            onVolver={() => setVistaActual('dashboard')}
+          />
+        </div>
       )}
       {pasoActual === 7 && vistaActual === 'contratos' && usuarioLogueado && puedeGestionarContratos && (
-        <VistaContratos 
-          usuario={usuarioLogueado}
-          empresaId={empresaActual?.id}
-          onVolver={() => setVistaActual('dashboard')}
-        />
+        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
+          <VistaContratos 
+            usuario={usuarioLogueado}
+            empresaId={empresaActual?.id}
+            onVolver={() => setVistaActual('dashboard')}
+          />
+        </div>
       )}
       {pasoActual === 7 && vistaActual === 'mi_contrato' && usuarioLogueado && puedeVerMiContrato && (
-        <VistaMiContrato 
-          usuario={usuarioLogueado}
-          empresaId={empresaActual?.id}
-          onVolver={() => setVistaActual('dashboard')}
-        />
+        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
+          <VistaMiContrato 
+            usuario={usuarioLogueado}
+            empresaId={empresaActual?.id}
+            onVolver={() => setVistaActual('dashboard')}
+          />
+        </div>
       )}
       {pasoActual === 7 && vistaActual === 'mis_recibos' && usuarioLogueado && puedeVerMisRecibos && (
-        <MisRecibos 
-          usuario={usuarioLogueado}
-          empresaId={empresaActual?.id}
-          onVolver={() => setVistaActual('dashboard')}
-        />
+        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
+          <MisRecibos 
+            usuario={usuarioLogueado}
+            empresaId={empresaActual?.id}
+            onVolver={() => setVistaActual('dashboard')}
+          />
+        </div>
       )}
       {pasoActual === 7 && vistaActual === 'proveedores' && usuarioLogueado && puedeGestionarProveedores && (
-        <VistaProveedores 
-          usuario={usuarioLogueado}
-          empresaId={empresaActual?.id}
-          onVolver={() => setVistaActual('dashboard')}
-        />
+        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
+          <VistaProveedores 
+            usuario={usuarioLogueado}
+            empresaId={empresaActual?.id}
+            onVolver={() => setVistaActual('dashboard')}
+          />
+        </div>
       )}
       {pasoActual === 7 && vistaActual === 'compras' && usuarioLogueado && puedeGestionarCompras && (
-        <VistaCompras 
-          usuario={usuarioLogueado}
-          empresaId={empresaActual?.id}
-          onVolver={() => setVistaActual('dashboard')}
-        />
+        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
+          <VistaCompras 
+            usuario={usuarioLogueado}
+            empresaId={empresaActual?.id}
+            onVolver={() => setVistaActual('dashboard')}
+          />
+        </div>
       )}
       {pasoActual === 7 && vistaActual === 'ingredientes' && usuarioLogueado && puedeGestionarIngredientes && (
-        <VistaIngredientes 
-          usuario={usuarioLogueado}
-          empresaId={empresaActual?.id}
-          onVolver={() => setVistaActual('dashboard')}
-        />
+        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
+          <VistaIngredientes 
+            usuario={usuarioLogueado}
+            empresaId={empresaActual?.id}
+            onVolver={() => setVistaActual('dashboard')}
+          />
+        </div>
       )}
       {pasoActual === 7 && vistaActual === 'gastos' && usuarioLogueado && puedeGestionarGastos && (
-        <VistaGastos 
-          usuario={usuarioLogueado}
-          empresaId={empresaActual?.id}
-          onVolver={() => setVistaActual('dashboard')}
-        />
+        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
+          <VistaGastos 
+            usuario={usuarioLogueado}
+            empresaId={empresaActual?.id}
+            onVolver={() => setVistaActual('dashboard')}
+          />
+        </div>
       )}
       {pasoActual === 7 && vistaActual === 'nomina' && usuarioLogueado && puedeGestionarNomina && (
-        <VistaNomina 
-          usuario={usuarioLogueado}
-          empresaId={empresaActual?.id}
-          onVolver={() => setVistaActual('dashboard')}
-        />
+        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
+          <VistaNomina 
+            usuario={usuarioLogueado}
+            empresaId={empresaActual?.id}
+            onVolver={() => setVistaActual('dashboard')}
+          />
+        </div>
       )}
       {pasoActual === 7 && vistaActual === 'catalogo_recetas' && usuarioLogueado && puedeVerCatalogo && (
-        <VistaCatalogoRecetas 
-          empresa_id={empresaActual?.id}
-          onVolver={() => setVistaActual('dashboard')}
-        />
+        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
+          <VistaCatalogoRecetas 
+            empresa_id={empresaActual?.id}
+            onVolver={() => setVistaActual('dashboard')}
+          />
+        </div>
       )}
       {pasoActual === 7 && vistaActual === 'historial' && usuarioLogueado && puedeVerHistorial && (
-        <VistaHistorial 
-          usuario={usuarioLogueado}
-          empresaId={empresaActual?.id}
-          onVolver={() => setVistaActual('dashboard')}
-        />
+        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
+          <VistaHistorial 
+            usuario={usuarioLogueado}
+            empresaId={empresaActual?.id}
+            onVolver={() => setVistaActual('dashboard')}
+          />
+        </div>
       )}
-    </div>
+    </>
   )
 }
 

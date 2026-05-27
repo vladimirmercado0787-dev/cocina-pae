@@ -1,137 +1,390 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
-import bcrypt from 'bcryptjs'
-import logoAndamio from '../../assets/brand/andamio-logo.png'
 
 function LoginEmpresa({ onLoginExitoso }) {
-  const [usuario, setUsuario] = useState('')
+  // ─── Estado del formulario ───
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [verPassword, setVerPassword] = useState(false)
+  const [mantenerSesion, setMantenerSesion] = useState(true)
   const [error, setError] = useState('')
   const [cargando, setCargando] = useState(false)
   const [mostrarAyuda, setMostrarAyuda] = useState(false)
 
+  // ─── Estado del tema (Oscuro Híbrido / Tropical Claro) ───
+  const [tema, setTema] = useState(() => {
+    return localStorage.getItem('cocina_pae_tema') || 'oscuro'
+  })
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-tema', tema)
+    localStorage.setItem('cocina_pae_tema', tema)
+  }, [tema])
+
+  // ─── Lógica de login con Supabase Auth ───
   async function intentarLogin(e) {
     e?.preventDefault()
-    
-    if (!usuario.trim() || !password.trim()) {
-      setError('Ingresa tu usuario y contraseña')
+
+    if (!email.trim() || !password.trim()) {
+      setError('Ingresa tu correo y contraseña')
       return
     }
 
     setCargando(true)
     setError('')
 
-    const { data: empresas, error: errSupa } = await supabase
+    // Paso 1: autenticar con Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password: password,
+    })
+
+    if (authError) {
+      console.error('Error de autenticación:', authError)
+      if (authError.message.includes('Invalid login credentials')) {
+        setError('Correo o contraseña incorrectos')
+      } else if (authError.message.includes('Email not confirmed')) {
+        setError('Tu correo aún no está confirmado. Contacta a soporte.')
+      } else {
+        setError('Error al iniciar sesión. Intenta de nuevo.')
+      }
+      setCargando(false)
+      return
+    }
+
+    if (!authData?.user) {
+      setError('No se pudo iniciar sesión. Intenta de nuevo.')
+      setCargando(false)
+      return
+    }
+
+    // Paso 2: obtener el objeto empresa vinculado a este auth user
+    const { data: empresa, error: errEmpresa } = await supabase
       .from('empresas')
       .select('*')
-      .ilike('usuario', usuario.trim())
-      .limit(1)
+      .eq('auth_user_id', authData.user.id)
+      .single()
 
-    if (errSupa) {
-      console.error('Error al buscar empresa:', errSupa)
-      setError('Error de conexión. Intenta de nuevo.')
+    if (errEmpresa || !empresa) {
+      console.error('Empresa no encontrada para este usuario:', errEmpresa)
+      setError('Tu cuenta no está vinculada a ninguna empresa. Contacta a soporte.')
+      await supabase.auth.signOut()
       setCargando(false)
       return
     }
 
-    if (!empresas || empresas.length === 0) {
-      setError('Usuario o contraseña incorrectos')
-      setCargando(false)
-      return
-    }
-
-    const empresa = empresas[0]
-
-    let passwordCorrecta = false
-
-    if (empresa.password_hash === 'TEMPORAL_SIN_HASH') {
-      passwordCorrecta = (password === 'temporal2026')
-    } else if (empresa.password_hash) {
-      try {
-        passwordCorrecta = await bcrypt.compare(password, empresa.password_hash)
-      } catch (err) {
-        console.error('Error al comparar password:', err)
-        passwordCorrecta = false
-      }
-    }
-
-    if (!passwordCorrecta) {
-      setError('Usuario o contraseña incorrectos')
-      setCargando(false)
-      return
+    // Si el usuario NO marcó "mantener sesión", limpiamos al cerrar pestaña
+    if (!mantenerSesion) {
+      sessionStorage.setItem('cocina_pae_session_only', 'true')
+    } else {
+      sessionStorage.removeItem('cocina_pae_session_only')
     }
 
     setCargando(false)
     onLoginExitoso(empresa)
   }
 
+  // ─── Toggle de tema ───
+  function cambiarTema(nuevoTema) {
+    setTema(nuevoTema)
+  }
+
   return (
-    <div className="w-full max-w-md">
-      
-      {/* HEADER con logo Andamio */}
-      <div className="text-center mb-6">
-        {/* Logo en contenedor oscuro elegante */}
-        <div className="inline-block bg-gradient-to-br from-slate-900 to-slate-800 rounded-3xl p-4 shadow-2xl mb-4 ring-1 ring-slate-700/50">
-          <img 
-            src={logoAndamio} 
-            alt="Andamio" 
-            className="h-32 w-auto object-contain"
-          />
+    <div
+      style={{
+        minHeight: '100vh',
+        background: 'var(--color-bg-primary)',
+        position: 'relative',
+        padding: '24px',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      {/* ─── Resplandores radiales del fondo ─── */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          backgroundImage: 'var(--glow-verde), var(--glow-ambar)',
+          pointerEvents: 'none',
+        }}
+      />
+
+      {/* ─── HEADER: Logo Andamio (izq) + Toggle Tema (der) ─── */}
+      <div
+        style={{
+          position: 'relative',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '32px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div
+            style={{
+              width: '26px',
+              height: '26px',
+              borderRadius: '6px',
+              background: 'var(--gradient-logo)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '13px',
+              fontWeight: 500,
+              color: '#FAC775',
+            }}
+          >
+            A
+          </div>
+          <span
+            style={{
+              color: 'var(--color-text-accent)',
+              fontSize: '11px',
+              fontWeight: 500,
+              letterSpacing: '1.5px',
+            }}
+          >
+            ANDAMIO
+          </span>
         </div>
-        
-        {/* Identificación del producto */}
-        <div className="mt-2">
-          <h1 className="text-3xl font-bold text-gray-900">
-            🍳 Cocina PAE
-          </h1>
-          <p className="text-sm text-gray-600 mt-1">
-            Sistema de gestión para suplidores INABIE
-          </p>
-          <p className="text-xs text-gray-400 mt-2 tracking-wider">
-            by <span className="font-bold text-slate-700">ANDAMIO</span>
-          </p>
+
+        {/* Toggle de tema */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            background: 'var(--color-bg-elevated)',
+            border: '0.5px solid var(--color-border-subtle)',
+            borderRadius: '20px',
+            padding: '3px',
+            gap: '2px',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => cambiarTema('oscuro')}
+            style={{
+              background: tema === 'oscuro' ? 'var(--gradient-toggle-active)' : 'transparent',
+              border: 'none',
+              borderRadius: '16px',
+              padding: '6px 12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+            }}
+          >
+            <span style={{ fontSize: '12px' }}>🌙</span>
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: 500,
+                color: tema === 'oscuro' ? 'white' : 'var(--color-text-muted)',
+              }}
+            >
+              Oscuro
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => cambiarTema('tropical')}
+            style={{
+              background: tema === 'tropical' ? 'var(--gradient-toggle-active)' : 'transparent',
+              border: 'none',
+              borderRadius: '16px',
+              padding: '6px 12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+            }}
+          >
+            <span style={{ fontSize: '12px' }}>☀️</span>
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: 500,
+                color: tema === 'tropical' ? 'white' : 'var(--color-text-muted)',
+              }}
+            >
+              Claro
+            </span>
+          </button>
         </div>
       </div>
 
-      {/* TARJETA DE LOGIN */}
-      <div className="bg-white rounded-2xl shadow-xl p-8">
-        
-        <h2 className="text-xl font-bold text-gray-900 mb-1">
-          Iniciar sesión
-        </h2>
-        <p className="text-sm text-gray-500 mb-6">
-          Ingresa las credenciales de tu empresa
-        </p>
-
-        <form onSubmit={intentarLogin} className="space-y-4">
-          
-          {/* USUARIO */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">
-              Usuario de empresa
-            </label>
-            <input
-              type="text"
-              value={usuario}
-              onChange={(e) => {
-                setUsuario(e.target.value)
-                if (error) setError('')
+      {/* ─── CONTENIDO CENTRAL ─── */}
+      <div
+        style={{
+          position: 'relative',
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '12px 0',
+        }}
+      >
+        {/* Logo grande */}
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            marginBottom: '24px',
+          }}
+        >
+          <div
+            style={{
+              width: '80px',
+              height: '80px',
+              borderRadius: '20px',
+              background: 'var(--gradient-logo)',
+              border: '0.5px solid var(--color-border-accent)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              position: 'relative',
+            }}
+          >
+            <div style={{ fontSize: '40px', fontWeight: 500, color: '#FAC775', lineHeight: 1 }}>A</div>
+            <div
+              style={{
+                position: 'absolute',
+                top: '8px',
+                right: '10px',
+                width: '4px',
+                height: '4px',
+                borderRadius: '50%',
+                background: '#FAC775',
               }}
-              placeholder="Ej: elba2026"
-              autoComplete="username"
-              autoFocus
-              disabled={cargando}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
+            />
+            <div
+              style={{
+                position: 'absolute',
+                top: '14px',
+                right: '18px',
+                width: '2px',
+                height: '2px',
+                borderRadius: '50%',
+                background: '#5DCAA5',
+              }}
             />
           </div>
+        </div>
 
-          {/* CONTRASEÑA */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">
+        {/* Título y subtítulo */}
+        <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+          <h1
+            style={{
+              color: 'var(--color-text-primary)',
+              fontSize: '28px',
+              fontWeight: 500,
+              margin: '0 0 8px',
+              letterSpacing: '-0.5px',
+            }}
+          >
+            Cocina PAE
+          </h1>
+          <p style={{ color: 'var(--color-text-muted)', fontSize: '13px', margin: 0 }}>
+            Gestión integral para suplidores INABIE
+          </p>
+        </div>
+
+        {/* ─── FORMULARIO ─── */}
+        <form
+          onSubmit={intentarLogin}
+          style={{
+            width: '100%',
+            maxWidth: '360px',
+            background: 'var(--color-bg-card)',
+            border: '0.5px solid var(--color-border-accent)',
+            borderRadius: '16px',
+            padding: '28px',
+          }}
+        >
+          {/* Email */}
+          <div style={{ marginBottom: '18px' }}>
+            <label
+              style={{
+                display: 'block',
+                color: 'var(--color-text-secondary)',
+                fontSize: '12px',
+                fontWeight: 500,
+                marginBottom: '8px',
+              }}
+            >
+              Correo de la empresa
+            </label>
+            <div style={{ position: 'relative' }}>
+              <span
+                style={{
+                  position: 'absolute',
+                  left: '14px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  fontSize: '14px',
+                  opacity: 0.5,
+                }}
+              >
+                ✉️
+              </span>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value)
+                  if (error) setError('')
+                }}
+                placeholder="elbabuffet21@gmail.com"
+                autoComplete="username"
+                autoFocus
+                disabled={cargando}
+                style={{
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  padding: '13px 14px 13px 40px',
+                  background: 'var(--color-bg-input)',
+                  border: '0.5px solid var(--color-border-subtle)',
+                  borderRadius: '10px',
+                  color: 'var(--color-text-primary)',
+                  fontSize: '14px',
+                  fontFamily: 'inherit',
+                  outline: 'none',
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Password */}
+          <div style={{ marginBottom: '18px' }}>
+            <label
+              style={{
+                display: 'block',
+                color: 'var(--color-text-secondary)',
+                fontSize: '12px',
+                fontWeight: 500,
+                marginBottom: '8px',
+              }}
+            >
               Contraseña
             </label>
-            <div className="relative">
+            <div style={{ position: 'relative' }}>
+              <span
+                style={{
+                  position: 'absolute',
+                  left: '14px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  fontSize: '14px',
+                  opacity: 0.5,
+                }}
+              >
+                🔒
+              </span>
               <input
                 type={verPassword ? 'text' : 'password'}
                 value={password}
@@ -142,87 +395,188 @@ function LoginEmpresa({ onLoginExitoso }) {
                 placeholder="••••••••"
                 autoComplete="current-password"
                 disabled={cargando}
-                className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
+                style={{
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  padding: '13px 44px 13px 40px',
+                  background: 'var(--color-bg-input)',
+                  border: '0.5px solid var(--color-border-subtle)',
+                  borderRadius: '10px',
+                  color: 'var(--color-text-primary)',
+                  fontSize: '14px',
+                  fontFamily: 'inherit',
+                  outline: 'none',
+                }}
               />
               <button
                 type="button"
                 onClick={() => setVerPassword(!verPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+                style={{
+                  position: 'absolute',
+                  right: '14px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  opacity: 0.6,
+                }}
               >
                 {verPassword ? '🙈' : '👁️'}
               </button>
             </div>
           </div>
 
-          {/* ERROR */}
+          {/* Mantener sesión + ¿Olvidaste? */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '20px',
+            }}
+          >
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={mantenerSesion}
+                onChange={(e) => setMantenerSesion(e.target.checked)}
+                style={{ width: '16px', height: '16px', accentColor: '#BA7517', cursor: 'pointer' }}
+              />
+              <span style={{ color: 'var(--color-text-secondary)', fontSize: '12px' }}>
+                Mantener sesión iniciada
+              </span>
+            </label>
+            <button
+              type="button"
+              onClick={() => setMostrarAyuda(!mostrarAyuda)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--color-text-accent)',
+                fontSize: '12px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                padding: 0,
+              }}
+            >
+              ¿Olvidaste?
+            </button>
+          </div>
+
+          {/* Error */}
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
+            <div
+              style={{
+                background: 'rgba(244, 67, 54, 0.1)',
+                border: '0.5px solid rgba(244, 67, 54, 0.3)',
+                borderRadius: '10px',
+                padding: '10px 12px',
+                marginBottom: '16px',
+                color: '#F4C0D1',
+                fontSize: '12px',
+              }}
+            >
               ⚠️ {error}
             </div>
           )}
 
-          {/* BOTÓN ENTRAR */}
+          {/* Botón Entrar */}
           <button
             type="submit"
             disabled={cargando}
-            className="w-full bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-600 hover:to-yellow-700 text-white font-bold py-3 rounded-lg transition disabled:opacity-50 flex items-center justify-center gap-2"
+            style={{
+              width: '100%',
+              padding: '14px',
+              background: 'var(--gradient-button)',
+              border: 'none',
+              borderRadius: '10px',
+              color: 'white',
+              fontSize: '14px',
+              fontWeight: 500,
+              cursor: cargando ? 'not-allowed' : 'pointer',
+              opacity: cargando ? 0.6 : 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              transition: 'opacity 0.2s',
+            }}
           >
             {cargando ? (
               <>
-                <span className="animate-spin">⏳</span> Verificando...
+                <span>⏳</span> Verificando...
               </>
             ) : (
-              '🔐 Entrar'
+              <>
+                <span>Entrar</span>
+                <span>→</span>
+              </>
             )}
           </button>
 
-          {/* OLVIDÉ CONTRASEÑA */}
-          <button
-            type="button"
-            onClick={() => setMostrarAyuda(!mostrarAyuda)}
-            className="w-full text-sm text-gray-500 hover:text-gray-700 underline"
-          >
-            ¿Olvidaste tu contraseña?
-          </button>
-
+          {/* Ayuda */}
           {mostrarAyuda && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-900">
-              <p className="font-semibold mb-2">📞 Contacta al administrador</p>
-              <p className="text-xs">
-                Por ahora, la recuperación de contraseña es manual. 
-                Contacta a tu administrador o a soporte de Cocina PAE:
+            <div
+              style={{
+                marginTop: '16px',
+                background: 'rgba(250, 199, 117, 0.08)',
+                border: '0.5px solid rgba(250, 199, 117, 0.25)',
+                borderRadius: '10px',
+                padding: '14px',
+                fontSize: '11px',
+                color: 'var(--color-text-secondary)',
+              }}
+            >
+              <p style={{ margin: '0 0 8px', fontWeight: 500, color: 'var(--color-text-accent)' }}>
+                📞 Contacta a soporte
               </p>
-              <p className="text-xs mt-2">
-                📧 vladimirmercado0787@gmail.com
-              </p>
-              <p className="text-xs mt-1">
-                📱 WhatsApp: +1 (978) 414-7190
-              </p>
+              <p style={{ margin: '0 0 4px' }}>📧 vladimirmercado0787@gmail.com</p>
+              <p style={{ margin: 0 }}>📱 WhatsApp: +1 (978) 414-7190</p>
             </div>
           )}
-
         </form>
-
       </div>
 
-      {/* FOOTER PROFESIONAL */}
-      <div className="text-center mt-6 space-y-2">
-        <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
-          <div className="h-px bg-gray-300 flex-1 max-w-[60px]"></div>
-          <span className="font-bold tracking-widest">ANDAMIO</span>
-          <div className="h-px bg-gray-300 flex-1 max-w-[60px]"></div>
+      {/* ─── FOOTER ─── */}
+      <div
+        style={{
+          position: 'relative',
+          paddingTop: '24px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '6px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '14px' }}>🇩🇴</span>
+          <span
+            style={{
+              color: 'var(--color-text-accent)',
+              opacity: 0.6,
+              fontSize: '11px',
+              fontWeight: 500,
+              letterSpacing: '0.5px',
+            }}
+          >
+            Hecho en República Dominicana
+          </span>
         </div>
-        <p className="text-xs text-gray-500 italic">
+        <span
+          style={{
+            color: 'var(--color-text-disabled)',
+            fontSize: '10px',
+            letterSpacing: '0.3px',
+          }}
+        >
           Materializamos ideas · Construimos posibilidades
-        </p>
-        <p className="text-xs text-gray-400">
+        </span>
+        <span style={{ color: 'var(--color-text-disabled)', fontSize: '10px' }}>
           © 2026 Andamio · Cocina PAE v1.0
-        </p>
-        <p className="text-xs text-gray-400">
-          Sistema seguro con encriptación bcrypt 🔒
-        </p>
+        </span>
       </div>
-
     </div>
   )
 }
