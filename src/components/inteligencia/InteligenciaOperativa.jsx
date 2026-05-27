@@ -10,6 +10,8 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
   const [operaciones, setOperaciones] = useState([])
   const [escuelas, setEscuelas] = useState([])
   const [recetas, setRecetas] = useState([])
+  const [gastos, setGastos] = useState([])
+  const [categoriasGasto, setCategoriasGasto] = useState([])
   const [cargando, setCargando] = useState(true)
 
   useEffect(() => {
@@ -19,12 +21,10 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
   async function cargarDatos() {
     setCargando(true)
     
-    // Calcular fecha de hace 30 días
     const hace30 = new Date()
     hace30.setDate(hace30.getDate() - 30)
     const hace30Str = hace30.toISOString().split('T')[0]
     
-    // 1) Empresa y finanzas
     const { data: empresaData } = await supabase
       .from('empresas').select('*').eq('id', empresaId).single()
     setEmpresa(empresaData)
@@ -33,17 +33,14 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
       .from('finanzas').select('*').eq('empresa_id', empresaId).maybeSingle()
     setFinanzas(finanzasData)
     
-    // 2) Escuelas
     const { data: escuelasData } = await supabase
       .from('escuelas').select('*').eq('empresa_id', empresaId).eq('activa', true)
     setEscuelas(escuelasData || [])
     
-    // 3) Recetas
     const { data: recetasData } = await supabase
       .from('recetas').select('*').eq('empresa_id', empresaId).eq('activa', true)
     setRecetas(recetasData || [])
     
-    // 4) Operaciones últimos 30 días
     const { data: opsData } = await supabase
       .from('operaciones_dia')
       .select('*')
@@ -51,7 +48,6 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
       .gte('fecha', hace30Str)
     setOperaciones(opsData || [])
     
-    // 5) Pesajes del día (crudos) últimos 30 días
     const { data: pesajesDiaData } = await supabase
       .from('pesajes_dia')
       .select('*')
@@ -59,7 +55,6 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
       .gte('fecha', hace30Str)
     setPesajesDia(pesajesDiaData || [])
     
-    // 6) Pesajes ingredientes (con sugerido vs real)
     if (pesajesDiaData && pesajesDiaData.length > 0) {
       const pesajeIds = pesajesDiaData.map(p => p.id)
       const { data: ingsData } = await supabase
@@ -69,7 +64,6 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
       setPesajesIngs(ingsData || [])
     }
     
-    // 7) Pesajes de operación (cocinado/sobrante)
     if (opsData && opsData.length > 0) {
       const opIds = opsData.map(op => op.id)
       const { data: pesajesOpData } = await supabase
@@ -78,6 +72,22 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
         .in('operacion_id', opIds)
       setPesajesOperacion(pesajesOpData || [])
     }
+
+    // 🆕 INT-008: Cargar gastos últimos 30 días
+    const { data: gastosData } = await supabase
+      .from('gastos')
+      .select('*, categorias_gasto(id, nombre, icono, color)')
+      .eq('empresa_id', empresaId)
+      .gte('fecha', hace30Str)
+      .order('fecha', { ascending: false })
+    setGastos(gastosData || [])
+
+    // 🆕 INT-008: Cargar todas las categorías
+    const { data: catsData } = await supabase
+      .from('categorias_gasto')
+      .select('*')
+      .eq('empresa_id', empresaId)
+    setCategoriasGasto(catsData || [])
     
     setCargando(false)
   }
@@ -90,8 +100,7 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
   // CÁLCULOS
   // ═══════════════════════════════════════════════════════
   
-  // ─── 1) SALUD DEL SISTEMA ────────────────────────────
-  const totalDiasOperados = pesajesDia.length // días con pesaje crudo aprobado
+  const totalDiasOperados = pesajesDia.length
   const totalOperacionesActivas = operaciones.filter(op => !op.no_hubo_clase).length
   
   const pesajesCocinado = pesajesOperacion.filter(p => p.tipo === 'cocinado').length
@@ -104,20 +113,15 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
     ? Math.round((pesajesSobrante / totalOperacionesActivas) * 100) 
     : 0
   
-  // El crudo siempre es 100% si se aprobó (por días con pesaje)
-  // Calculamos % de días pesados respecto a días con operaciones
   const fechasConOps = [...new Set(operaciones.filter(op => !op.no_hubo_clase).map(op => op.fecha))]
   const tasaCrudo = fechasConOps.length > 0
     ? Math.round((totalDiasOperados / fechasConOps.length) * 100)
     : 0
   
-  // Calidad de datos (promedio ponderado)
   const calidadDatos = Math.round((tasaCrudo * 0.5 + tasaCocinado * 0.3 + tasaSobrante * 0.2))
   
-  // ─── 2) COSTO REAL ───────────────────────────────────
   const costoObjetivo = parseFloat(finanzas?.costo_objetivo_racion || 35)
   
-  // Calcular costo real basado en pesajes reales
   let costoTotalReal = 0
   let racionesTotalesReal = 0
   
@@ -139,14 +143,12 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
   const ahorroProRacion = costoObjetivo - costoRealPorRacion
   const ahorro30dias = ahorroProRacion * racionesTotalesReal
   
-  // ─── 3) ANÁLISIS DE EDICIONES ────────────────────────
   const ingsEditados = pesajesIngs.filter(pi => pi.fue_editado).length
   const totalIngsPesados = pesajesIngs.length
   const tasaEdicion = totalIngsPesados > 0 
     ? Math.round((ingsEditados / totalIngsPesados) * 100) 
     : 0
   
-  // ─── 4) ESCUELAS QUE MÁS DEVUELVEN ───────────────────
   const sobrantePorEscuela = {}
   pesajesOperacion.filter(p => p.tipo === 'retorno').forEach(p => {
     const op = operaciones.find(o => o.id === p.operacion_id)
@@ -163,7 +165,6 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
     }
     sobrantePorEscuela[escuela.id].totalSobrante += parseFloat(p.peso || 0)
     
-    // Buscar el cocinado correspondiente
     const cocinado = pesajesOperacion.find(c => c.operacion_id === op.id && c.tipo === 'cocinado')
     if (cocinado) {
       sobrantePorEscuela[escuela.id].totalCocinado += parseFloat(cocinado.peso || 0)
@@ -178,13 +179,90 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
     }))
     .sort((a, b) => b.pctSobrante - a.pctSobrante)
   
-  // ─── 5) DÍAS SIN CLASE ───────────────────────────────
   const opsSinClase = operaciones.filter(op => op.no_hubo_clase).length
+
+  // ═══════════════════════════════════════════════════════
+  // 🆕 INT-008: CÁLCULOS DE GASTOS Y MARGEN REAL
+  // ═══════════════════════════════════════════════════════
+
+  // Gasto total últimos 30 días
+  const gastoTotal30dias = gastos.reduce((sum, g) => sum + parseFloat(g.total || 0), 0)
+
+  // Desglose por categoría
+  const gastosPorCategoria = {}
+  gastos.forEach(g => {
+    const cat = g.categorias_gasto
+    if (!cat) return
+    if (!gastosPorCategoria[cat.id]) {
+      gastosPorCategoria[cat.id] = {
+        id: cat.id,
+        nombre: cat.nombre,
+        icono: cat.icono,
+        color: cat.color,
+        total: 0,
+        cantidad: 0,
+      }
+    }
+    gastosPorCategoria[cat.id].total += parseFloat(g.total || 0)
+    gastosPorCategoria[cat.id].cantidad += 1
+  })
+
+  const categoriasOrdenadas = Object.values(gastosPorCategoria)
+    .map(c => ({
+      ...c,
+      pct: gastoTotal30dias > 0 ? (c.total / gastoTotal30dias * 100) : 0
+    }))
+    .sort((a, b) => b.total - a.total)
+
+  // Top 3 gastos individuales
+  const top3Gastos = [...gastos]
+    .sort((a, b) => parseFloat(b.total || 0) - parseFloat(a.total || 0))
+    .slice(0, 3)
+
+  // Facturación real del mes (de operaciones entregadas)
+  const facturacionReal30 = operaciones
+    .filter(op => op.estado === 'entregada' || op.estado === 'cerrada')
+    .reduce((sum, op) => {
+      const escuela = escuelas.find(e => e.id === op.escuela_id)
+      return sum + ((op.raciones_planificadas || 0) * (parseFloat(escuela?.precio_racion) || 0))
+    }, 0)
+
+  const racionesEntregadas30 = operaciones
+    .filter(op => op.estado === 'entregada' || op.estado === 'cerrada')
+    .reduce((sum, op) => sum + (op.raciones_planificadas || 0), 0)
+
+  // Margen real
+  const margenReal = facturacionReal30 - gastoTotal30dias
+  const margenRealPct = facturacionReal30 > 0 ? (margenReal / facturacionReal30 * 100) : 0
+  const margenMinimoObjetivo = parseFloat(finanzas?.margen_minimo_porcentaje || 25)
+
+  // Costo total por ración (todos los gastos)
+  const costoTotalPorRacion = racionesEntregadas30 > 0 
+    ? gastoTotal30dias / racionesEntregadas30 
+    : 0
+
+  // Diferencia entre costo total y costo de ingredientes
+  const costoNoIngredientes = costoTotalPorRacion - costoRealPorRacion
+
+  // Colores para categorías
+  const COLORES_TW = {
+    amber: 'bg-amber-500',
+    orange: 'bg-orange-500',
+    red: 'bg-red-500',
+    rose: 'bg-rose-500',
+    pink: 'bg-pink-500',
+    purple: 'bg-purple-500',
+    blue: 'bg-blue-500',
+    green: 'bg-green-500',
+    emerald: 'bg-emerald-500',
+    teal: 'bg-teal-500',
+    cyan: 'bg-cyan-500',
+    gray: 'bg-gray-500',
+  }
   
   return (
     <div className="w-full max-w-6xl">
       
-      {/* Header */}
       <div className="bg-gradient-to-br from-indigo-600 to-purple-800 rounded-2xl p-6 mb-6 text-white">
         <div className="flex justify-between items-start">
           <div>
@@ -201,8 +279,7 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
         </div>
       </div>
 
-      {/* SI NO HAY DATOS */}
-      {totalDiasOperados === 0 && totalOperacionesActivas === 0 ? (
+      {totalDiasOperados === 0 && totalOperacionesActivas === 0 && gastos.length === 0 ? (
         <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-12 text-center">
           <p className="text-6xl mb-4">📊</p>
           <h3 className="font-bold text-yellow-900 text-lg">Aún no hay datos suficientes</h3>
@@ -216,6 +293,231 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
         </div>
       ) : (
         <>
+          {/* ─────────────────────────────────────────────── */}
+          {/* 🆕 INT-008: SECCIÓN VISIÓN FINANCIERA COMPLETA */}
+          {/* ─────────────────────────────────────────────── */}
+          <div className="bg-gradient-to-br from-slate-50 to-indigo-50 border-2 border-indigo-200 rounded-2xl shadow-xl p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-xs text-indigo-700 font-semibold tracking-wider">
+                  💼 VISIÓN FINANCIERA REAL
+                </p>
+                <p className="text-xs text-indigo-600 mt-1">
+                  Todo lo que entra, todo lo que sale · últimos 30 días
+                </p>
+              </div>
+              <span className="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">
+                ECOSISTEMA COMPLETO
+              </span>
+            </div>
+
+            {/* 4 KPIs PRINCIPALES */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+              <div className="bg-white rounded-xl p-4 border-2 border-green-200">
+                <p className="text-xs text-green-700 font-bold tracking-wider">FACTURACIÓN</p>
+                <p className="text-2xl font-bold text-green-900 mt-1">
+                  RD$ {(facturacionReal30 / 1000).toFixed(0)}K
+                </p>
+                <p className="text-xs text-green-600 mt-1">
+                  {racionesEntregadas30.toLocaleString()} raciones entregadas
+                </p>
+              </div>
+
+              <div className="bg-white rounded-xl p-4 border-2 border-red-200">
+                <p className="text-xs text-red-700 font-bold tracking-wider">GASTOS TOTALES</p>
+                <p className="text-2xl font-bold text-red-900 mt-1">
+                  RD$ {(gastoTotal30dias / 1000).toFixed(0)}K
+                </p>
+                <p className="text-xs text-red-600 mt-1">
+                  {gastos.length} gastos registrados
+                </p>
+              </div>
+
+              <div className={`bg-white rounded-xl p-4 border-2 ${
+                margenReal >= 0 ? 'border-blue-200' : 'border-orange-300'
+              }`}>
+                <p className={`text-xs font-bold tracking-wider ${
+                  margenReal >= 0 ? 'text-blue-700' : 'text-orange-700'
+                }`}>
+                  {margenReal >= 0 ? 'MARGEN NETO' : '⚠️ PÉRDIDA'}
+                </p>
+                <p className={`text-2xl font-bold mt-1 ${
+                  margenReal >= 0 ? 'text-blue-900' : 'text-orange-900'
+                }`}>
+                  RD$ {(Math.abs(margenReal) / 1000).toFixed(0)}K
+                </p>
+                <p className={`text-xs mt-1 ${
+                  margenReal >= 0 ? 'text-blue-600' : 'text-orange-600'
+                }`}>
+                  {margenRealPct.toFixed(1)}% de facturación
+                </p>
+              </div>
+
+              <div className="bg-white rounded-xl p-4 border-2 border-purple-200">
+                <p className="text-xs text-purple-700 font-bold tracking-wider">COSTO TOTAL/RACIÓN</p>
+                <p className="text-2xl font-bold text-purple-900 mt-1">
+                  RD$ {costoTotalPorRacion.toFixed(2)}
+                </p>
+                <p className="text-xs text-purple-600 mt-1">
+                  Incluye todos los gastos
+                </p>
+              </div>
+            </div>
+
+            {/* COMPARATIVA INGREDIENTES VS TOTAL */}
+            {costoRealPorRacion > 0 && costoTotalPorRacion > 0 && (
+              <div className="bg-white rounded-xl p-4 mb-5 border border-indigo-200">
+                <p className="text-xs text-indigo-700 font-semibold tracking-wider mb-3">
+                  🔍 ¿DE QUÉ ESTÁ COMPUESTO TU COSTO POR RACIÓN?
+                </p>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-32 text-sm font-semibold text-gray-700">Ingredientes</div>
+                    <div className="flex-1 bg-gray-100 rounded-full h-6 relative overflow-hidden">
+                      <div 
+                        className="bg-emerald-500 h-6 rounded-full flex items-center justify-end pr-2"
+                        style={{ width: `${Math.min((costoRealPorRacion / costoTotalPorRacion * 100), 100)}%` }}
+                      >
+                        <span className="text-xs font-bold text-white">
+                          RD$ {costoRealPorRacion.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-32 text-sm font-semibold text-gray-700">Resto del negocio</div>
+                    <div className="flex-1 bg-gray-100 rounded-full h-6 relative overflow-hidden">
+                      <div 
+                        className="bg-rose-500 h-6 rounded-full flex items-center justify-end pr-2"
+                        style={{ width: `${Math.min((costoNoIngredientes / costoTotalPorRacion * 100), 100)}%` }}
+                      >
+                        <span className="text-xs font-bold text-white">
+                          RD$ {costoNoIngredientes.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 pt-2 border-t border-gray-200">
+                    <div className="w-32 text-sm font-bold text-indigo-900">TOTAL</div>
+                    <div className="flex-1 text-right">
+                      <span className="text-lg font-bold text-indigo-900">
+                        RD$ {costoTotalPorRacion.toFixed(2)} por ración
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-600 mt-3 italic">
+                  💡 Nómina, gas, limpieza, contador y demás suman <strong>RD$ {costoNoIngredientes.toFixed(2)}</strong> al costo real de cada ración.
+                </p>
+              </div>
+            )}
+
+            {/* ALERTA SI MARGEN BAJO */}
+            {facturacionReal30 > 0 && margenRealPct < margenMinimoObjetivo && (
+              <div className={`rounded-xl p-4 mb-5 ${
+                margenReal < 0 
+                  ? 'bg-red-50 border-2 border-red-300'
+                  : 'bg-orange-50 border-2 border-orange-300'
+              }`}>
+                <p className={`text-sm font-bold ${
+                  margenReal < 0 ? 'text-red-900' : 'text-orange-900'
+                }`}>
+                  {margenReal < 0 
+                    ? '🚨 ALERTA: Estás operando con pérdida'
+                    : `⚠️ Margen por debajo del objetivo (${margenMinimoObjetivo}%)`}
+                </p>
+                <p className={`text-xs mt-1 ${
+                  margenReal < 0 ? 'text-red-700' : 'text-orange-700'
+                }`}>
+                  Tu margen real es {margenRealPct.toFixed(1)}%. Revisa gastos o ajusta operación.
+                </p>
+              </div>
+            )}
+
+            {/* DESGLOSE POR CATEGORÍA */}
+            {categoriasOrdenadas.length > 0 && (
+              <div className="bg-white rounded-xl p-4 border border-indigo-200 mb-4">
+                <p className="text-xs text-gray-700 font-semibold tracking-wider mb-3">
+                  📊 GASTOS POR CATEGORÍA
+                </p>
+                <div className="space-y-3">
+                  {categoriasOrdenadas.map(cat => (
+                    <div key={cat.id}>
+                      <div className="flex justify-between items-center mb-1">
+                        <p className="text-sm font-semibold text-gray-700">
+                          {cat.icono} {cat.nombre}
+                          <span className="text-xs text-gray-500 font-normal ml-2">
+                            ({cat.cantidad} gasto{cat.cantidad !== 1 ? 's' : ''})
+                          </span>
+                        </p>
+                        <div className="text-right">
+                          <span className="text-sm font-bold text-gray-900">
+                            RD$ {cat.total.toLocaleString('es-DO', { maximumFractionDigits: 0 })}
+                          </span>
+                          <span className="text-xs text-gray-500 ml-2">
+                            {cat.pct.toFixed(1)}%
+                          </span>
+                        </div>
+                      </div>
+                      <div className="w-full bg-gray-100 rounded-full h-2">
+                        <div 
+                          className={`${COLORES_TW[cat.color] || 'bg-gray-400'} h-2 rounded-full transition-all`}
+                          style={{ width: `${Math.min(cat.pct, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* TOP 3 GASTOS INDIVIDUALES */}
+            {top3Gastos.length > 0 && (
+              <div className="bg-white rounded-xl p-4 border border-indigo-200">
+                <p className="text-xs text-gray-700 font-semibold tracking-wider mb-3">
+                  🏆 TOP 3 GASTOS DEL PERÍODO
+                </p>
+                <div className="space-y-2">
+                  {top3Gastos.map((g, idx) => {
+                    const cat = g.categorias_gasto
+                    return (
+                      <div key={g.id} className="flex items-center gap-3 bg-gray-50 rounded-lg p-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-sm ${
+                          idx === 0 ? 'bg-yellow-500' : idx === 1 ? 'bg-gray-400' : 'bg-amber-700'
+                        }`}>
+                          {idx + 1}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-gray-900 text-sm truncate">
+                            {cat?.icono} {g.descripcion || 'Sin descripción'}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {cat?.nombre} · {new Date(g.fecha).toLocaleDateString('es-DO')}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-lg font-bold text-gray-900">
+                            RD$ {parseFloat(g.total).toLocaleString('es-DO', { maximumFractionDigits: 0 })}
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {gastos.length === 0 && (
+              <div className="bg-white rounded-xl p-6 text-center border border-indigo-200">
+                <p className="text-4xl mb-2">💸</p>
+                <p className="text-sm font-bold text-gray-700">Aún no hay gastos registrados</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Empieza a capturar gastos para ver tu costo total real y margen neto.
+                </p>
+              </div>
+            )}
+          </div>
+
           {/* ─── SALUD DEL SISTEMA ─── */}
           <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
             <p className="text-xs text-gray-500 font-semibold tracking-wider mb-4">
@@ -265,10 +567,10 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
             </div>
           </div>
 
-          {/* ─── COSTO REAL VS OBJETIVO ─── */}
+          {/* ─── COSTO INGREDIENTES VS OBJETIVO ─── */}
           <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
             <p className="text-xs text-gray-500 font-semibold tracking-wider mb-4">
-              💰 COSTO REAL VS OBJETIVO
+              🥕 COSTO INGREDIENTES VS OBJETIVO
             </p>
             
             {totalDiasOperados === 0 ? (
@@ -300,7 +602,7 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
                     </p>
                     <p className={`text-xs ${
                       costoRealPorRacion <= costoObjetivo ? 'text-green-600' : 'text-red-600'
-                    }`}>promedio real</p>
+                    }`}>solo ingredientes</p>
                   </div>
                   <div className={`rounded-xl p-4 text-center border ${
                     ahorroProRacion >= 0
@@ -339,7 +641,6 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
             )}
           </div>
 
-          {/* ─── EDICIONES (TRACKING) ─── */}
           {totalIngsPesados > 0 && (
             <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
               <p className="text-xs text-gray-500 font-semibold tracking-wider mb-4">
@@ -368,7 +669,6 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
             </div>
           )}
 
-          {/* ─── ESCUELAS QUE MÁS DEVUELVEN ─── */}
           {escuelasOrdenadas.length > 0 && (
             <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
               <p className="text-xs text-gray-500 font-semibold tracking-wider mb-4">
@@ -402,7 +702,6 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
             </div>
           )}
 
-          {/* ─── DÍAS SIN CLASE ─── */}
           {opsSinClase > 0 && (
             <div className="bg-orange-50 border border-orange-200 rounded-2xl p-6 mb-6">
               <p className="text-xs text-orange-700 font-semibold tracking-wider mb-2">
@@ -420,7 +719,6 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
   )
 }
 
-// Componente auxiliar: barra de salud
 function BarraSalud({ label, pct, count, total, color }) {
   const colores = {
     emerald: { bg: 'bg-emerald-500', text: 'text-emerald-700' },
