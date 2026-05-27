@@ -21,6 +21,8 @@ function LoginEmpresa({ onLoginExitoso }) {
     localStorage.setItem('cocina_pae_tema', tema)
   }, [tema])
 
+  const esTropical = tema === 'tropical'
+
   // ─── Lógica de login con Supabase Auth ───
   async function intentarLogin(e) {
     e?.preventDefault()
@@ -33,7 +35,6 @@ function LoginEmpresa({ onLoginExitoso }) {
     setCargando(true)
     setError('')
 
-    // Paso 1: autenticar con Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
       password: password,
@@ -58,7 +59,6 @@ function LoginEmpresa({ onLoginExitoso }) {
       return
     }
 
-    // Paso 2: obtener el objeto empresa vinculado a este auth user
     const { data: empresa, error: errEmpresa } = await supabase
       .from('empresas')
       .select('*')
@@ -73,7 +73,6 @@ function LoginEmpresa({ onLoginExitoso }) {
       return
     }
 
-    // Si el usuario NO marcó "mantener sesión", limpiamos al cerrar pestaña
     if (!mantenerSesion) {
       sessionStorage.setItem('cocina_pae_session_only', 'true')
     } else {
@@ -84,7 +83,6 @@ function LoginEmpresa({ onLoginExitoso }) {
     onLoginExitoso(empresa)
   }
 
-  // ─── Toggle de tema ───
   function cambiarTema(nuevoTema) {
     setTema(nuevoTema)
   }
@@ -120,19 +118,20 @@ function LoginEmpresa({ onLoginExitoso }) {
           marginBottom: '32px',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div
             style={{
-              width: '26px',
-              height: '26px',
-              borderRadius: '6px',
+              width: '32px',
+              height: '32px',
+              borderRadius: '8px',
               background: 'var(--gradient-logo)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '13px',
+              fontSize: '15px',
               fontWeight: 500,
               color: '#FAC775',
+              boxShadow: esTropical ? '0 4px 12px rgba(15, 110, 86, 0.25)' : 'none',
             }}
           >
             A
@@ -140,9 +139,10 @@ function LoginEmpresa({ onLoginExitoso }) {
           <span
             style={{
               color: 'var(--color-text-accent)',
-              fontSize: '11px',
-              fontWeight: 500,
+              fontSize: '12px',
+              fontWeight: 600,
               letterSpacing: '1.5px',
+              opacity: 0.85,
             }}
           >
             ANDAMIO
@@ -155,10 +155,11 @@ function LoginEmpresa({ onLoginExitoso }) {
             display: 'flex',
             alignItems: 'center',
             background: 'var(--color-bg-elevated)',
-            border: '0.5px solid var(--color-border-subtle)',
+            border: '1px solid var(--color-border-subtle)',
             borderRadius: '20px',
             padding: '3px',
             gap: '2px',
+            boxShadow: 'var(--modulo-sombra)',
           }}
         >
           <button
@@ -168,7 +169,7 @@ function LoginEmpresa({ onLoginExitoso }) {
               background: tema === 'oscuro' ? 'var(--gradient-toggle-active)' : 'transparent',
               border: 'none',
               borderRadius: '16px',
-              padding: '6px 12px',
+              padding: '7px 14px',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
@@ -194,7 +195,7 @@ function LoginEmpresa({ onLoginExitoso }) {
               background: tema === 'tropical' ? 'var(--gradient-toggle-active)' : 'transparent',
               border: 'none',
               borderRadius: '16px',
-              padding: '6px 12px',
+              padding: '7px 14px',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
@@ -239,25 +240,28 @@ function LoginEmpresa({ onLoginExitoso }) {
         >
           <div
             style={{
-              width: '80px',
-              height: '80px',
-              borderRadius: '20px',
+              width: '88px',
+              height: '88px',
+              borderRadius: '22px',
               background: 'var(--gradient-logo)',
-              border: '0.5px solid var(--color-border-accent)',
+              border: '1px solid var(--color-border-accent)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               position: 'relative',
+              boxShadow: esTropical 
+                ? '0 8px 24px rgba(15, 110, 86, 0.3), 0 2px 8px rgba(15, 110, 86, 0.15)' 
+                : '0 4px 16px rgba(0, 0, 0, 0.3)',
             }}
           >
-            <div style={{ fontSize: '40px', fontWeight: 500, color: '#FAC775', lineHeight: 1 }}>A</div>
+            <div style={{ fontSize: '44px', fontWeight: 500, color: '#FAC775', lineHeight: 1 }}>A</div>
             <div
               style={{
                 position: 'absolute',
-                top: '8px',
-                right: '10px',
-                width: '4px',
-                height: '4px',
+                top: '10px',
+                right: '12px',
+                width: '5px',
+                height: '5px',
                 borderRadius: '50%',
                 background: '#FAC775',
               }}
@@ -265,10 +269,10 @@ function LoginEmpresa({ onLoginExitoso }) {
             <div
               style={{
                 position: 'absolute',
-                top: '14px',
-                right: '18px',
-                width: '2px',
-                height: '2px',
+                top: '16px',
+                right: '20px',
+                width: '3px',
+                height: '3px',
                 borderRadius: '50%',
                 background: '#5DCAA5',
               }}
@@ -277,11 +281,11 @@ function LoginEmpresa({ onLoginExitoso }) {
         </div>
 
         {/* Título y subtítulo */}
-        <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <h1
             style={{
               color: 'var(--color-text-primary)',
-              fontSize: '28px',
+              fontSize: '32px',
               fontWeight: 500,
               margin: '0 0 8px',
               letterSpacing: '-0.5px',
@@ -289,7 +293,12 @@ function LoginEmpresa({ onLoginExitoso }) {
           >
             Cocina PAE
           </h1>
-          <p style={{ color: 'var(--color-text-muted)', fontSize: '13px', margin: 0 }}>
+          <p style={{ 
+            color: 'var(--color-text-secondary)', 
+            fontSize: '14px', 
+            margin: 0,
+            fontWeight: 500,
+          }}>
             Gestión integral para suplidores INABIE
           </p>
         </div>
@@ -299,11 +308,16 @@ function LoginEmpresa({ onLoginExitoso }) {
           onSubmit={intentarLogin}
           style={{
             width: '100%',
-            maxWidth: '360px',
-            background: 'var(--color-bg-card)',
-            border: '0.5px solid var(--color-border-accent)',
-            borderRadius: '16px',
+            maxWidth: '380px',
+            background: esTropical ? 'var(--color-bg-elevated)' : 'var(--color-bg-card)',
+            border: esTropical 
+              ? '1.5px solid var(--color-border-accent)' 
+              : '1px solid var(--color-border-accent)',
+            borderRadius: '18px',
             padding: '28px',
+            boxShadow: esTropical 
+              ? '0 8px 24px rgba(15, 110, 86, 0.08), 0 2px 8px rgba(15, 110, 86, 0.04)' 
+              : 'none',
           }}
         >
           {/* Email */}
@@ -311,9 +325,9 @@ function LoginEmpresa({ onLoginExitoso }) {
             <label
               style={{
                 display: 'block',
-                color: 'var(--color-text-secondary)',
-                fontSize: '12px',
-                fontWeight: 500,
+                color: 'var(--color-text-primary)',
+                fontSize: '13px',
+                fontWeight: 600,
                 marginBottom: '8px',
               }}
             >
@@ -326,8 +340,8 @@ function LoginEmpresa({ onLoginExitoso }) {
                   left: '14px',
                   top: '50%',
                   transform: 'translateY(-50%)',
-                  fontSize: '14px',
-                  opacity: 0.5,
+                  fontSize: '15px',
+                  opacity: 0.6,
                 }}
               >
                 ✉️
@@ -346,14 +360,23 @@ function LoginEmpresa({ onLoginExitoso }) {
                 style={{
                   width: '100%',
                   boxSizing: 'border-box',
-                  padding: '13px 14px 13px 40px',
+                  padding: '14px 14px 14px 42px',
                   background: 'var(--color-bg-input)',
-                  border: '0.5px solid var(--color-border-subtle)',
+                  border: '1px solid var(--color-border-subtle)',
                   borderRadius: '10px',
                   color: 'var(--color-text-primary)',
-                  fontSize: '14px',
+                  fontSize: '15px',
                   fontFamily: 'inherit',
                   outline: 'none',
+                  transition: 'border-color 0.2s, box-shadow 0.2s',
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--color-text-accent)'
+                  e.currentTarget.style.boxShadow = `0 0 0 3px ${esTropical ? 'rgba(15, 110, 86, 0.1)' : 'rgba(250, 199, 117, 0.15)'}`
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--color-border-subtle)'
+                  e.currentTarget.style.boxShadow = 'none'
                 }}
               />
             </div>
@@ -364,9 +387,9 @@ function LoginEmpresa({ onLoginExitoso }) {
             <label
               style={{
                 display: 'block',
-                color: 'var(--color-text-secondary)',
-                fontSize: '12px',
-                fontWeight: 500,
+                color: 'var(--color-text-primary)',
+                fontSize: '13px',
+                fontWeight: 600,
                 marginBottom: '8px',
               }}
             >
@@ -379,8 +402,8 @@ function LoginEmpresa({ onLoginExitoso }) {
                   left: '14px',
                   top: '50%',
                   transform: 'translateY(-50%)',
-                  fontSize: '14px',
-                  opacity: 0.5,
+                  fontSize: '15px',
+                  opacity: 0.6,
                 }}
               >
                 🔒
@@ -398,14 +421,23 @@ function LoginEmpresa({ onLoginExitoso }) {
                 style={{
                   width: '100%',
                   boxSizing: 'border-box',
-                  padding: '13px 44px 13px 40px',
+                  padding: '14px 44px 14px 42px',
                   background: 'var(--color-bg-input)',
-                  border: '0.5px solid var(--color-border-subtle)',
+                  border: '1px solid var(--color-border-subtle)',
                   borderRadius: '10px',
                   color: 'var(--color-text-primary)',
-                  fontSize: '14px',
+                  fontSize: '15px',
                   fontFamily: 'inherit',
                   outline: 'none',
+                  transition: 'border-color 0.2s, box-shadow 0.2s',
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--color-text-accent)'
+                  e.currentTarget.style.boxShadow = `0 0 0 3px ${esTropical ? 'rgba(15, 110, 86, 0.1)' : 'rgba(250, 199, 117, 0.15)'}`
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--color-border-subtle)'
+                  e.currentTarget.style.boxShadow = 'none'
                 }}
               />
               <button
@@ -419,8 +451,8 @@ function LoginEmpresa({ onLoginExitoso }) {
                   background: 'transparent',
                   border: 'none',
                   cursor: 'pointer',
-                  fontSize: '14px',
-                  opacity: 0.6,
+                  fontSize: '15px',
+                  opacity: 0.7,
                 }}
               >
                 {verPassword ? '🙈' : '👁️'}
@@ -444,7 +476,11 @@ function LoginEmpresa({ onLoginExitoso }) {
                 onChange={(e) => setMantenerSesion(e.target.checked)}
                 style={{ width: '16px', height: '16px', accentColor: '#BA7517', cursor: 'pointer' }}
               />
-              <span style={{ color: 'var(--color-text-secondary)', fontSize: '12px' }}>
+              <span style={{ 
+                color: 'var(--color-text-secondary)', 
+                fontSize: '13px',
+                fontWeight: 500,
+              }}>
                 Mantener sesión iniciada
               </span>
             </label>
@@ -455,8 +491,8 @@ function LoginEmpresa({ onLoginExitoso }) {
                 background: 'transparent',
                 border: 'none',
                 color: 'var(--color-text-accent)',
-                fontSize: '12px',
-                fontWeight: 500,
+                fontSize: '13px',
+                fontWeight: 600,
                 cursor: 'pointer',
                 padding: 0,
               }}
@@ -469,13 +505,15 @@ function LoginEmpresa({ onLoginExitoso }) {
           {error && (
             <div
               style={{
-                background: 'rgba(244, 67, 54, 0.1)',
-                border: '0.5px solid rgba(244, 67, 54, 0.3)',
+                background: esTropical ? '#FCEBEB' : 'rgba(244, 67, 54, 0.1)',
+                border: esTropical ? '1px solid #E24B4A' : '1px solid rgba(244, 67, 54, 0.3)',
+                borderLeft: esTropical ? '4px solid #E24B4A' : '4px solid #E24B4A',
                 borderRadius: '10px',
-                padding: '10px 12px',
+                padding: '12px 14px',
                 marginBottom: '16px',
-                color: '#F4C0D1',
-                fontSize: '12px',
+                color: esTropical ? '#A32D2D' : '#F4C0D1',
+                fontSize: '13px',
+                fontWeight: 500,
               }}
             >
               ⚠️ {error}
@@ -488,20 +526,24 @@ function LoginEmpresa({ onLoginExitoso }) {
             disabled={cargando}
             style={{
               width: '100%',
-              padding: '14px',
+              padding: '15px',
               background: 'var(--gradient-button)',
               border: 'none',
               borderRadius: '10px',
               color: 'white',
-              fontSize: '14px',
-              fontWeight: 500,
+              fontSize: '15px',
+              fontWeight: 600,
               cursor: cargando ? 'not-allowed' : 'pointer',
               opacity: cargando ? 0.6 : 1,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: '8px',
-              transition: 'opacity 0.2s',
+              transition: 'all 0.2s',
+              fontFamily: 'inherit',
+              boxShadow: esTropical 
+                ? '0 4px 12px rgba(186, 117, 23, 0.3), 0 2px 4px rgba(186, 117, 23, 0.15)' 
+                : 'none',
             }}
           >
             {cargando ? (
@@ -521,19 +563,25 @@ function LoginEmpresa({ onLoginExitoso }) {
             <div
               style={{
                 marginTop: '16px',
-                background: 'rgba(250, 199, 117, 0.08)',
-                border: '0.5px solid rgba(250, 199, 117, 0.25)',
+                background: esTropical ? '#FAF3E5' : 'rgba(250, 199, 117, 0.08)',
+                border: esTropical ? '1px solid rgba(186, 117, 23, 0.3)' : '1px solid rgba(250, 199, 117, 0.25)',
+                borderLeft: esTropical ? '4px solid #BA7517' : '4px solid rgba(250, 199, 117, 0.5)',
                 borderRadius: '10px',
                 padding: '14px',
-                fontSize: '11px',
-                color: 'var(--color-text-secondary)',
+                fontSize: '12px',
+                color: esTropical ? '#633806' : 'var(--color-text-secondary)',
               }}
             >
-              <p style={{ margin: '0 0 8px', fontWeight: 500, color: 'var(--color-text-accent)' }}>
+              <p style={{ 
+                margin: '0 0 8px', 
+                fontWeight: 600, 
+                color: esTropical ? '#633806' : 'var(--color-text-accent)',
+                fontSize: '13px',
+              }}>
                 📞 Contacta a soporte
               </p>
-              <p style={{ margin: '0 0 4px' }}>📧 vladimirmercado0787@gmail.com</p>
-              <p style={{ margin: 0 }}>📱 WhatsApp: +1 (978) 414-7190</p>
+              <p style={{ margin: '0 0 4px', fontWeight: 500 }}>📧 vladimirmercado0787@gmail.com</p>
+              <p style={{ margin: 0, fontWeight: 500 }}>📱 WhatsApp: +1 (978) 414-7190</p>
             </div>
           )}
         </form>
@@ -555,9 +603,9 @@ function LoginEmpresa({ onLoginExitoso }) {
           <span
             style={{
               color: 'var(--color-text-accent)',
-              opacity: 0.6,
+              opacity: 0.85,
               fontSize: '11px',
-              fontWeight: 500,
+              fontWeight: 600,
               letterSpacing: '0.5px',
             }}
           >
@@ -566,14 +614,19 @@ function LoginEmpresa({ onLoginExitoso }) {
         </div>
         <span
           style={{
-            color: 'var(--color-text-disabled)',
-            fontSize: '10px',
+            color: 'var(--color-text-muted)',
+            fontSize: '11px',
             letterSpacing: '0.3px',
+            fontWeight: 500,
           }}
         >
           Materializamos ideas · Construimos posibilidades
         </span>
-        <span style={{ color: 'var(--color-text-disabled)', fontSize: '10px' }}>
+        <span style={{ 
+          color: 'var(--color-text-disabled)', 
+          fontSize: '10px',
+          fontWeight: 500,
+        }}>
           © 2026 Andamio · Cocina PAE v1.0
         </span>
       </div>

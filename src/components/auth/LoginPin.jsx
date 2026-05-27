@@ -2,13 +2,13 @@ import { useState, useEffect } from 'react'
 
 // ─── Información visual por rol ───
 const ROL_INFO = {
-  propietario:   { emoji: '👑', label: 'Propietario',     color: '#FAC775', bgGlow: 'rgba(250, 199, 117, 0.15)' },
-  administrador: { emoji: '💼', label: 'Administrador',   color: '#185FA5', bgGlow: 'rgba(24, 95, 165, 0.15)' },
-  secretaria:    { emoji: '📋', label: 'Secretaria',      color: '#D4537E', bgGlow: 'rgba(212, 83, 126, 0.15)' },
-  jefa_cocina:   { emoji: '👩‍🍳', label: 'Jefa de cocina',  color: '#ED93B1', bgGlow: 'rgba(237, 147, 177, 0.15)' },
-  despachador:   { emoji: '🚚', label: 'Despachador',     color: '#E89042', bgGlow: 'rgba(232, 144, 66, 0.15)' },
-  ayudante:      { emoji: '👨‍🍳', label: 'Ayudante',        color: '#0F6E56', bgGlow: 'rgba(15, 110, 86, 0.15)' },
-  contador:      { emoji: '🧮', label: 'Contador',        color: '#534AB7', bgGlow: 'rgba(83, 74, 183, 0.15)' },
+  propietario:   { emoji: '👑', label: 'Propietario',     color: '#BA7517', bgClaro: 'rgba(250, 199, 117, 0.15)', bgClaroBorde: 'rgba(250, 199, 117, 0.4)' },
+  administrador: { emoji: '💼', label: 'Administrador',   color: '#185FA5', bgClaro: 'rgba(133, 183, 235, 0.15)', bgClaroBorde: 'rgba(133, 183, 235, 0.4)' },
+  secretaria:    { emoji: '📋', label: 'Secretaria',      color: '#D4537E', bgClaro: 'rgba(237, 147, 177, 0.15)', bgClaroBorde: 'rgba(237, 147, 177, 0.4)' },
+  jefa_cocina:   { emoji: '👩‍🍳', label: 'Jefa de cocina',  color: '#D4537E', bgClaro: 'rgba(237, 147, 177, 0.15)', bgClaroBorde: 'rgba(237, 147, 177, 0.4)' },
+  despachador:   { emoji: '🚚', label: 'Despachador',     color: '#D85A30', bgClaro: 'rgba(232, 144, 66, 0.15)',  bgClaroBorde: 'rgba(232, 144, 66, 0.4)' },
+  ayudante:      { emoji: '👨‍🍳', label: 'Ayudante',        color: '#0F6E56', bgClaro: 'rgba(29, 158, 117, 0.15)',  bgClaroBorde: 'rgba(29, 158, 117, 0.4)' },
+  contador:      { emoji: '🧮', label: 'Contador',        color: '#534AB7', bgClaro: 'rgba(127, 119, 221, 0.15)', bgClaroBorde: 'rgba(127, 119, 221, 0.4)' },
 }
 
 function LoginPin({ usuario, onCancelar, onLoginExitoso }) {
@@ -16,7 +16,6 @@ function LoginPin({ usuario, onCancelar, onLoginExitoso }) {
   const [error, setError] = useState(false)
   const [shake, setShake] = useState(false)
 
-  // ─── Tema (persiste de pantallas anteriores) ───
   const [tema, setTema] = useState(() => {
     return localStorage.getItem('cocina_pae_tema') || 'oscuro'
   })
@@ -26,6 +25,7 @@ function LoginPin({ usuario, onCancelar, onLoginExitoso }) {
     localStorage.setItem('cocina_pae_tema', tema)
   }, [tema])
 
+  const esTropical = tema === 'tropical'
   const info = ROL_INFO[usuario.rol] || ROL_INFO.ayudante
   const esPropietario = usuario.rol === 'propietario'
 
@@ -64,7 +64,6 @@ function LoginPin({ usuario, onCancelar, onLoginExitoso }) {
     }
   }
 
-  // ─── Soporte para teclado físico ───
   useEffect(() => {
     function manejarTecla(evento) {
       if (evento.key >= '0' && evento.key <= '9') {
@@ -123,17 +122,18 @@ function LoginPin({ usuario, onCancelar, onLoginExitoso }) {
           onClick={onCancelar}
           style={{
             background: 'var(--color-bg-elevated)',
-            border: '0.5px solid var(--color-border-subtle)',
+            border: '1px solid var(--color-border-subtle)',
             borderRadius: '20px',
-            padding: '8px 14px',
+            padding: '8px 16px',
             color: 'var(--color-text-secondary)',
-            fontSize: '12px',
+            fontSize: '13px',
             fontWeight: 500,
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
             fontFamily: 'inherit',
+            boxShadow: esTropical ? '0 1px 3px rgba(15, 110, 86, 0.05)' : 'none',
           }}
         >
           <span>←</span>
@@ -146,10 +146,11 @@ function LoginPin({ usuario, onCancelar, onLoginExitoso }) {
             display: 'flex',
             alignItems: 'center',
             background: 'var(--color-bg-elevated)',
-            border: '0.5px solid var(--color-border-subtle)',
+            border: '1px solid var(--color-border-subtle)',
             borderRadius: '20px',
             padding: '3px',
             gap: '2px',
+            boxShadow: esTropical ? '0 1px 3px rgba(15, 110, 86, 0.05)' : 'none',
           }}
         >
           <button
@@ -159,7 +160,7 @@ function LoginPin({ usuario, onCancelar, onLoginExitoso }) {
               background: tema === 'oscuro' ? 'var(--gradient-toggle-active)' : 'transparent',
               border: 'none',
               borderRadius: '16px',
-              padding: '6px 10px',
+              padding: '7px 12px',
               display: 'flex',
               alignItems: 'center',
               gap: '5px',
@@ -170,7 +171,7 @@ function LoginPin({ usuario, onCancelar, onLoginExitoso }) {
             <span style={{ fontSize: '11px' }}>🌙</span>
             <span
               style={{
-                fontSize: '10px',
+                fontSize: '11px',
                 fontWeight: 500,
                 color: tema === 'oscuro' ? 'white' : 'var(--color-text-muted)',
               }}
@@ -185,7 +186,7 @@ function LoginPin({ usuario, onCancelar, onLoginExitoso }) {
               background: tema === 'tropical' ? 'var(--gradient-toggle-active)' : 'transparent',
               border: 'none',
               borderRadius: '16px',
-              padding: '6px 10px',
+              padding: '7px 12px',
               display: 'flex',
               alignItems: 'center',
               gap: '5px',
@@ -196,7 +197,7 @@ function LoginPin({ usuario, onCancelar, onLoginExitoso }) {
             <span style={{ fontSize: '11px' }}>☀️</span>
             <span
               style={{
-                fontSize: '10px',
+                fontSize: '11px',
                 fontWeight: 500,
                 color: tema === 'tropical' ? 'white' : 'var(--color-text-muted)',
               }}
@@ -216,26 +217,17 @@ function LoginPin({ usuario, onCancelar, onLoginExitoso }) {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: '24px',
+          gap: '28px',
         }}
       >
-        {/* ─── Card del usuario ─── */}
+        {/* ─── Avatar circular + nombre + rol (sin card) ─── */}
         <div
           style={{
-            background: esPropietario
-              ? `linear-gradient(135deg, ${info.bgGlow} 0%, rgba(250, 199, 117, 0.05) 100%)`
-              : 'var(--color-bg-card)',
-            border: esPropietario
-              ? `1px solid ${info.color}80`
-              : `0.5px solid ${info.color}40`,
-            borderRadius: '16px',
-            padding: '24px 36px',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: '8px',
+            gap: '16px',
             position: 'relative',
-            minWidth: '260px',
           }}
         >
           {esPropietario && (
@@ -243,57 +235,75 @@ function LoginPin({ usuario, onCancelar, onLoginExitoso }) {
               style={{
                 position: 'absolute',
                 top: '-8px',
-                right: '14px',
+                right: '-36px',
                 background: 'var(--gradient-button)',
                 color: 'white',
                 fontSize: '9px',
-                fontWeight: 600,
-                padding: '3px 9px',
+                fontWeight: 700,
+                padding: '4px 10px',
                 borderRadius: '8px',
-                letterSpacing: '0.5px',
+                letterSpacing: '0.8px',
+                boxShadow: esTropical ? '0 2px 4px rgba(186, 117, 23, 0.2)' : 'none',
               }}
             >
               DUEÑA
             </div>
           )}
 
-          <div style={{ fontSize: '52px', lineHeight: 1 }}>{info.emoji}</div>
-
-          <p
+          {/* Avatar circular minimalista */}
+          <div
             style={{
-              color: 'var(--color-text-primary)',
-              fontSize: '20px',
-              fontWeight: 600,
-              margin: 0,
-              textAlign: 'center',
+              width: '88px',
+              height: '88px',
+              borderRadius: '50%',
+              background: info.bgClaro,
+              border: `2px solid ${info.bgClaroBorde}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '44px',
+              lineHeight: 1,
             }}
           >
-            {usuario.nombre}
-          </p>
+            {info.emoji}
+          </div>
 
-          <p
-            style={{
-              color: info.color,
-              fontSize: '10px',
-              fontWeight: 600,
-              margin: 0,
-              letterSpacing: '1px',
-              textTransform: 'uppercase',
-            }}
-          >
-            {info.label}
-          </p>
+          {/* Nombre + Rol (sin card) */}
+          <div style={{ textAlign: 'center' }}>
+            <div
+              style={{
+                color: 'var(--color-text-primary)',
+                fontSize: '22px',
+                fontWeight: 600,
+                letterSpacing: '-0.3px',
+              }}
+            >
+              {usuario.nombre}
+            </div>
+            <div
+              style={{
+                color: info.color,
+                fontSize: '11px',
+                fontWeight: 600,
+                letterSpacing: '1.5px',
+                marginTop: '6px',
+                textTransform: 'uppercase',
+              }}
+            >
+              {info.label}
+            </div>
+          </div>
         </div>
 
         {/* ─── Display del PIN ─── */}
-        <div style={{ textAlign: 'center' }}>
+        <div style={{ textAlign: 'center', marginTop: '8px' }}>
           <p
             style={{
               color: 'var(--color-text-secondary)',
-              fontSize: '12px',
+              fontSize: '13px',
               fontWeight: 500,
               margin: '0 0 14px',
-              letterSpacing: '0.5px',
+              letterSpacing: '0.3px',
             }}
           >
             Ingresa tu PIN
@@ -303,35 +313,38 @@ function LoginPin({ usuario, onCancelar, onLoginExitoso }) {
             style={{
               display: 'flex',
               justifyContent: 'center',
-              gap: '14px',
+              gap: '16px',
             }}
           >
-            {[0, 1, 2, 3].map((i) => (
-              <div
-                key={i}
-                style={{
-                  width: '16px',
-                  height: '16px',
-                  borderRadius: '50%',
-                  border: error
-                    ? '1.5px solid #F44336'
-                    : pinIngresado.length > i
-                      ? '1.5px solid #FAC775'
-                      : '1.5px solid var(--color-border-strong)',
-                  background: error
-                    ? '#F44336'
-                    : pinIngresado.length > i
-                      ? '#FAC775'
-                      : 'transparent',
-                  transition: 'all 0.2s ease',
-                }}
-              />
-            ))}
+            {[0, 1, 2, 3].map((i) => {
+              const lleno = pinIngresado.length > i
+              return (
+                <div
+                  key={i}
+                  style={{
+                    width: '14px',
+                    height: '14px',
+                    borderRadius: '50%',
+                    border: error
+                      ? `2px solid ${esTropical ? '#E24B4A' : '#F44336'}`
+                      : lleno
+                        ? `2px solid ${info.color}`
+                        : '2px solid var(--color-border-strong)',
+                    background: error
+                      ? (esTropical ? '#E24B4A' : '#F44336')
+                      : lleno
+                        ? info.color
+                        : 'transparent',
+                    transition: 'all 0.2s ease',
+                  }}
+                />
+              )
+            })}
           </div>
           {error && (
             <p
               style={{
-                color: '#F4C0D1',
+                color: esTropical ? '#A32D2D' : '#F4C0D1',
                 fontSize: '12px',
                 fontWeight: 500,
                 marginTop: '12px',
@@ -343,11 +356,11 @@ function LoginPin({ usuario, onCancelar, onLoginExitoso }) {
           )}
         </div>
 
-        {/* ─── Teclado numérico ─── */}
+        {/* ─── Teclado numérico minimalista ─── */}
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, 70px)',
+            gridTemplateColumns: 'repeat(3, 72px)',
             gap: '12px',
             marginTop: '8px',
           }}
@@ -357,8 +370,8 @@ function LoginPin({ usuario, onCancelar, onLoginExitoso }) {
               key={num}
               onClick={() => agregarDigito(num.toString())}
               style={{
-                background: 'var(--color-bg-card)',
-                border: '0.5px solid var(--color-border-subtle)',
+                background: 'var(--color-modulo-bg)',
+                border: '1px solid var(--color-border-subtle)',
                 borderRadius: '14px',
                 padding: '18px 0',
                 fontSize: '24px',
@@ -367,13 +380,14 @@ function LoginPin({ usuario, onCancelar, onLoginExitoso }) {
                 cursor: 'pointer',
                 fontFamily: 'inherit',
                 transition: 'all 0.15s ease',
+                boxShadow: esTropical ? '0 1px 3px rgba(15, 110, 86, 0.05)' : 'none',
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = 'var(--color-bg-hover)'
                 e.currentTarget.style.borderColor = 'var(--color-border-accent)'
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'var(--color-bg-card)'
+                e.currentTarget.style.background = 'var(--color-modulo-bg)'
                 e.currentTarget.style.borderColor = 'var(--color-border-subtle)'
               }}
             >
@@ -381,15 +395,15 @@ function LoginPin({ usuario, onCancelar, onLoginExitoso }) {
             </button>
           ))}
 
-          {/* Botón C - Limpiar todo */}
+          {/* Botón C - Limpiar todo (transparente) */}
           <button
             onClick={limpiarTodo}
             style={{
-              background: 'var(--color-bg-elevated)',
-              border: '0.5px solid var(--color-border-subtle)',
+              background: 'transparent',
+              border: '1px solid var(--color-border-subtle)',
               borderRadius: '14px',
               padding: '18px 0',
-              fontSize: '20px',
+              fontSize: '18px',
               fontWeight: 600,
               color: 'var(--color-text-muted)',
               cursor: 'pointer',
@@ -397,8 +411,8 @@ function LoginPin({ usuario, onCancelar, onLoginExitoso }) {
               transition: 'all 0.15s ease',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.color = '#F4C0D1'
-              e.currentTarget.style.borderColor = 'rgba(244, 67, 54, 0.4)'
+              e.currentTarget.style.color = esTropical ? '#A32D2D' : '#F4C0D1'
+              e.currentTarget.style.borderColor = esTropical ? '#E24B4A' : 'rgba(244, 67, 54, 0.4)'
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.color = 'var(--color-text-muted)'
@@ -412,8 +426,8 @@ function LoginPin({ usuario, onCancelar, onLoginExitoso }) {
           <button
             onClick={() => agregarDigito('0')}
             style={{
-              background: 'var(--color-bg-card)',
-              border: '0.5px solid var(--color-border-subtle)',
+              background: 'var(--color-modulo-bg)',
+              border: '1px solid var(--color-border-subtle)',
               borderRadius: '14px',
               padding: '18px 0',
               fontSize: '24px',
@@ -422,25 +436,26 @@ function LoginPin({ usuario, onCancelar, onLoginExitoso }) {
               cursor: 'pointer',
               fontFamily: 'inherit',
               transition: 'all 0.15s ease',
+              boxShadow: esTropical ? '0 1px 3px rgba(15, 110, 86, 0.05)' : 'none',
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = 'var(--color-bg-hover)'
               e.currentTarget.style.borderColor = 'var(--color-border-accent)'
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'var(--color-bg-card)'
+              e.currentTarget.style.background = 'var(--color-modulo-bg)'
               e.currentTarget.style.borderColor = 'var(--color-border-subtle)'
             }}
           >
             0
           </button>
 
-          {/* Botón backspace */}
+          {/* Botón backspace (transparente) */}
           <button
             onClick={borrarDigito}
             style={{
-              background: 'var(--color-bg-elevated)',
-              border: '0.5px solid var(--color-border-subtle)',
+              background: 'transparent',
+              border: '1px solid var(--color-border-subtle)',
               borderRadius: '14px',
               padding: '18px 0',
               fontSize: '20px',
@@ -480,9 +495,9 @@ function LoginPin({ usuario, onCancelar, onLoginExitoso }) {
           <span
             style={{
               color: 'var(--color-text-accent)',
-              opacity: 0.6,
+              opacity: 0.85,
               fontSize: '11px',
-              fontWeight: 500,
+              fontWeight: 600,
               letterSpacing: '0.5px',
             }}
           >

@@ -3,12 +3,47 @@ import { supabase } from '../../supabaseClient'
 import { registrar, TIPOS_ACCION } from '../../utils/historial'
 import ModalPesajeCrudo from '../pesaje/ModalPesajeCrudo'
 
-// ─── Colores por categoría de módulos ───
 const CATEGORIAS = {
-  finanzas:    { color: '#85B7EB', colorOscuro: '#185FA5', glow: 'rgba(55, 138, 221, 0.15)', icon: 'cash', label: 'Finanzas' },
-  inventario:  { color: '#FAC775', colorOscuro: '#BA7517', glow: 'rgba(239, 159, 39, 0.15)', icon: 'package', label: 'Inventario & Compras' },
-  personal:    { color: '#ED93B1', colorOscuro: '#D4537E', glow: 'rgba(212, 83, 126, 0.15)', icon: 'users', label: 'Personal' },
-  operacion:   { color: '#AFA9EC', colorOscuro: '#534AB7', glow: 'rgba(127, 119, 221, 0.15)', icon: 'brain', label: 'Operación & Configuración' },
+  finanzas: {
+    color: '#378ADD',
+    colorBg: '#85B7EB',
+    colorDark: '#185FA5',
+    colorDarker: '#0C447C',
+    glowBg: 'rgba(55, 138, 221, 0.15)',
+    bgClaro: '#E6F1FB',
+    label: 'Finanzas',
+    sublabel: 'Facturas, conduces, gastos y reportes DGII',
+  },
+  inventario: {
+    color: '#EF9F27',
+    colorBg: '#FAC775',
+    colorDark: '#BA7517',
+    colorDarker: '#633806',
+    glowBg: 'rgba(239, 159, 39, 0.15)',
+    bgClaro: '#FAEEDA',
+    label: 'Inventario & Compras',
+    sublabel: 'Ingredientes, compras, proveedores y recetas',
+  },
+  personal: {
+    color: '#D4537E',
+    colorBg: '#ED93B1',
+    colorDark: '#993556',
+    colorDarker: '#72243E',
+    glowBg: 'rgba(212, 83, 126, 0.15)',
+    bgClaro: '#FBEAF0',
+    label: 'Personal',
+    sublabel: 'Empleados, nómina, contratos y calculadora',
+  },
+  operacion: {
+    color: '#7F77DD',
+    colorBg: '#AFA9EC',
+    colorDark: '#534AB7',
+    colorDarker: '#3C3489',
+    glowBg: 'rgba(127, 119, 221, 0.15)',
+    bgClaro: '#EEEDFE',
+    label: 'Operación & Configuración',
+    sublabel: 'Inteligencia, historial y configuración',
+  },
 }
 
 function DashboardDelDia({ 
@@ -33,6 +68,7 @@ function DashboardDelDia({
   onIrHistorial,
   onIrFactura,
   onIrConduces,
+  onIrProveedores,
   onVerComoSecretaria 
 }) {
   const [empresa, setEmpresa] = useState(null)
@@ -47,7 +83,6 @@ function DashboardDelDia({
   const [modoEdicionCrudo, setModoEdicionCrudo] = useState(false)
   const [modalProximamente, setModalProximamente] = useState(null)
 
-  // ─── Tema (persiste de pantallas anteriores) ───
   const [tema, setTema] = useState(() => {
     return localStorage.getItem('cocina_pae_tema') || 'oscuro'
   })
@@ -314,7 +349,6 @@ function DashboardDelDia({
     await cargarDatos()
   }
 
-  // ─── KPIs calculados ───
   const totalRacionesHoy = operacionesHoy
     .filter(op => op.estado !== 'sin_clase')
     .reduce((sum, op) => sum + (op.raciones_planificadas || 0), 0)
@@ -349,7 +383,6 @@ function DashboardDelDia({
   const todasEntregadas = escuelasOperativas > 0 && escuelasEntregadas >= escuelasOperativas
   const mostrarBotonDespacho = yaSePesoHoy && hayEscuelasIniciadas && !todasEntregadas
 
-  // ─── Próximo evento ───
   const proximoEvento = mostrarBotonDespacho 
     ? '🚚 Despachar' 
     : mostrarBotonPesaje 
@@ -374,7 +407,6 @@ function DashboardDelDia({
     )
   }
 
-  const fechaHoyTexto = new Date().toLocaleDateString('es-DO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
   const fechaCorta = new Date().toLocaleDateString('es-DO', { weekday: 'short', day: 'numeric', month: 'short' })
 
   return (
@@ -387,7 +419,6 @@ function DashboardDelDia({
         color: 'var(--color-text-primary)',
       }}
     >
-      {/* Resplandores radiales del fondo */}
       <div
         style={{
           position: 'fixed',
@@ -398,9 +429,6 @@ function DashboardDelDia({
         }}
       />
 
-      {/* ═══════════════════════════════════════════════════════════════
-          MODAL: Sin clase
-          ═══════════════════════════════════════════════════════════════ */}
       {modalSinClase && (
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 100,
@@ -434,7 +462,7 @@ function DashboardDelDia({
               style={{
                 width: '100%', boxSizing: 'border-box',
                 background: 'var(--color-bg-input)',
-                border: '0.5px solid var(--color-border-subtle)',
+                border: '1px solid var(--color-border-subtle)',
                 borderRadius: '10px',
                 padding: '10px 12px',
                 color: 'var(--color-text-primary)',
@@ -467,7 +495,7 @@ function DashboardDelDia({
                 style={{
                   padding: '12px 16px',
                   background: 'var(--color-bg-elevated)',
-                  border: '0.5px solid var(--color-border-subtle)',
+                  border: '1px solid var(--color-border-subtle)',
                   borderRadius: '10px',
                   color: 'var(--color-text-secondary)',
                   fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit',
@@ -480,9 +508,6 @@ function DashboardDelDia({
         </div>
       )}
 
-      {/* ═══════════════════════════════════════════════════════════════
-          MODAL: Próximamente
-          ═══════════════════════════════════════════════════════════════ */}
       {modalProximamente && (
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 100,
@@ -540,9 +565,7 @@ function DashboardDelDia({
         />
       )}
 
-      {/* ═══════════════════════════════════════════════════════════════
-          HEADER: Logo + saludo + fecha + toggle tema
-          ═══════════════════════════════════════════════════════════════ */}
+      {/* HEADER */}
       <div style={{
         position: 'relative', zIndex: 1,
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -560,7 +583,7 @@ function DashboardDelDia({
             <div style={{ position: 'absolute', top: '5px', right: '7px', width: '3px', height: '3px', borderRadius: '50%', background: '#FAC775' }} />
           </div>
           <div>
-            <div style={{ fontSize: '10px', color: 'var(--color-text-accent)', opacity: 0.7, letterSpacing: '1.5px', fontWeight: 500 }}>
+            <div style={{ fontSize: '10px', color: 'var(--color-text-accent)', opacity: 0.8, letterSpacing: '1.5px', fontWeight: 600 }}>
               ANDAMIO · {empresa?.nombre?.toUpperCase()}
             </div>
             <div style={{ fontSize: '18px', fontWeight: 500, color: 'var(--color-text-primary)', marginTop: '2px' }}>
@@ -570,10 +593,9 @@ function DashboardDelDia({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {/* Chip fecha */}
           <div style={{
             background: 'var(--color-bg-elevated)',
-            border: '0.5px solid var(--color-border-subtle)',
+            border: '1px solid var(--color-border-subtle)',
             borderRadius: '20px', padding: '7px 14px',
             fontSize: '11px', color: 'var(--color-text-secondary)',
             display: 'flex', alignItems: 'center', gap: '6px',
@@ -582,11 +604,10 @@ function DashboardDelDia({
             📅 {fechaCorta}
           </div>
 
-          {/* Toggle tema */}
           <div style={{
             display: 'flex', alignItems: 'center',
             background: 'var(--color-bg-elevated)',
-            border: '0.5px solid var(--color-border-subtle)',
+            border: '1px solid var(--color-border-subtle)',
             borderRadius: '20px', padding: '3px', gap: '2px',
           }}>
             <button
@@ -623,78 +644,52 @@ function DashboardDelDia({
         </div>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════
-          OPERACIÓN DE HOY - KPIs + Próximo
-          ═══════════════════════════════════════════════════════════════ */}
+      {/* OPERACIÓN DE HOY */}
       <div style={{ position: 'relative', zIndex: 1, marginBottom: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
           <span style={{ fontSize: '14px' }}>🔥</span>
-          <span style={{ fontSize: '11px', color: 'var(--color-text-accent)', opacity: 0.7, letterSpacing: '1.5px', fontWeight: 500 }}>
+          <span style={{ fontSize: '11px', color: 'var(--color-text-accent)', opacity: 0.85, letterSpacing: '1.5px', fontWeight: 600 }}>
             OPERACIÓN DE HOY
           </span>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+          <KpiCard label="Raciones planificadas" valor={totalRacionesHoy.toLocaleString()} colorBorde="#1D9E75" />
+          <KpiCard label="Escuelas atendidas" colorBorde="#0F6E56">
+            <span style={{ color: '#0F6E56' }}>{escuelasAtendidas}</span>
+            <span style={{ color: 'var(--color-text-muted)', fontSize: '14px' }}>/{escuelas.length}</span>
+          </KpiCard>
+          <KpiCard label="Facturado hoy" valor={`RD$ ${(facturacionHoy / 1000).toFixed(1)}K`} colorBorde="#BA7517" colorTexto="#854F0B" />
           <div style={{
-            background: 'var(--color-bg-card)',
-            border: '0.5px solid var(--color-border-subtle)',
+            background: '#EEEDFE',
+            border: '1px solid rgba(83, 74, 183, 0.3)',
+            borderLeft: '4px solid #534AB7',
             borderRadius: '12px', padding: '14px',
+            boxShadow: 'var(--modulo-sombra)',
           }}>
-            <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginBottom: '8px' }}>Raciones planificadas</div>
-            <div style={{ fontSize: '22px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
-              {totalRacionesHoy.toLocaleString()}
-            </div>
-          </div>
-          <div style={{
-            background: 'var(--color-bg-card)',
-            border: '0.5px solid var(--color-border-subtle)',
-            borderRadius: '12px', padding: '14px',
-          }}>
-            <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginBottom: '8px' }}>Escuelas atendidas</div>
-            <div style={{ fontSize: '22px', fontWeight: 500 }}>
-              <span style={{ color: '#5DCAA5' }}>{escuelasAtendidas}</span>
-              <span style={{ color: 'var(--color-text-muted)', fontSize: '14px' }}>/{escuelas.length}</span>
-            </div>
-          </div>
-          <div style={{
-            background: 'var(--color-bg-card)',
-            border: '0.5px solid var(--color-border-subtle)',
-            borderRadius: '12px', padding: '14px',
-          }}>
-            <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginBottom: '8px' }}>Facturado hoy</div>
-            <div style={{ fontSize: '22px', fontWeight: 500, color: '#FAC775' }}>
-              RD$ {(facturacionHoy / 1000).toFixed(1)}K
-            </div>
-          </div>
-          <div style={{
-            background: 'rgba(83, 74, 183, 0.12)',
-            border: '0.5px solid rgba(127, 119, 221, 0.3)',
-            borderRadius: '12px', padding: '14px',
-          }}>
-            <div style={{ fontSize: '10px', color: '#AFA9EC', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <div style={{ fontSize: '10px', color: '#534AB7', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 500 }}>
               ⚡ Próximo
             </div>
-            <div style={{ fontSize: '15px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
+            <div style={{ fontSize: '15px', fontWeight: 500, color: '#26215C' }}>
               {proximoEvento}
             </div>
           </div>
         </div>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════
-          BLOQUE: Iniciar día / Pesar / Despachar (operativo)
-          ═══════════════════════════════════════════════════════════════ */}
+      {/* BLOQUE OPERATIVO */}
       <div style={{ position: 'relative', zIndex: 1, marginBottom: '24px' }}>
         {escuelasPendientesCount > 0 && (
           <div style={{
             background: 'linear-gradient(135deg, rgba(29, 158, 117, 0.18) 0%, rgba(15, 110, 86, 0.08) 100%)',
-            border: '0.5px solid rgba(29, 158, 117, 0.3)',
+            border: '1px solid rgba(29, 158, 117, 0.4)',
+            borderLeft: '4px solid #1D9E75',
             borderRadius: '14px', padding: '18px', marginBottom: '12px',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             gap: '16px', flexWrap: 'wrap',
           }}>
             <div>
-              <div style={{ fontSize: '10px', color: '#5DCAA5', letterSpacing: '1.5px', fontWeight: 500, marginBottom: '6px' }}>
+              <div style={{ fontSize: '10px', color: '#0F6E56', letterSpacing: '1.5px', fontWeight: 600, marginBottom: '6px' }}>
                 ACCIÓN DEL DÍA
               </div>
               <div style={{ fontSize: '18px', fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: '4px' }}>
@@ -725,13 +720,14 @@ function DashboardDelDia({
         {mostrarBotonPesaje && (
           <div style={{
             background: 'linear-gradient(135deg, rgba(239, 159, 39, 0.18) 0%, rgba(186, 117, 23, 0.08) 100%)',
-            border: '0.5px solid rgba(239, 159, 39, 0.3)',
+            border: '1px solid rgba(239, 159, 39, 0.4)',
+            borderLeft: '4px solid #EF9F27',
             borderRadius: '14px', padding: '18px', marginBottom: '12px',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             gap: '16px', flexWrap: 'wrap',
           }}>
             <div>
-              <div style={{ fontSize: '10px', color: '#FAC775', letterSpacing: '1.5px', fontWeight: 500, marginBottom: '6px' }}>
+              <div style={{ fontSize: '10px', color: '#BA7517', letterSpacing: '1.5px', fontWeight: 600, marginBottom: '6px' }}>
                 SIGUIENTE PASO
               </div>
               <div style={{ fontSize: '18px', fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: '4px' }}>
@@ -762,7 +758,8 @@ function DashboardDelDia({
         {yaSePesoHoy && hayEscuelasIniciadas && (
           <div style={{
             background: 'linear-gradient(135deg, rgba(29, 158, 117, 0.15) 0%, rgba(15, 110, 86, 0.05) 100%)',
-            border: '0.5px solid rgba(29, 158, 117, 0.25)',
+            border: '1px solid rgba(29, 158, 117, 0.35)',
+            borderLeft: '4px solid #1D9E75',
             borderRadius: '14px', padding: '14px 18px', marginBottom: '12px',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             gap: '12px', flexWrap: 'wrap',
@@ -783,7 +780,7 @@ function DashboardDelDia({
               style={{
                 padding: '8px 14px',
                 background: 'var(--color-bg-elevated)',
-                border: '0.5px solid var(--color-border-subtle)',
+                border: '1px solid var(--color-border-subtle)',
                 borderRadius: '20px',
                 color: 'var(--color-text-secondary)',
                 fontSize: '11px', fontWeight: 500,
@@ -798,13 +795,14 @@ function DashboardDelDia({
         {mostrarBotonDespacho && onIrDespacho && (
           <div style={{
             background: 'linear-gradient(135deg, rgba(216, 90, 48, 0.2) 0%, rgba(153, 60, 29, 0.08) 100%)',
-            border: '0.5px solid rgba(216, 90, 48, 0.35)',
+            border: '1px solid rgba(216, 90, 48, 0.45)',
+            borderLeft: '4px solid #D85A30',
             borderRadius: '14px', padding: '18px', marginBottom: '12px',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             gap: '16px', flexWrap: 'wrap',
           }}>
             <div>
-              <div style={{ fontSize: '10px', color: '#F0997B', letterSpacing: '1.5px', fontWeight: 500, marginBottom: '6px' }}>
+              <div style={{ fontSize: '10px', color: '#993C1D', letterSpacing: '1.5px', fontWeight: 600, marginBottom: '6px' }}>
                 SIGUIENTE PASO
               </div>
               <div style={{ fontSize: '18px', fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: '4px' }}>
@@ -836,7 +834,8 @@ function DashboardDelDia({
         {todasEntregadas && (
           <div style={{
             background: 'linear-gradient(135deg, rgba(29, 158, 117, 0.15) 0%, rgba(15, 110, 86, 0.05) 100%)',
-            border: '0.5px solid rgba(29, 158, 117, 0.25)',
+            border: '1px solid rgba(29, 158, 117, 0.35)',
+            borderLeft: '4px solid #1D9E75',
             borderRadius: '14px', padding: '14px 18px',
             display: 'flex', alignItems: 'center', gap: '12px',
           }}>
@@ -853,14 +852,12 @@ function DashboardDelDia({
         )}
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════
-          ESCUELAS DEL DÍA - Lista con estados
-          ═══════════════════════════════════════════════════════════════ */}
+      {/* ESCUELAS DEL DÍA */}
       {escuelas.length > 0 && (
         <div style={{ position: 'relative', zIndex: 1, marginBottom: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
             <span style={{ fontSize: '14px' }}>🏫</span>
-            <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', letterSpacing: '1.5px', fontWeight: 500 }}>
+            <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', letterSpacing: '1.5px', fontWeight: 600 }}>
               ESCUELAS DEL DÍA
             </span>
           </div>
@@ -870,11 +867,11 @@ function DashboardDelDia({
               const estado = op?.estado || 'pendiente'
 
               const ESTADO_INFO = {
-                entregada:   { label: '✅ Entregada',   color: '#5DCAA5' },
-                cerrada:     { label: '✅ Entregada',   color: '#5DCAA5' },
-                despachando: { label: '🚚 En camino',   color: '#F0997B' },
-                lista:       { label: '✅ Lista',       color: '#85B7EB' },
-                preparando:  { label: '👨‍🍳 Preparando',  color: '#FAC775' },
+                entregada:   { label: '✅ Entregada',   color: '#0F6E56' },
+                cerrada:     { label: '✅ Entregada',   color: '#0F6E56' },
+                despachando: { label: '🚚 En camino',   color: '#D85A30' },
+                lista:       { label: '✅ Lista',       color: '#185FA5' },
+                preparando:  { label: '👨‍🍳 Preparando',  color: '#BA7517' },
                 sin_clase:   { label: '🚫 Sin clase',   color: 'var(--color-text-muted)' },
                 pendiente:   { label: '⏰ Pendiente',   color: 'var(--color-text-secondary)' },
               }
@@ -882,11 +879,13 @@ function DashboardDelDia({
 
               return (
                 <div key={escuela.id} style={{
-                  background: 'var(--color-bg-card)',
-                  border: '0.5px solid var(--color-border-subtle)',
+                  background: 'var(--color-modulo-bg)',
+                  border: '1px solid var(--color-modulo-border)',
+                  borderLeft: `4px solid ${estadoInfo.color}`,
                   borderRadius: '12px', padding: '14px 16px',
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   gap: '12px', flexWrap: 'wrap',
+                  boxShadow: 'var(--modulo-sombra)',
                 }}>
                   <div style={{ flex: 1, minWidth: '200px' }}>
                     <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
@@ -905,7 +904,7 @@ function DashboardDelDia({
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                     <span style={{
                       background: `${estadoInfo.color}20`,
-                      border: `0.5px solid ${estadoInfo.color}40`,
+                      border: `1px solid ${estadoInfo.color}50`,
                       color: estadoInfo.color,
                       fontSize: '10px', fontWeight: 600,
                       padding: '4px 10px', borderRadius: '12px',
@@ -936,7 +935,7 @@ function DashboardDelDia({
                           style={{
                             padding: '6px 12px',
                             background: 'var(--color-bg-elevated)',
-                            border: '0.5px solid var(--color-border-subtle)',
+                            border: '1px solid var(--color-border-subtle)',
                             borderRadius: '8px',
                             color: 'var(--color-text-secondary)',
                             fontSize: '11px', fontWeight: 500,
@@ -973,64 +972,56 @@ function DashboardDelDia({
         </div>
       )}
 
-      {/* ═══════════════════════════════════════════════════════════════
-          MÓDULOS - 4 categorías
-          ═══════════════════════════════════════════════════════════════ */}
+      {/* MÓDULOS - 4 CATEGORÍAS */}
       <div style={{ position: 'relative', zIndex: 1, marginBottom: '24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '18px' }}>
           <span style={{ fontSize: '14px' }}>📂</span>
-          <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', letterSpacing: '1.5px', fontWeight: 500 }}>
+          <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', letterSpacing: '1.5px', fontWeight: 600 }}>
             MÓDULOS
           </span>
         </div>
 
-        {/* ─── Categoría: FINANZAS ─── */}
-        <CategoriaBanner cat={CATEGORIAS.finanzas} icon="💰" count={4}>
-          <Modulo emoji="🧾" label="Factura INABIE"   sublabel="Facturas mensuales" color={CATEGORIAS.finanzas.color} onClick={onIrFactura ? () => onIrFactura() : () => mostrarProximamente('Factura INABIE')} />
-          <Modulo emoji="🚚" label="Conduces"         sublabel="Mes en curso"       color={CATEGORIAS.finanzas.color} onClick={onIrConduces ? () => onIrConduces() : () => mostrarProximamente('Conduces')} />
-          <Modulo emoji="💸" label="Gastos"           sublabel="Categorías + RNC"   color={CATEGORIAS.finanzas.color} onClick={onIrGastos ? onIrGastos : () => mostrarProximamente('Gastos')} />
-          <Modulo emoji="📊" label="Reportes DGII"    sublabel="606 · 607"          color={CATEGORIAS.finanzas.color} proximamente onClick={() => mostrarProximamente('Reportes DGII 606/607')} />
+        <CategoriaBanner cat={CATEGORIAS.finanzas} icon="💰" count={4} tema={tema}>
+          <Modulo emoji="🧾" label="Factura INABIE"   sublabel="Facturas mensuales" cat={CATEGORIAS.finanzas} tema={tema} onClick={onIrFactura ? () => onIrFactura() : () => mostrarProximamente('Factura INABIE')} />
+          <Modulo emoji="🚚" label="Conduces"         sublabel="Mes en curso"       cat={CATEGORIAS.finanzas} tema={tema} onClick={onIrConduces ? () => onIrConduces() : () => mostrarProximamente('Conduces')} />
+          <Modulo emoji="💸" label="Gastos"           sublabel="Categorías + RNC"   cat={CATEGORIAS.finanzas} tema={tema} onClick={onIrGastos ? onIrGastos : () => mostrarProximamente('Gastos')} />
+          <Modulo emoji="📊" label="Reportes DGII"    sublabel="606 · 607"          cat={CATEGORIAS.finanzas} tema={tema} proximamente onClick={() => mostrarProximamente('Reportes DGII 606/607')} />
         </CategoriaBanner>
 
-        {/* ─── Categoría: INVENTARIO ─── */}
-        <CategoriaBanner cat={CATEGORIAS.inventario} icon="📦" count={4}>
-          <Modulo emoji="🥕" label="Ingredientes" sublabel="Catálogo"      color={CATEGORIAS.inventario.color} onClick={onIrIngredientes ? onIrIngredientes : () => mostrarProximamente('Ingredientes')} />
-          <Modulo emoji="🛒" label="Compras"       sublabel="Esta semana"   color={CATEGORIAS.inventario.color} onClick={onIrCompras ? onIrCompras : () => mostrarProximamente('Compras')} />
-          <Modulo emoji="🏪" label="Proveedores"   sublabel="Con RNC"       color={CATEGORIAS.inventario.color} proximamente onClick={() => mostrarProximamente('Proveedores')} />
-          <Modulo emoji="👨‍🍳" label="Recetas"      sublabel="Catálogo"      color={CATEGORIAS.inventario.color} onClick={onIrCatalogo ? onIrCatalogo : () => mostrarProximamente('Recetas')} />
+        <CategoriaBanner cat={CATEGORIAS.inventario} icon="📦" count={4} tema={tema}>
+          <Modulo emoji="🥕" label="Ingredientes" sublabel="Catálogo"    cat={CATEGORIAS.inventario} tema={tema} onClick={onIrIngredientes ? onIrIngredientes : () => mostrarProximamente('Ingredientes')} />
+          <Modulo emoji="🛒" label="Compras"       sublabel="Esta semana" cat={CATEGORIAS.inventario} tema={tema} onClick={onIrCompras ? onIrCompras : () => mostrarProximamente('Compras')} />
+          <Modulo emoji="🏪" label="Proveedores"   sublabel="Con RNC"     cat={CATEGORIAS.inventario} tema={tema} onClick={onIrProveedores ? onIrProveedores : () => mostrarProximamente('Proveedores')} />
+          <Modulo emoji="👨‍🍳" label="Recetas"      sublabel="Catálogo"    cat={CATEGORIAS.inventario} tema={tema} onClick={onIrCatalogo ? onIrCatalogo : () => mostrarProximamente('Recetas')} />
         </CategoriaBanner>
 
-        {/* ─── Categoría: PERSONAL ─── */}
-        <CategoriaBanner cat={CATEGORIAS.personal} icon="👥" count={4}>
-          <Modulo emoji="👤" label="Empleados"   sublabel="Equipo"          color={CATEGORIAS.personal.color} onClick={onIrEmpleados ? onIrEmpleados : () => mostrarProximamente('Empleados')} />
-          <Modulo emoji="💵" label="Nómina"      sublabel="Pagos"           color={CATEGORIAS.personal.color} onClick={onIrNomina ? onIrNomina : () => mostrarProximamente('Nómina')} />
-          <Modulo emoji="📄" label="Contratos"   sublabel="Por empleado"    color={CATEGORIAS.personal.color} onClick={onIrContratos ? onIrContratos : () => mostrarProximamente('Contratos')} />
-          <Modulo emoji="🧮" label="Calculadora" sublabel="Liquidación"     color={CATEGORIAS.personal.color} onClick={onIrCalculadora ? onIrCalculadora : () => mostrarProximamente('Calculadora')} />
+        <CategoriaBanner cat={CATEGORIAS.personal} icon="👥" count={4} tema={tema}>
+          <Modulo emoji="👤" label="Empleados"   sublabel="Equipo"       cat={CATEGORIAS.personal} tema={tema} onClick={onIrEmpleados ? onIrEmpleados : () => mostrarProximamente('Empleados')} />
+          <Modulo emoji="💵" label="Nómina"      sublabel="Pagos"        cat={CATEGORIAS.personal} tema={tema} onClick={onIrNomina ? onIrNomina : () => mostrarProximamente('Nómina')} />
+          <Modulo emoji="📄" label="Contratos"   sublabel="Por empleado" cat={CATEGORIAS.personal} tema={tema} onClick={onIrContratos ? onIrContratos : () => mostrarProximamente('Contratos')} />
+          <Modulo emoji="🧮" label="Calculadora" sublabel="Liquidación"  cat={CATEGORIAS.personal} tema={tema} onClick={onIrCalculadora ? onIrCalculadora : () => mostrarProximamente('Calculadora')} />
         </CategoriaBanner>
 
-        {/* ─── Categoría: OPERACIÓN ─── */}
-        <CategoriaBanner cat={CATEGORIAS.operacion} icon="🧠" count={4}>
-          <Modulo emoji="💡" label="Inteligencia"    sublabel="Análisis"    color={CATEGORIAS.operacion.color} onClick={onIrInteligencia ? onIrInteligencia : () => mostrarProximamente('Inteligencia')} />
-          <Modulo emoji="📜" label="Historial"       sublabel="Todas ops"   color={CATEGORIAS.operacion.color} onClick={onIrHistorial ? onIrHistorial : () => mostrarProximamente('Historial')} />
-          <Modulo emoji="🏫" label="Centros INABIE"  sublabel={`${escuelas.length} escuelas`} color={CATEGORIAS.operacion.color} proximamente onClick={() => mostrarProximamente('Centros INABIE')} />
-          <Modulo emoji="⚙️" label="Configuración"  sublabel="Empresa"     color={CATEGORIAS.operacion.color} onClick={onIrConfiguracion ? onIrConfiguracion : () => mostrarProximamente('Configuración')} />
+        <CategoriaBanner cat={CATEGORIAS.operacion} icon="🧠" count={4} tema={tema}>
+          <Modulo emoji="💡" label="Inteligencia"    sublabel="Análisis"  cat={CATEGORIAS.operacion} tema={tema} onClick={onIrInteligencia ? onIrInteligencia : () => mostrarProximamente('Inteligencia')} />
+          <Modulo emoji="📜" label="Historial"       sublabel="Todas ops" cat={CATEGORIAS.operacion} tema={tema} onClick={onIrHistorial ? onIrHistorial : () => mostrarProximamente('Historial')} />
+          <Modulo emoji="🏫" label="Centros INABIE"  sublabel={`${escuelas.length} escuelas`} cat={CATEGORIAS.operacion} tema={tema} proximamente onClick={() => mostrarProximamente('Centros INABIE')} />
+          <Modulo emoji="⚙️" label="Configuración"  sublabel="Empresa"   cat={CATEGORIAS.operacion} tema={tema} onClick={onIrConfiguracion ? onIrConfiguracion : () => mostrarProximamente('Configuración')} />
         </CategoriaBanner>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════
-          FOOTER
-          ═══════════════════════════════════════════════════════════════ */}
+      {/* FOOTER */}
       <div style={{
         position: 'relative', zIndex: 1,
         paddingTop: '20px',
-        borderTop: '0.5px solid var(--color-border-subtle)',
+        borderTop: '1px solid var(--color-border-subtle)',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         gap: '12px', flexWrap: 'wrap',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '14px' }}>🇩🇴</span>
           <span style={{
-            color: 'var(--color-text-accent)', opacity: 0.6,
+            color: 'var(--color-text-accent)', opacity: 0.8,
             fontSize: '10px', fontWeight: 500, letterSpacing: '0.5px',
           }}>
             Andamio · Modo {usuario.rol === 'propietario' ? 'Propietario' : 'Administrador'} · Sincronizado
@@ -1042,7 +1033,7 @@ function DashboardDelDia({
               onClick={onCambiarUsuario}
               style={{
                 background: 'var(--color-bg-elevated)',
-                border: '0.5px solid var(--color-border-subtle)',
+                border: '1px solid var(--color-border-subtle)',
                 borderRadius: '20px', padding: '7px 14px',
                 color: 'var(--color-text-secondary)',
                 fontSize: '11px', cursor: 'pointer',
@@ -1056,13 +1047,13 @@ function DashboardDelDia({
           <button
             onClick={confirmarCerrarSesion}
             style={{
-              background: 'rgba(244, 67, 54, 0.1)',
-              border: '0.5px solid rgba(244, 67, 54, 0.3)',
+              background: tema === 'tropical' ? '#FCEBEB' : 'rgba(244, 67, 54, 0.1)',
+              border: tema === 'tropical' ? '1px solid #E24B4A' : '1px solid rgba(244, 67, 54, 0.3)',
               borderRadius: '20px', padding: '7px 14px',
-              color: '#F4C0D1',
+              color: tema === 'tropical' ? '#A32D2D' : '#F4C0D1',
               fontSize: '11px', cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: '6px',
-              fontFamily: 'inherit',
+              fontFamily: 'inherit', fontWeight: 500,
             }}
           >
             🚪 Cerrar sesión
@@ -1073,83 +1064,171 @@ function DashboardDelDia({
   )
 }
 
-// ═══════════════════════════════════════════════════════════════
-// COMPONENTE: Banda de Categoría
-// ═══════════════════════════════════════════════════════════════
-function CategoriaBanner({ cat, icon, count, children }) {
+function KpiCard({ label, valor, children, colorBorde, colorTexto }) {
   return (
     <div style={{
-      background: `linear-gradient(135deg, ${cat.glow} 0%, ${cat.glow.replace('0.15', '0.05').replace('0.18', '0.05')} 100%)`,
-      border: `0.5px solid ${cat.color}40`,
-      borderRadius: '14px', padding: '16px 18px', marginBottom: '14px',
+      background: 'var(--color-modulo-bg)',
+      border: '1px solid var(--color-modulo-border)',
+      borderLeft: `4px solid ${colorBorde}`,
+      borderRadius: '12px', padding: '14px',
+      boxShadow: 'var(--modulo-sombra)',
+    }}>
+      <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginBottom: '8px' }}>{label}</div>
+      <div style={{ fontSize: '22px', fontWeight: 500, color: colorTexto || 'var(--color-text-primary)' }}>
+        {valor || children}
+      </div>
+    </div>
+  )
+}
+
+function CategoriaBanner({ cat, icon, count, children, tema }) {
+  const esTropical = tema === 'tropical'
+
+  return (
+    <div style={{
+      background: esTropical
+        ? `linear-gradient(135deg, ${cat.bgClaro} 0%, #ffffff 100%)`
+        : `linear-gradient(135deg, ${cat.color}25 0%, ${cat.color}10 100%)`,
+      border: esTropical ? `1.5px solid ${cat.colorBg}` : `1px solid ${cat.color}55`,
+      borderRadius: '18px',
+      padding: '26px 28px',
+      marginBottom: '16px',
+      boxShadow: esTropical ? `0 2px 12px ${cat.color}15` : 'none',
     }}>
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        marginBottom: '14px',
+        marginBottom: '22px', gap: '12px', flexWrap: 'wrap',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '20px' }}>{icon}</span>
-          <span style={{ fontSize: '15px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
-            {cat.label}
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{
+            width: '52px',
+            height: '52px',
+            borderRadius: '14px',
+            background: esTropical ? cat.color : `${cat.color}30`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '26px',
+            boxShadow: esTropical ? `0 4px 12px ${cat.color}40` : 'none',
+          }}>
+            {icon}
+          </div>
+          <div>
+            <div style={{
+              fontSize: '22px',
+              fontWeight: 500,
+              color: esTropical ? cat.colorDarker : 'var(--color-text-primary)',
+              lineHeight: 1.2,
+            }}>
+              {cat.label}
+            </div>
+            {cat.sublabel && (
+              <div style={{
+                fontSize: '12px',
+                color: esTropical ? cat.colorDark : cat.color,
+                opacity: esTropical ? 1 : 0.85,
+                marginTop: '4px',
+                fontWeight: esTropical ? 500 : 400,
+              }}>
+                {cat.sublabel}
+              </div>
+            )}
+          </div>
         </div>
         <span style={{
-          fontSize: '10px', color: cat.color,
-          background: `${cat.color}15`, padding: '3px 8px', borderRadius: '8px',
+          fontSize: '12px',
+          color: esTropical ? '#ffffff' : cat.color,
+          background: esTropical ? cat.colorDark : `${cat.color}25`,
+          padding: '6px 14px',
+          borderRadius: '12px',
+          fontWeight: 500,
+          whiteSpace: 'nowrap',
         }}>
           {count} módulos
         </span>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' }}>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+        gap: '12px',
+      }}>
         {children}
       </div>
     </div>
   )
 }
 
-// ═══════════════════════════════════════════════════════════════
-// COMPONENTE: Tarjeta de Módulo
-// ═══════════════════════════════════════════════════════════════
-function Modulo({ emoji, label, sublabel, color, onClick, proximamente }) {
+function Modulo({ emoji, label, sublabel, cat, tema, onClick, proximamente }) {
+  const esTropical = tema === 'tropical'
+
   return (
     <button
       onClick={onClick}
       style={{
-        background: 'var(--color-bg-card)',
-        border: '0.5px solid var(--color-border-subtle)',
-        borderRadius: '10px', padding: '10px 12px',
+        background: proximamente
+          ? (esTropical ? '#F1EFE8' : 'var(--color-bg-card)')
+          : 'var(--color-modulo-bg)',
+        border: proximamente
+          ? (esTropical ? '1px solid rgba(186, 117, 23, 0.3)' : '0.5px solid var(--color-border-subtle)')
+          : (esTropical ? `1px solid ${cat.color}30` : '0.5px solid var(--color-border-subtle)'),
+        borderLeft: proximamente
+          ? (esTropical ? '4px solid #BA7517' : '0.5px solid var(--color-border-subtle)')
+          : (esTropical ? `4px solid ${cat.color}` : '0.5px solid var(--color-border-subtle)'),
+        borderRadius: '12px',
+        padding: '16px 18px',
         cursor: 'pointer', textAlign: 'left',
         display: 'flex', flexDirection: 'column', gap: '4px',
         fontFamily: 'inherit', position: 'relative',
         transition: 'all 0.15s ease',
-        opacity: proximamente ? 0.7 : 1,
+        opacity: proximamente ? (esTropical ? 0.9 : 0.75) : 1,
+        boxShadow: esTropical && !proximamente ? `0 2px 8px ${cat.color}10` : 'none',
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.background = 'var(--color-bg-hover)'
-        e.currentTarget.style.borderColor = `${color}60`
+        if (esTropical && !proximamente) {
+          e.currentTarget.style.background = cat.bgClaro
+          e.currentTarget.style.transform = 'translateY(-1px)'
+        } else if (!esTropical) {
+          e.currentTarget.style.background = 'var(--color-bg-hover)'
+          e.currentTarget.style.borderColor = `${cat.color}60`
+        }
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.background = 'var(--color-bg-card)'
-        e.currentTarget.style.borderColor = 'var(--color-border-subtle)'
+        e.currentTarget.style.background = proximamente
+          ? (esTropical ? '#F1EFE8' : 'var(--color-bg-card)')
+          : 'var(--color-modulo-bg)'
+        e.currentTarget.style.transform = 'none'
       }}
     >
       {proximamente && (
         <span style={{
-          position: 'absolute', top: '6px', right: '6px',
-          fontSize: '8px', fontWeight: 600,
-          background: 'rgba(250, 199, 117, 0.2)',
-          color: '#FAC775',
-          padding: '2px 6px', borderRadius: '6px',
+          position: 'absolute', top: '8px', right: '8px',
+          fontSize: '9px', fontWeight: 600,
+          background: esTropical ? '#BA7517' : 'rgba(250, 199, 117, 0.2)',
+          color: esTropical ? '#ffffff' : '#FAC775',
+          padding: '3px 7px', borderRadius: '7px',
           letterSpacing: '0.3px',
         }}>
           PRÓXIMO
         </span>
       )}
-      <div style={{ fontSize: '16px', lineHeight: 1 }}>{emoji}</div>
-      <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
+      <div style={{ fontSize: '22px', lineHeight: 1, marginBottom: '6px' }}>{emoji}</div>
+      <div style={{
+        fontSize: '14px',
+        fontWeight: 500,
+        color: proximamente
+          ? (esTropical ? '#633806' : 'var(--color-text-primary)')
+          : (esTropical ? cat.colorDarker : 'var(--color-text-primary)'),
+        lineHeight: 1.3,
+      }}>
         {label}
       </div>
-      <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
+      <div style={{
+        fontSize: '11px',
+        color: proximamente
+          ? (esTropical ? '#854F0B' : 'var(--color-text-muted)')
+          : (esTropical ? cat.colorDark : 'var(--color-text-muted)'),
+        fontWeight: esTropical ? 500 : 400,
+      }}>
         {sublabel}
       </div>
     </button>

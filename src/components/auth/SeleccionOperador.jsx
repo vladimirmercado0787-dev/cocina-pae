@@ -3,20 +3,19 @@ import { supabase } from '../../supabaseClient'
 
 // ─── Información visual por rol ───
 const ROL_INFO = {
-  propietario:   { emoji: '👑', label: 'Propietario',     color: '#FAC775', bgGlow: 'rgba(250, 199, 117, 0.15)' },
-  administrador: { emoji: '💼', label: 'Administrador',   color: '#185FA5', bgGlow: 'rgba(24, 95, 165, 0.15)' },
-  secretaria:    { emoji: '📋', label: 'Secretaria',      color: '#D4537E', bgGlow: 'rgba(212, 83, 126, 0.15)' },
-  jefa_cocina:   { emoji: '👩‍🍳', label: 'Jefa de cocina',  color: '#ED93B1', bgGlow: 'rgba(237, 147, 177, 0.15)' },
-  despachador:   { emoji: '🚚', label: 'Despachador',     color: '#E89042', bgGlow: 'rgba(232, 144, 66, 0.15)' },
-  ayudante:      { emoji: '👨‍🍳', label: 'Ayudante',        color: '#0F6E56', bgGlow: 'rgba(15, 110, 86, 0.15)' },
-  contador:      { emoji: '🧮', label: 'Contador',        color: '#534AB7', bgGlow: 'rgba(83, 74, 183, 0.15)' },
+  propietario:   { emoji: '👑', label: 'Propietario',     color: '#BA7517', colorBg: '#FAC775', colorDarker: '#633806', bgClaro: 'rgba(250, 199, 117, 0.15)' },
+  administrador: { emoji: '💼', label: 'Administrador',   color: '#185FA5', colorBg: '#85B7EB', colorDarker: '#0C447C', bgClaro: 'rgba(24, 95, 165, 0.10)' },
+  secretaria:    { emoji: '📋', label: 'Secretaria',      color: '#D4537E', colorBg: '#ED93B1', colorDarker: '#72243E', bgClaro: 'rgba(212, 83, 126, 0.10)' },
+  jefa_cocina:   { emoji: '👩‍🍳', label: 'Jefa de cocina',  color: '#D4537E', colorBg: '#ED93B1', colorDarker: '#72243E', bgClaro: 'rgba(237, 147, 177, 0.10)' },
+  despachador:   { emoji: '🚚', label: 'Despachador',     color: '#D85A30', colorBg: '#E89042', colorDarker: '#7A2F12', bgClaro: 'rgba(232, 144, 66, 0.10)' },
+  ayudante:      { emoji: '👨‍🍳', label: 'Ayudante',        color: '#0F6E56', colorBg: '#1D9E75', colorDarker: '#04342C', bgClaro: 'rgba(29, 158, 117, 0.10)' },
+  contador:      { emoji: '🧮', label: 'Contador',        color: '#534AB7', colorBg: '#7F77DD', colorDarker: '#3C3489', bgClaro: 'rgba(83, 74, 183, 0.10)' },
 }
 
 function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
   const [usuarios, setUsuarios] = useState([])
   const [cargando, setCargando] = useState(true)
 
-  // ─── Tema (persiste de LoginEmpresa via localStorage) ───
   const [tema, setTema] = useState(() => {
     return localStorage.getItem('cocina_pae_tema') || 'oscuro'
   })
@@ -25,6 +24,8 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
     document.documentElement.setAttribute('data-tema', tema)
     localStorage.setItem('cocina_pae_tema', tema)
   }, [tema])
+
+  const esTropical = tema === 'tropical'
 
   useEffect(() => {
     if (empresaId) cargarUsuarios()
@@ -40,7 +41,6 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
       .order('rol', { ascending: true })
 
     if (!error) {
-      // Ordenar: propietario primero, luego el resto
       const ordenados = (data || []).sort((a, b) => {
         if (a.rol === 'propietario') return -1
         if (b.rol === 'propietario') return 1
@@ -56,7 +56,6 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
   }
 
   function manejarAgregarEmpleado() {
-    // Por ahora muestra un alert. En FASE 10 conectamos el Modal de Autorización
     alert('🚧 Próximamente: Modal de autorización (PIN propietario/admin)')
   }
 
@@ -94,19 +93,20 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
         }}
       >
         {/* Logo Andamio izquierda */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div
             style={{
-              width: '26px',
-              height: '26px',
-              borderRadius: '6px',
+              width: '32px',
+              height: '32px',
+              borderRadius: '8px',
               background: 'var(--gradient-logo)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '13px',
+              fontSize: '15px',
               fontWeight: 500,
               color: '#FAC775',
+              boxShadow: esTropical ? '0 4px 12px rgba(15, 110, 86, 0.25)' : 'none',
             }}
           >
             A
@@ -114,9 +114,10 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
           <span
             style={{
               color: 'var(--color-text-accent)',
-              fontSize: '11px',
-              fontWeight: 500,
+              fontSize: '12px',
+              fontWeight: 600,
               letterSpacing: '1.5px',
+              opacity: 0.85,
             }}
           >
             ANDAMIO
@@ -125,16 +126,16 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
 
         {/* Toggle de tema + botón Cambiar empresa */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {/* Toggle tema */}
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
               background: 'var(--color-bg-elevated)',
-              border: '0.5px solid var(--color-border-subtle)',
+              border: '1px solid var(--color-border-subtle)',
               borderRadius: '20px',
               padding: '3px',
               gap: '2px',
+              boxShadow: esTropical ? '0 1px 3px rgba(15, 110, 86, 0.05)' : 'none',
             }}
           >
             <button
@@ -144,7 +145,7 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
                 background: tema === 'oscuro' ? 'var(--gradient-toggle-active)' : 'transparent',
                 border: 'none',
                 borderRadius: '16px',
-                padding: '6px 10px',
+                padding: '7px 12px',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '5px',
@@ -155,7 +156,7 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
               <span style={{ fontSize: '11px' }}>🌙</span>
               <span
                 style={{
-                  fontSize: '10px',
+                  fontSize: '11px',
                   fontWeight: 500,
                   color: tema === 'oscuro' ? 'white' : 'var(--color-text-muted)',
                 }}
@@ -170,7 +171,7 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
                 background: tema === 'tropical' ? 'var(--gradient-toggle-active)' : 'transparent',
                 border: 'none',
                 borderRadius: '16px',
-                padding: '6px 10px',
+                padding: '7px 12px',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '5px',
@@ -181,7 +182,7 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
               <span style={{ fontSize: '11px' }}>☀️</span>
               <span
                 style={{
-                  fontSize: '10px',
+                  fontSize: '11px',
                   fontWeight: 500,
                   color: tema === 'tropical' ? 'white' : 'var(--color-text-muted)',
                 }}
@@ -191,24 +192,24 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
             </button>
           </div>
 
-          {/* Botón Cambiar empresa */}
           {onCerrarSesion && (
             <button
               type="button"
               onClick={onCerrarSesion}
               style={{
                 background: 'var(--color-bg-elevated)',
-                border: '0.5px solid var(--color-border-subtle)',
+                border: '1px solid var(--color-border-subtle)',
                 borderRadius: '20px',
-                padding: '8px 14px',
+                padding: '8px 16px',
                 color: 'var(--color-text-secondary)',
-                fontSize: '11px',
+                fontSize: '12px',
                 fontWeight: 500,
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
                 transition: 'all 0.3s ease',
+                boxShadow: esTropical ? '0 1px 3px rgba(15, 110, 86, 0.05)' : 'none',
               }}
             >
               <span>🚪</span>
@@ -245,9 +246,10 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
           </h1>
           <p
             style={{
-              color: 'var(--color-text-muted)',
+              color: 'var(--color-text-secondary)',
               fontSize: '14px',
               margin: 0,
+              fontWeight: 500,
             }}
           >
             Selecciona tu nombre y luego ingresa tu PIN
@@ -267,8 +269,9 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
         {!cargando && usuarios.length === 0 && (
           <div
             style={{
-              background: 'rgba(250, 199, 117, 0.08)',
-              border: '0.5px solid var(--color-border-accent)',
+              background: esTropical ? '#FAF3E5' : 'rgba(250, 199, 117, 0.08)',
+              border: esTropical ? '1px solid rgba(186, 117, 23, 0.3)' : '1px solid var(--color-border-accent)',
+              borderLeft: esTropical ? '4px solid #BA7517' : '1px solid var(--color-border-accent)',
               borderRadius: '16px',
               padding: '32px',
               maxWidth: '500px',
@@ -277,9 +280,10 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
           >
             <p
               style={{
-                color: 'var(--color-text-accent)',
+                color: esTropical ? '#633806' : 'var(--color-text-accent)',
                 fontSize: '14px',
                 margin: 0,
+                fontWeight: 500,
               }}
             >
               ⚠️ No hay personas registradas. Completa el Paso 5 del Wizard primero.
@@ -292,10 +296,10 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
           <div
             style={{
               width: '100%',
-              maxWidth: '900px',
+              maxWidth: '1000px',
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
-              gap: '14px',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+              gap: '16px',
               padding: '0 12px',
             }}
           >
@@ -308,31 +312,47 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
                   onClick={() => onSeleccionar(usuario)}
                   style={{
                     position: 'relative',
-                    background: esPropietario
-                      ? `linear-gradient(135deg, ${info.bgGlow} 0%, rgba(250, 199, 117, 0.05) 100%)`
-                      : 'var(--color-bg-card)',
-                    border: esPropietario
-                      ? `1px solid ${info.color}80`
-                      : `0.5px solid ${info.color}40`,
+                    background: esTropical
+                      ? (esPropietario 
+                          ? `linear-gradient(135deg, ${info.bgClaro} 0%, var(--color-bg-elevated) 100%)`
+                          : 'var(--color-bg-elevated)')
+                      : (esPropietario
+                          ? `linear-gradient(135deg, ${info.bgClaro} 0%, rgba(250, 199, 117, 0.05) 100%)`
+                          : 'var(--color-bg-card)'),
+                    border: esTropical 
+                      ? `1px solid ${info.color}25`
+                      : (esPropietario 
+                          ? `1px solid ${info.color}80`
+                          : `1px solid ${info.color}40`),
+                    borderLeft: `4px solid ${info.color}`,
                     borderRadius: '14px',
-                    padding: '20px 14px',
+                    padding: '22px 16px',
                     cursor: 'pointer',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
-                    gap: '8px',
+                    gap: '10px',
                     transition: 'all 0.25s ease',
                     fontFamily: 'inherit',
+                    boxShadow: esTropical 
+                      ? `0 2px 8px ${info.color}10` 
+                      : 'none',
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.transform = 'translateY(-3px)'
                     e.currentTarget.style.borderColor = info.color
+                    e.currentTarget.style.boxShadow = esTropical
+                      ? `0 8px 20px ${info.color}25, 0 4px 8px ${info.color}15`
+                      : `0 8px 20px ${info.color}30`
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.transform = 'translateY(0)'
-                    e.currentTarget.style.borderColor = esPropietario
-                      ? `${info.color}80`
-                      : `${info.color}40`
+                    e.currentTarget.style.borderColor = esTropical 
+                      ? `${info.color}25`
+                      : (esPropietario ? `${info.color}80` : `${info.color}40`)
+                    e.currentTarget.style.boxShadow = esTropical 
+                      ? `0 2px 8px ${info.color}10` 
+                      : 'none'
                   }}
                 >
                   {/* Badge DUEÑA si es propietario */}
@@ -340,51 +360,72 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
                     <div
                       style={{
                         position: 'absolute',
-                        top: '-7px',
-                        right: '10px',
+                        top: '-8px',
+                        right: '12px',
                         background: 'var(--gradient-button)',
                         color: 'white',
-                        fontSize: '8px',
-                        fontWeight: 600,
-                        padding: '3px 8px',
+                        fontSize: '9px',
+                        fontWeight: 700,
+                        padding: '4px 10px',
                         borderRadius: '8px',
-                        letterSpacing: '0.5px',
+                        letterSpacing: '0.8px',
+                        boxShadow: esTropical ? '0 2px 6px rgba(186, 117, 23, 0.3)' : 'none',
                       }}
                     >
                       DUEÑA
                     </div>
                   )}
 
-                  {/* Emoji grande */}
-                  <div style={{ fontSize: '38px', lineHeight: 1 }}>{info.emoji}</div>
+                  {/* Avatar circular con color del rol */}
+                  <div
+                    style={{
+                      width: '64px',
+                      height: '64px',
+                      borderRadius: '50%',
+                      background: esTropical 
+                        ? `${info.color}15`
+                        : `${info.color}25`,
+                      border: `2px solid ${info.color}40`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '32px',
+                      lineHeight: 1,
+                    }}
+                  >
+                    {info.emoji}
+                  </div>
 
                   {/* Nombre */}
                   <p
                     style={{
-                      color: 'var(--color-text-primary)',
-                      fontSize: '14px',
+                      color: esTropical ? info.colorDarker : 'var(--color-text-primary)',
+                      fontSize: '15px',
                       fontWeight: 600,
                       margin: 0,
                       textAlign: 'center',
                       lineHeight: 1.2,
+                      letterSpacing: '-0.2px',
                     }}
                   >
                     {usuario.nombre}
                   </p>
 
-                  {/* Rol */}
-                  <p
+                  {/* Rol como badge */}
+                  <span
                     style={{
-                      color: info.color,
-                      fontSize: '9px',
-                      fontWeight: 600,
-                      margin: 0,
+                      color: esTropical ? '#ffffff' : info.color,
+                      background: esTropical ? info.color : `${info.color}20`,
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      padding: '4px 10px',
+                      borderRadius: '8px',
                       letterSpacing: '0.8px',
                       textTransform: 'uppercase',
                     }}
                   >
                     {info.label}
-                  </p>
+                  </span>
                 </button>
               )
             })}
@@ -394,22 +435,24 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
               onClick={manejarAgregarEmpleado}
               style={{
                 background: 'transparent',
-                border: '1.5px dashed var(--color-border-strong)',
+                border: '2px dashed var(--color-border-strong)',
                 borderRadius: '14px',
-                padding: '20px 14px',
+                padding: '22px 16px',
                 cursor: 'pointer',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '8px',
-                minHeight: '120px',
+                minHeight: '160px',
                 transition: 'all 0.25s ease',
                 fontFamily: 'inherit',
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.borderColor = 'var(--color-text-accent)'
-                e.currentTarget.style.background = 'rgba(250, 199, 117, 0.05)'
+                e.currentTarget.style.background = esTropical 
+                  ? 'rgba(15, 110, 86, 0.04)' 
+                  : 'rgba(250, 199, 117, 0.05)'
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.borderColor = 'var(--color-border-strong)'
@@ -418,18 +461,27 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
             >
               <div
                 style={{
-                  fontSize: '32px',
+                  width: '52px',
+                  height: '52px',
+                  borderRadius: '50%',
+                  background: 'var(--color-bg-elevated)',
+                  border: '1px dashed var(--color-border-strong)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '28px',
                   lineHeight: 1,
                   color: 'var(--color-text-muted)',
+                  fontWeight: 300,
                 }}
               >
                 +
               </div>
               <p
                 style={{
-                  color: 'var(--color-text-muted)',
-                  fontSize: '12px',
-                  fontWeight: 500,
+                  color: 'var(--color-text-secondary)',
+                  fontSize: '13px',
+                  fontWeight: 600,
                   margin: 0,
                   textAlign: 'center',
                 }}
@@ -438,11 +490,12 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
               </p>
               <p
                 style={{
-                  color: 'var(--color-text-disabled)',
-                  fontSize: '9px',
+                  color: 'var(--color-text-muted)',
+                  fontSize: '10px',
                   margin: 0,
                   textAlign: 'center',
                   letterSpacing: '0.3px',
+                  fontWeight: 500,
                 }}
               >
                 🔒 Requiere autorización
@@ -466,9 +519,10 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
         {!cargando && usuarios.length > 0 && (
           <p
             style={{
-              color: 'var(--color-text-disabled)',
-              fontSize: '10px',
+              color: 'var(--color-text-muted)',
+              fontSize: '11px',
               marginBottom: '8px',
+              fontWeight: 500,
             }}
           >
             {usuarios.length} {usuarios.length === 1 ? 'persona activa' : 'personas activas'}
@@ -479,9 +533,9 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
           <span
             style={{
               color: 'var(--color-text-accent)',
-              opacity: 0.6,
+              opacity: 0.85,
               fontSize: '11px',
-              fontWeight: 500,
+              fontWeight: 600,
               letterSpacing: '0.5px',
             }}
           >
