@@ -38,6 +38,7 @@ function App() {
   const [usuarioLogueado, setUsuarioLogueado] = useState(null)
   const [usuarioSeleccionado, setUsuarioSeleccionado] = useState(null)
   const [vistaActual, setVistaActual] = useState('login_empresa')
+  const [tabFacturaInicial, setTabFacturaInicial] = useState('factura')
   const [cargando, setCargando] = useState(true)
 
   useEffect(() => {
@@ -116,6 +117,16 @@ function App() {
     setVistaActual('seleccion_operador')
   }
 
+  function irAFactura() {
+    setTabFacturaInicial('factura')
+    setVistaActual('factura')
+  }
+
+  function irAConduces() {
+    setTabFacturaInicial('conduces')
+    setVistaActual('factura')
+  }
+
   // === PERMISOS ===
   const puedeVerInteligencia = usuarioLogueado && 
     (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'secretaria')
@@ -184,7 +195,8 @@ function App() {
           empresaId={empresaActual?.id}
           onCerrarSesion={cerrarSesionTotal}
           onCambiarUsuario={cambiarDeUsuario}
-          onIrFactura={() => setVistaActual('factura')}
+          onIrFactura={irAFactura}
+          onIrConduces={irAConduces}
           onIrCalculadora={() => setVistaActual('calculadora')}
           onIrInteligencia={() => setVistaActual('inteligencia')}
           onIrDespacho={() => setVistaActual('despacho')}
@@ -217,7 +229,8 @@ function App() {
               ? () => setVistaActual('configuracion')
               : null
           }
-          onIrFactura={() => setVistaActual('factura')}
+          onIrFactura={irAFactura}
+          onIrConduces={irAConduces}
           onIrCalculadora={() => setVistaActual('calculadora')}
           onIrInteligencia={
             usuarioLogueado.rol === 'administrador' 
@@ -305,6 +318,8 @@ function App() {
             : null
         }
         onIrCierre={() => setVistaActual('cierre')}
+        onIrFactura={irAFactura}
+        onIrConduces={irAConduces}
         onIrCalculadora={() => setVistaActual('calculadora')}
         onIrInteligencia={
           puedeVerInteligencia 
@@ -418,9 +433,7 @@ function App() {
       )}
       
       {pasoActual === 7 && vistaActual === 'dashboard' && usuarioLogueado && (
-        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
-          {renderVistaSegunRol()}
-        </div>
+        renderVistaSegunRol()
       )}
       
       {pasoActual === 7 && vistaActual === 'vista_secretaria_admin' && usuarioLogueado && (
@@ -430,7 +443,8 @@ function App() {
             empresaId={empresaActual?.id}
             onCerrarSesion={cerrarSesionTotal}
             onCambiarUsuario={cambiarDeUsuario}
-            onIrFactura={() => setVistaActual('factura')}
+            onIrFactura={irAFactura}
+            onIrConduces={irAConduces}
             onIrCalculadora={() => setVistaActual('calculadora')}
             onIrInteligencia={() => setVistaActual('inteligencia')}
             onIrDespacho={() => setVistaActual('despacho')}
@@ -481,6 +495,7 @@ function App() {
           <FacturaInabie 
             usuario={usuarioLogueado}
             empresaId={empresaActual?.id}
+            tabInicial={tabFacturaInicial}
             onVolver={() => setVistaActual('dashboard')}
           />
         </div>

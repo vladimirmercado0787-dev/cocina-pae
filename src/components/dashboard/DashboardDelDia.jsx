@@ -3,6 +3,14 @@ import { supabase } from '../../supabaseClient'
 import { registrar, TIPOS_ACCION } from '../../utils/historial'
 import ModalPesajeCrudo from '../pesaje/ModalPesajeCrudo'
 
+// ─── Colores por categoría de módulos ───
+const CATEGORIAS = {
+  finanzas:    { color: '#85B7EB', colorOscuro: '#185FA5', glow: 'rgba(55, 138, 221, 0.15)', icon: 'cash', label: 'Finanzas' },
+  inventario:  { color: '#FAC775', colorOscuro: '#BA7517', glow: 'rgba(239, 159, 39, 0.15)', icon: 'package', label: 'Inventario & Compras' },
+  personal:    { color: '#ED93B1', colorOscuro: '#D4537E', glow: 'rgba(212, 83, 126, 0.15)', icon: 'users', label: 'Personal' },
+  operacion:   { color: '#AFA9EC', colorOscuro: '#534AB7', glow: 'rgba(127, 119, 221, 0.15)', icon: 'brain', label: 'Operación & Configuración' },
+}
+
 function DashboardDelDia({ 
   usuario, 
   empresaId, 
@@ -23,6 +31,8 @@ function DashboardDelDia({
   onIrNomina,
   onIrCatalogo,
   onIrHistorial,
+  onIrFactura,
+  onIrConduces,
   onVerComoSecretaria 
 }) {
   const [empresa, setEmpresa] = useState(null)
@@ -35,6 +45,17 @@ function DashboardDelDia({
   const [yaSePesoHoy, setYaSePesoHoy] = useState(false)
   const [modalPesajeAbierto, setModalPesajeAbierto] = useState(false)
   const [modoEdicionCrudo, setModoEdicionCrudo] = useState(false)
+  const [modalProximamente, setModalProximamente] = useState(null)
+
+  // ─── Tema (persiste de pantallas anteriores) ───
+  const [tema, setTema] = useState(() => {
+    return localStorage.getItem('cocina_pae_tema') || 'oscuro'
+  })
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-tema', tema)
+    localStorage.setItem('cocina_pae_tema', tema)
+  }, [tema])
 
   useEffect(() => {
     if (empresaId) cargarDatos()
@@ -75,6 +96,10 @@ function DashboardDelDia({
     if (confirmar && onCerrarSesion) {
       onCerrarSesion()
     }
+  }
+
+  function mostrarProximamente(nombreModulo) {
+    setModalProximamente(nombreModulo)
   }
 
   async function iniciarEscuela(escuela) {
@@ -289,6 +314,7 @@ function DashboardDelDia({
     await cargarDatos()
   }
 
+  // ─── KPIs calculados ───
   const totalRacionesHoy = operacionesHoy
     .filter(op => op.estado !== 'sin_clase')
     .reduce((sum, op) => sum + (op.raciones_planificadas || 0), 0)
@@ -323,52 +349,178 @@ function DashboardDelDia({
   const todasEntregadas = escuelasOperativas > 0 && escuelasEntregadas >= escuelasOperativas
   const mostrarBotonDespacho = yaSePesoHoy && hayEscuelasIniciadas && !todasEntregadas
 
+  // ─── Próximo evento ───
+  const proximoEvento = mostrarBotonDespacho 
+    ? '🚚 Despachar' 
+    : mostrarBotonPesaje 
+      ? '🥘 Pesar ingredientes'
+      : escuelasPendientesCount > 0
+        ? '🚀 Iniciar día'
+        : todasEntregadas
+          ? '🏆 Día completado'
+          : '⏰ Esperando'
+
   if (cargando) {
-    return <div className="text-center py-12 text-gray-500">Cargando dashboard...</div>
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: 'var(--color-bg-primary)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
+        <p style={{ color: 'var(--color-text-muted)' }}>⏳ Cargando dashboard...</p>
+      </div>
+    )
   }
 
   const fechaHoyTexto = new Date().toLocaleDateString('es-DO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const fechaCorta = new Date().toLocaleDateString('es-DO', { weekday: 'short', day: 'numeric', month: 'short' })
 
   return (
-    <div className="w-full max-w-5xl">
-      
+    <div
+      style={{
+        minHeight: '100vh',
+        background: 'var(--color-bg-primary)',
+        position: 'relative',
+        padding: '20px',
+        color: 'var(--color-text-primary)',
+      }}
+    >
+      {/* Resplandores radiales del fondo */}
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundImage: 'var(--glow-verde), var(--glow-ambar)',
+          pointerEvents: 'none',
+          zIndex: 0,
+        }}
+      />
+
+      {/* ═══════════════════════════════════════════════════════════════
+          MODAL: Sin clase
+          ═══════════════════════════════════════════════════════════════ */}
       {modalSinClase && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
-            <h3 className="text-xl font-bold text-gray-900 mb-2">
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 100,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px',
+          backdropFilter: 'blur(8px)',
+        }}>
+          <div style={{
+            background: 'var(--color-bg-elevated)',
+            backdropFilter: 'blur(20px)',
+            border: '0.5px solid var(--color-border-accent)',
+            borderRadius: '16px',
+            padding: '24px',
+            maxWidth: '440px',
+            width: '100%',
+          }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--color-text-primary)', margin: '0 0 8px' }}>
               🚫 Sin clase hoy
             </h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Marcar <strong>{modalSinClase.nombre}</strong> como sin clase hoy.
-              No se facturará a INABIE.
+            <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', margin: '0 0 16px' }}>
+              Marcar <strong style={{ color: 'var(--color-text-accent)' }}>{modalSinClase.nombre}</strong> como sin clase hoy. No se facturará a INABIE.
             </p>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">
-              Razón (obligatoria)
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: 500, color: 'var(--color-text-muted)', marginBottom: '6px', letterSpacing: '0.5px' }}>
+              RAZÓN (obligatoria)
             </label>
             <textarea
               value={razonSinClase}
               onChange={(e) => setRazonSinClase(e.target.value)}
               placeholder="Ej: Día feriado, suspensión por lluvia, evento escolar, etc."
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none mb-4"
               autoFocus
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                background: 'var(--color-bg-input)',
+                border: '0.5px solid var(--color-border-subtle)',
+                borderRadius: '10px',
+                padding: '10px 12px',
+                color: 'var(--color-text-primary)',
+                fontSize: '13px',
+                fontFamily: 'inherit',
+                resize: 'none',
+                marginBottom: '16px',
+                outline: 'none',
+              }}
             />
-            <div className="flex gap-2">
+            <div style={{ display: 'flex', gap: '8px' }}>
               <button
                 onClick={confirmarSinClase}
                 disabled={procesando}
-                className="flex-1 bg-gray-700 hover:bg-gray-800 text-white font-bold px-4 py-2 rounded-lg disabled:opacity-50"
+                style={{
+                  flex: 1, padding: '12px',
+                  background: 'var(--gradient-button)',
+                  border: 'none', borderRadius: '10px',
+                  color: 'white', fontSize: '13px', fontWeight: 500,
+                  cursor: procesando ? 'not-allowed' : 'pointer',
+                  opacity: procesando ? 0.6 : 1,
+                  fontFamily: 'inherit',
+                }}
               >
-                {procesando ? 'Guardando...' : '🚫 Confirmar sin clase'}
+                {procesando ? '⏳ Guardando...' : '🚫 Confirmar sin clase'}
               </button>
               <button
                 onClick={() => { setModalSinClase(null); setRazonSinClase('') }}
                 disabled={procesando}
-                className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg disabled:opacity-50"
+                style={{
+                  padding: '12px 16px',
+                  background: 'var(--color-bg-elevated)',
+                  border: '0.5px solid var(--color-border-subtle)',
+                  borderRadius: '10px',
+                  color: 'var(--color-text-secondary)',
+                  fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit',
+                }}
               >
                 Cancelar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════
+          MODAL: Próximamente
+          ═══════════════════════════════════════════════════════════════ */}
+      {modalProximamente && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 100,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px',
+          backdropFilter: 'blur(8px)',
+        }}>
+          <div style={{
+            background: 'var(--color-bg-elevated)',
+            backdropFilter: 'blur(20px)',
+            border: '0.5px solid var(--color-border-accent)',
+            borderRadius: '16px',
+            padding: '32px',
+            maxWidth: '420px',
+            width: '100%',
+            textAlign: 'center',
+          }}>
+            <div style={{ fontSize: '52px', marginBottom: '12px' }}>🚧</div>
+            <h3 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--color-text-primary)', margin: '0 0 8px' }}>
+              Próximamente
+            </h3>
+            <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', margin: '0 0 8px', lineHeight: 1.5 }}>
+              <strong style={{ color: 'var(--color-text-accent)' }}>{modalProximamente}</strong>
+            </p>
+            <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', margin: '0 0 24px', lineHeight: 1.5 }}>
+              Esta función estará disponible en una próxima actualización. Estamos trabajando en ella.
+            </p>
+            <button
+              onClick={() => setModalProximamente(null)}
+              style={{
+                width: '100%', padding: '12px',
+                background: 'var(--gradient-button)',
+                border: 'none', borderRadius: '10px',
+                color: 'white', fontSize: '13px', fontWeight: 500,
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              Entendido
+            </button>
           </div>
         </div>
       )}
@@ -388,325 +540,431 @@ function DashboardDelDia({
         />
       )}
 
-      <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl p-6 mb-6 text-white">
-        <div className="flex justify-between items-start mb-4">
+      {/* ═══════════════════════════════════════════════════════════════
+          HEADER: Logo + saludo + fecha + toggle tema
+          ═══════════════════════════════════════════════════════════════ */}
+      <div style={{
+        position: 'relative', zIndex: 1,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        marginBottom: '24px', flexWrap: 'wrap', gap: '12px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <div style={{
+            width: '38px', height: '38px', borderRadius: '10px',
+            background: 'var(--gradient-logo)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '18px', fontWeight: 500, color: '#FAC775',
+            position: 'relative',
+          }}>
+            A
+            <div style={{ position: 'absolute', top: '5px', right: '7px', width: '3px', height: '3px', borderRadius: '50%', background: '#FAC775' }} />
+          </div>
           <div>
-            <p className="text-blue-100 text-xs font-semibold tracking-wider">
-              PANEL DEL DÍA
-            </p>
-            <h2 className="text-3xl font-bold mt-1">
-              👋 Hola, {usuario.nombre.split(' ')[0]}
-            </h2>
-            <p className="text-blue-200 mt-1 capitalize">
-              {empresa?.nombre} · {fechaHoyTexto}
-            </p>
-          </div>
-          <div className="flex gap-2 flex-wrap justify-end">
-            {onVerComoSecretaria && (
-              <button onClick={onVerComoSecretaria} className="bg-pink-500 hover:bg-pink-600 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md">
-                📋 Ver como Secretaria
-              </button>
-            )}
-            {onIrDespacho && (
-              <button onClick={onIrDespacho} className="bg-orange-500 hover:bg-orange-600 text-white text-sm px-4 py-2 rounded-lg font-bold">
-                🚚 Modo Despacho
-              </button>
-            )}
-            {onIrInteligencia && (
-              <button onClick={onIrInteligencia} className="bg-purple-600 hover:bg-purple-700 text-white text-sm px-4 py-2 rounded-lg">
-                🧠 Inteligencia
-              </button>
-            )}
-            {onIrEmpleados && (
-              <button onClick={onIrEmpleados} className="bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-sm px-4 py-2 rounded-lg">
-                👥 Empleados
-              </button>
-            )}
-            {onIrContratos && (
-              <button onClick={onIrContratos} className="bg-cyan-600 hover:bg-cyan-700 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md">
-                📄 Contratos
-              </button>
-            )}
-            {onIrMiContrato && (
-              <button onClick={onIrMiContrato} className="bg-cyan-500 hover:bg-cyan-600 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md">
-                📋 Mi Contrato
-              </button>
-            )}
-            {onIrMisRecibos && (
-              <button onClick={onIrMisRecibos} className="bg-emerald-500 hover:bg-emerald-600 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md">
-                💰 Mis Recibos
-              </button>
-            )}
-            {onIrCatalogo && (
-              <button onClick={onIrCatalogo} className="bg-teal-600 hover:bg-teal-700 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md">
-                📋 Catálogo
-              </button>
-            )}
-            {onIrHistorial && (
-              <button onClick={onIrHistorial} className="bg-slate-700 hover:bg-slate-800 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md">
-                📜 Historial
-              </button>
-            )}
-            {onIrIngredientes && (
-              <button onClick={onIrIngredientes} className="bg-green-500 hover:bg-green-600 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md">
-                🥕 Ingredientes
-              </button>
-            )}
-            {onIrCompras && (
-              <button onClick={onIrCompras} className="bg-amber-500 hover:bg-amber-600 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md">
-                📦 Compras
-              </button>
-            )}
-            {onIrGastos && (
-              <button onClick={onIrGastos} className="bg-rose-600 hover:bg-rose-700 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md">
-                💸 Gastos
-              </button>
-            )}
-            {onIrNomina && (
-              <button onClick={onIrNomina} className="bg-pink-600 hover:bg-pink-700 text-white text-sm px-4 py-2 rounded-lg font-bold shadow-md">
-                💵 Nómina
-              </button>
-            )}
-            {onIrCalculadora && (
-              <button onClick={onIrCalculadora} className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-4 py-2 rounded-lg">
-                📐 Calculadora
-              </button>
-            )}
-            {onIrCierre && (
-              <button onClick={onIrCierre} className="bg-blue-700 hover:bg-blue-900 text-white text-sm px-4 py-2 rounded-lg">
-                📊 Cierre del día
-              </button>
-            )}
-            {onIrConfiguracion && (
-              <button onClick={onIrConfiguracion} className="bg-blue-700 hover:bg-blue-900 text-white text-sm px-4 py-2 rounded-lg">
-                ⚙️ Configuración
-              </button>
-            )}
+            <div style={{ fontSize: '10px', color: 'var(--color-text-accent)', opacity: 0.7, letterSpacing: '1.5px', fontWeight: 500 }}>
+              ANDAMIO · {empresa?.nombre?.toUpperCase()}
+            </div>
+            <div style={{ fontSize: '18px', fontWeight: 500, color: 'var(--color-text-primary)', marginTop: '2px' }}>
+              Hola, {usuario.nombre.split(' ')[0]}
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <button onClick={onCambiarUsuario} className="bg-blue-500 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg font-semibold transition flex items-center justify-center gap-2">
-            🔄 Cambiar usuario
-          </button>
-          <button onClick={confirmarCerrarSesion} className="bg-red-600 hover:bg-red-700 text-white text-sm px-4 py-2 rounded-lg font-semibold transition flex items-center justify-center gap-2">
-            🚪 Cerrar sesión
-          </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* Chip fecha */}
+          <div style={{
+            background: 'var(--color-bg-elevated)',
+            border: '0.5px solid var(--color-border-subtle)',
+            borderRadius: '20px', padding: '7px 14px',
+            fontSize: '11px', color: 'var(--color-text-secondary)',
+            display: 'flex', alignItems: 'center', gap: '6px',
+            textTransform: 'capitalize',
+          }}>
+            📅 {fechaCorta}
+          </div>
+
+          {/* Toggle tema */}
+          <div style={{
+            display: 'flex', alignItems: 'center',
+            background: 'var(--color-bg-elevated)',
+            border: '0.5px solid var(--color-border-subtle)',
+            borderRadius: '20px', padding: '3px', gap: '2px',
+          }}>
+            <button
+              type="button"
+              onClick={() => setTema('oscuro')}
+              style={{
+                background: tema === 'oscuro' ? 'var(--gradient-toggle-active)' : 'transparent',
+                border: 'none', borderRadius: '16px', padding: '6px 10px',
+                display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer',
+                transition: 'all 0.3s ease',
+              }}
+            >
+              <span style={{ fontSize: '11px' }}>🌙</span>
+              <span style={{ fontSize: '10px', fontWeight: 500, color: tema === 'oscuro' ? 'white' : 'var(--color-text-muted)' }}>
+                Oscuro
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTema('tropical')}
+              style={{
+                background: tema === 'tropical' ? 'var(--gradient-toggle-active)' : 'transparent',
+                border: 'none', borderRadius: '16px', padding: '6px 10px',
+                display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer',
+                transition: 'all 0.3s ease',
+              }}
+            >
+              <span style={{ fontSize: '11px' }}>☀️</span>
+              <span style={{ fontSize: '10px', fontWeight: 500, color: tema === 'tropical' ? 'white' : 'var(--color-text-muted)' }}>
+                Claro
+              </span>
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-        <p className="text-xs text-gray-500 font-semibold tracking-wider mb-4">
-          📅 OPERACIONES DE HOY
-        </p>
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center">
-            <p className="text-3xl font-bold text-blue-900">{totalRacionesHoy.toLocaleString()}</p>
-            <p className="text-xs text-blue-600 mt-1">Raciones planificadas</p>
+      {/* ═══════════════════════════════════════════════════════════════
+          OPERACIÓN DE HOY - KPIs + Próximo
+          ═══════════════════════════════════════════════════════════════ */}
+      <div style={{ position: 'relative', zIndex: 1, marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+          <span style={{ fontSize: '14px' }}>🔥</span>
+          <span style={{ fontSize: '11px', color: 'var(--color-text-accent)', opacity: 0.7, letterSpacing: '1.5px', fontWeight: 500 }}>
+            OPERACIÓN DE HOY
+          </span>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+          <div style={{
+            background: 'var(--color-bg-card)',
+            border: '0.5px solid var(--color-border-subtle)',
+            borderRadius: '12px', padding: '14px',
+          }}>
+            <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginBottom: '8px' }}>Raciones planificadas</div>
+            <div style={{ fontSize: '22px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
+              {totalRacionesHoy.toLocaleString()}
+            </div>
           </div>
-          <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
-            <p className="text-3xl font-bold text-green-900">{escuelasAtendidas}/{escuelas.length}</p>
-            <p className="text-xs text-green-600 mt-1">Escuelas atendidas</p>
+          <div style={{
+            background: 'var(--color-bg-card)',
+            border: '0.5px solid var(--color-border-subtle)',
+            borderRadius: '12px', padding: '14px',
+          }}>
+            <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginBottom: '8px' }}>Escuelas atendidas</div>
+            <div style={{ fontSize: '22px', fontWeight: 500 }}>
+              <span style={{ color: '#5DCAA5' }}>{escuelasAtendidas}</span>
+              <span style={{ color: 'var(--color-text-muted)', fontSize: '14px' }}>/{escuelas.length}</span>
+            </div>
           </div>
-          <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-center">
-            <p className="text-3xl font-bold text-orange-900">
+          <div style={{
+            background: 'var(--color-bg-card)',
+            border: '0.5px solid var(--color-border-subtle)',
+            borderRadius: '12px', padding: '14px',
+          }}>
+            <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginBottom: '8px' }}>Facturado hoy</div>
+            <div style={{ fontSize: '22px', fontWeight: 500, color: '#FAC775' }}>
               RD$ {(facturacionHoy / 1000).toFixed(1)}K
-            </p>
-            <p className="text-xs text-orange-600 mt-1">Facturación del día</p>
+            </div>
+          </div>
+          <div style={{
+            background: 'rgba(83, 74, 183, 0.12)',
+            border: '0.5px solid rgba(127, 119, 221, 0.3)',
+            borderRadius: '12px', padding: '14px',
+          }}>
+            <div style={{ fontSize: '10px', color: '#AFA9EC', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              ⚡ Próximo
+            </div>
+            <div style={{ fontSize: '15px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
+              {proximoEvento}
+            </div>
           </div>
         </div>
       </div>
 
-      {escuelasPendientesCount > 0 && (
-        <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl shadow-xl p-6 mb-6 text-white">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
+      {/* ═══════════════════════════════════════════════════════════════
+          BLOQUE: Iniciar día / Pesar / Despachar (operativo)
+          ═══════════════════════════════════════════════════════════════ */}
+      <div style={{ position: 'relative', zIndex: 1, marginBottom: '24px' }}>
+        {escuelasPendientesCount > 0 && (
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(29, 158, 117, 0.18) 0%, rgba(15, 110, 86, 0.08) 100%)',
+            border: '0.5px solid rgba(29, 158, 117, 0.3)',
+            borderRadius: '14px', padding: '18px', marginBottom: '12px',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            gap: '16px', flexWrap: 'wrap',
+          }}>
             <div>
-              <p className="text-emerald-100 text-xs font-semibold tracking-wider">ACCIÓN DEL DÍA</p>
-              <h3 className="text-2xl font-bold mt-1">
+              <div style={{ fontSize: '10px', color: '#5DCAA5', letterSpacing: '1.5px', fontWeight: 500, marginBottom: '6px' }}>
+                ACCIÓN DEL DÍA
+              </div>
+              <div style={{ fontSize: '18px', fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: '4px' }}>
                 🚀 Iniciar día completo
-              </h3>
-              <p className="text-emerald-100 text-sm mt-1">
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
                 {escuelasPendientesCount} escuela(s) pendiente(s) · Inicia preparación de todas a la vez
-              </p>
+              </div>
             </div>
             <button
               onClick={iniciarTodas}
               disabled={procesando}
-              className="bg-white hover:bg-emerald-50 text-emerald-700 font-bold px-6 py-3 rounded-xl shadow-lg disabled:opacity-50 whitespace-nowrap"
+              style={{
+                padding: '12px 20px',
+                background: 'linear-gradient(135deg, #1D9E75 0%, #0F6E56 100%)',
+                border: 'none', borderRadius: '10px',
+                color: 'white', fontSize: '13px', fontWeight: 500,
+                cursor: procesando ? 'not-allowed' : 'pointer',
+                opacity: procesando ? 0.6 : 1,
+                fontFamily: 'inherit', whiteSpace: 'nowrap',
+              }}
             >
-              {procesando ? 'Iniciando...' : `🚀 Iniciar ${escuelasPendientesCount} escuela(s)`}
+              {procesando ? '⏳ Iniciando...' : `🚀 Iniciar ${escuelasPendientesCount} escuela(s)`}
             </button>
           </div>
-        </div>
-      )}
+        )}
 
-      {mostrarBotonPesaje && (
-        <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl shadow-xl p-6 mb-6 text-white">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
+        {mostrarBotonPesaje && (
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(239, 159, 39, 0.18) 0%, rgba(186, 117, 23, 0.08) 100%)',
+            border: '0.5px solid rgba(239, 159, 39, 0.3)',
+            borderRadius: '14px', padding: '18px', marginBottom: '12px',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            gap: '16px', flexWrap: 'wrap',
+          }}>
             <div>
-              <p className="text-amber-100 text-xs font-semibold tracking-wider">SIGUIENTE PASO</p>
-              <h3 className="text-2xl font-bold mt-1">
+              <div style={{ fontSize: '10px', color: '#FAC775', letterSpacing: '1.5px', fontWeight: 500, marginBottom: '6px' }}>
+                SIGUIENTE PASO
+              </div>
+              <div style={{ fontSize: '18px', fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: '4px' }}>
                 🥘 Iniciar Pesaje
-              </h3>
-              <p className="text-amber-100 text-sm mt-1">
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
                 {operacionesPreparando.length} escuela(s) · {totalRacionesHoy.toLocaleString()} raciones · Pesa todos los ingredientes crudos
-              </p>
+              </div>
             </div>
             <button
-              onClick={() => {
-                setModoEdicionCrudo(false)
-                setModalPesajeAbierto(true)
-              }}
+              onClick={() => { setModoEdicionCrudo(false); setModalPesajeAbierto(true) }}
               disabled={procesando}
-              className="bg-white hover:bg-amber-50 text-orange-700 font-bold px-6 py-3 rounded-xl shadow-lg disabled:opacity-50 whitespace-nowrap"
+              style={{
+                padding: '12px 20px',
+                background: 'var(--gradient-button)',
+                border: 'none', borderRadius: '10px',
+                color: 'white', fontSize: '13px', fontWeight: 500,
+                cursor: procesando ? 'not-allowed' : 'pointer',
+                opacity: procesando ? 0.6 : 1,
+                fontFamily: 'inherit', whiteSpace: 'nowrap',
+              }}
             >
               🥘 Pesar ingredientes
             </button>
           </div>
-        </div>
-      )}
+        )}
 
-      {yaSePesoHoy && hayEscuelasIniciadas && (
-        <div className="bg-gradient-to-br from-emerald-500 to-green-600 rounded-2xl shadow-md p-4 mb-6 text-white">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <span className="text-3xl">✅</span>
+        {yaSePesoHoy && hayEscuelasIniciadas && (
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(29, 158, 117, 0.15) 0%, rgba(15, 110, 86, 0.05) 100%)',
+            border: '0.5px solid rgba(29, 158, 117, 0.25)',
+            borderRadius: '14px', padding: '14px 18px', marginBottom: '12px',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            gap: '12px', flexWrap: 'wrap',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontSize: '24px' }}>✅</span>
               <div>
-                <p className="font-bold">Pesaje crudo aprobado</p>
-                <p className="text-emerald-100 text-sm">Ingredientes ya descontados del inventario · {totalRacionesHoy.toLocaleString()} raciones</p>
+                <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
+                  Pesaje crudo aprobado
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
+                  Ingredientes ya descontados del inventario · {totalRacionesHoy.toLocaleString()} raciones
+                </div>
               </div>
             </div>
             <button
-              onClick={() => {
-                setModoEdicionCrudo(true)
-                setModalPesajeAbierto(true)
+              onClick={() => { setModoEdicionCrudo(true); setModalPesajeAbierto(true) }}
+              style={{
+                padding: '8px 14px',
+                background: 'var(--color-bg-elevated)',
+                border: '0.5px solid var(--color-border-subtle)',
+                borderRadius: '20px',
+                color: 'var(--color-text-secondary)',
+                fontSize: '11px', fontWeight: 500,
+                cursor: 'pointer', fontFamily: 'inherit',
               }}
-              className="bg-white/20 hover:bg-white/30 text-white text-sm font-bold px-4 py-2 rounded-lg border border-white/30 whitespace-nowrap"
             >
               ✏️ Editar
             </button>
           </div>
-        </div>
-      )}
+        )}
 
-      {mostrarBotonDespacho && (
-        <div className="bg-gradient-to-br from-orange-500 to-red-600 rounded-2xl shadow-xl p-6 mb-6 text-white">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
+        {mostrarBotonDespacho && onIrDespacho && (
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(216, 90, 48, 0.2) 0%, rgba(153, 60, 29, 0.08) 100%)',
+            border: '0.5px solid rgba(216, 90, 48, 0.35)',
+            borderRadius: '14px', padding: '18px', marginBottom: '12px',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            gap: '16px', flexWrap: 'wrap',
+          }}>
             <div>
-              <p className="text-orange-100 text-xs font-semibold tracking-wider">SIGUIENTE PASO</p>
-              <h3 className="text-2xl font-bold mt-1">
+              <div style={{ fontSize: '10px', color: '#F0997B', letterSpacing: '1.5px', fontWeight: 500, marginBottom: '6px' }}>
+                SIGUIENTE PASO
+              </div>
+              <div style={{ fontSize: '18px', fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: '4px' }}>
                 🚚 Despachar y Entregar
-              </h3>
-              <p className="text-orange-100 text-sm mt-1">
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
                 {escuelasEntregadas} de {escuelasOperativas} entregadas
                 {escuelasEnCamino > 0 && ` · ${escuelasEnCamino} en camino`}
-                {' '}· Pesa cocido por escuela, despacha y firma conduces
-              </p>
+              </div>
             </div>
             <button
               onClick={onIrDespacho}
               disabled={procesando}
-              className="bg-white hover:bg-orange-50 text-red-700 font-bold px-6 py-3 rounded-xl shadow-lg disabled:opacity-50 whitespace-nowrap"
+              style={{
+                padding: '12px 20px',
+                background: 'linear-gradient(135deg, #D85A30 0%, #993C1D 100%)',
+                border: 'none', borderRadius: '10px',
+                color: 'white', fontSize: '13px', fontWeight: 500,
+                cursor: procesando ? 'not-allowed' : 'pointer',
+                opacity: procesando ? 0.6 : 1,
+                fontFamily: 'inherit', whiteSpace: 'nowrap',
+              }}
             >
               🚚 Ir a Modo Despacho
             </button>
           </div>
-        </div>
-      )}
+        )}
 
-      {todasEntregadas && (
-        <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl shadow-md p-4 mb-6 text-white">
-          <div className="flex items-center gap-3">
-            <span className="text-3xl">🏆</span>
+        {todasEntregadas && (
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(29, 158, 117, 0.15) 0%, rgba(15, 110, 86, 0.05) 100%)',
+            border: '0.5px solid rgba(29, 158, 117, 0.25)',
+            borderRadius: '14px', padding: '14px 18px',
+            display: 'flex', alignItems: 'center', gap: '12px',
+          }}>
+            <span style={{ fontSize: '24px' }}>🏆</span>
             <div>
-              <p className="font-bold">Todas las escuelas entregadas y firmadas</p>
-              <p className="text-green-100 text-sm">{escuelasEntregadas} conduce(s) firmado(s) por los directores · Día completado</p>
+              <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
+                Todas las escuelas entregadas y firmadas
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
+                {escuelasEntregadas} conduce(s) firmado(s) por los directores · Día completado
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
+      {/* ═══════════════════════════════════════════════════════════════
+          ESCUELAS DEL DÍA - Lista con estados
+          ═══════════════════════════════════════════════════════════════ */}
       {escuelas.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-xl p-6">
-          <p className="text-xs text-gray-500 font-semibold tracking-wider mb-4">
-            🏫 ESCUELAS DEL DÍA
-          </p>
-          <div className="space-y-2">
+        <div style={{ position: 'relative', zIndex: 1, marginBottom: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+            <span style={{ fontSize: '14px' }}>🏫</span>
+            <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', letterSpacing: '1.5px', fontWeight: 500 }}>
+              ESCUELAS DEL DÍA
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {escuelas.map(escuela => {
               const op = operacionesHoy.find(o => o.escuela_id === escuela.id)
               const estado = op?.estado || 'pendiente'
 
+              const ESTADO_INFO = {
+                entregada:   { label: '✅ Entregada',   color: '#5DCAA5' },
+                cerrada:     { label: '✅ Entregada',   color: '#5DCAA5' },
+                despachando: { label: '🚚 En camino',   color: '#F0997B' },
+                lista:       { label: '✅ Lista',       color: '#85B7EB' },
+                preparando:  { label: '👨‍🍳 Preparando',  color: '#FAC775' },
+                sin_clase:   { label: '🚫 Sin clase',   color: 'var(--color-text-muted)' },
+                pendiente:   { label: '⏰ Pendiente',   color: 'var(--color-text-secondary)' },
+              }
+              const estadoInfo = ESTADO_INFO[estado] || ESTADO_INFO.pendiente
+
               return (
-                <div key={escuela.id} className="border border-gray-200 rounded-xl p-4 hover:bg-gray-50 transition">
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <div className="flex-1 min-w-[200px]">
-                      <p className="font-bold text-gray-900">{escuela.nombre}</p>
-                      <p className="text-xs text-gray-500">
-                        {escuela.raciones_contractuales} raciones · RD$ {escuela.precio_racion}/ración
-                      </p>
-                      {op?.razon_no_clase && (
-                        <p className="text-xs text-gray-600 mt-1 italic">
-                          📝 {op.razon_no_clase}
-                        </p>
-                      )}
+                <div key={escuela.id} style={{
+                  background: 'var(--color-bg-card)',
+                  border: '0.5px solid var(--color-border-subtle)',
+                  borderRadius: '12px', padding: '14px 16px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  gap: '12px', flexWrap: 'wrap',
+                }}>
+                  <div style={{ flex: 1, minWidth: '200px' }}>
+                    <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
+                      {escuela.nombre}
                     </div>
+                    <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
+                      {escuela.raciones_contractuales} raciones · RD$ {escuela.precio_racion}/ración
+                    </div>
+                    {op?.razon_no_clase && (
+                      <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '4px', fontStyle: 'italic' }}>
+                        📝 {op.razon_no_clase}
+                      </div>
+                    )}
+                  </div>
 
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {estado === 'entregada' || estado === 'cerrada' ? (
-                        <span className="bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded-full">
-                          ✅ Entregada
-                        </span>
-                      ) : estado === 'despachando' ? (
-                        <span className="bg-orange-100 text-orange-800 text-xs font-bold px-3 py-1 rounded-full">
-                          🚚 En camino
-                        </span>
-                      ) : estado === 'lista' ? (
-                        <span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">
-                          ✅ Lista
-                        </span>
-                      ) : estado === 'preparando' ? (
-                        <span className="bg-yellow-100 text-yellow-800 text-xs font-bold px-3 py-1 rounded-full">
-                          👨‍🍳 Preparando
-                        </span>
-                      ) : estado === 'sin_clase' ? (
-                        <span className="bg-gray-200 text-gray-600 text-xs font-bold px-3 py-1 rounded-full">
-                          🚫 Sin clase
-                        </span>
-                      ) : (
-                        <span className="bg-gray-100 text-gray-700 text-xs font-bold px-3 py-1 rounded-full">
-                          ⏰ Pendiente
-                        </span>
-                      )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    <span style={{
+                      background: `${estadoInfo.color}20`,
+                      border: `0.5px solid ${estadoInfo.color}40`,
+                      color: estadoInfo.color,
+                      fontSize: '10px', fontWeight: 600,
+                      padding: '4px 10px', borderRadius: '12px',
+                      letterSpacing: '0.3px',
+                    }}>
+                      {estadoInfo.label}
+                    </span>
 
-                      {!op && (
-                        <>
-                          <button
-                            onClick={() => iniciarEscuela(escuela)}
-                            disabled={procesando}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-50"
-                          >
-                            ▶️ Iniciar
-                          </button>
-                          <button
-                            onClick={() => abrirModalSinClase(escuela)}
-                            disabled={procesando}
-                            className="bg-gray-500 hover:bg-gray-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-50"
-                          >
-                            🚫 Sin clase
-                          </button>
-                        </>
-                      )}
-
-                      {op?.estado === 'preparando' && (
+                    {!op && (
+                      <>
                         <button
-                          onClick={() => marcarLista(op)}
+                          onClick={() => iniciarEscuela(escuela)}
                           disabled={procesando}
-                          className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-50"
+                          style={{
+                            padding: '6px 12px',
+                            background: 'linear-gradient(135deg, #1D9E75 0%, #0F6E56 100%)',
+                            border: 'none', borderRadius: '8px',
+                            color: 'white', fontSize: '11px', fontWeight: 500,
+                            cursor: procesando ? 'not-allowed' : 'pointer',
+                            opacity: procesando ? 0.6 : 1, fontFamily: 'inherit',
+                          }}
                         >
-                          ✅ Marcar lista
+                          ▶️ Iniciar
                         </button>
-                      )}
-                    </div>
+                        <button
+                          onClick={() => abrirModalSinClase(escuela)}
+                          disabled={procesando}
+                          style={{
+                            padding: '6px 12px',
+                            background: 'var(--color-bg-elevated)',
+                            border: '0.5px solid var(--color-border-subtle)',
+                            borderRadius: '8px',
+                            color: 'var(--color-text-secondary)',
+                            fontSize: '11px', fontWeight: 500,
+                            cursor: procesando ? 'not-allowed' : 'pointer',
+                            opacity: procesando ? 0.6 : 1, fontFamily: 'inherit',
+                          }}
+                        >
+                          🚫 Sin clase
+                        </button>
+                      </>
+                    )}
+
+                    {op?.estado === 'preparando' && (
+                      <button
+                        onClick={() => marcarLista(op)}
+                        disabled={procesando}
+                        style={{
+                          padding: '6px 12px',
+                          background: 'linear-gradient(135deg, #378ADD 0%, #185FA5 100%)',
+                          border: 'none', borderRadius: '8px',
+                          color: 'white', fontSize: '11px', fontWeight: 500,
+                          cursor: procesando ? 'not-allowed' : 'pointer',
+                          opacity: procesando ? 0.6 : 1, fontFamily: 'inherit',
+                        }}
+                      >
+                        ✅ Marcar lista
+                      </button>
+                    )}
                   </div>
                 </div>
               )
@@ -715,7 +973,186 @@ function DashboardDelDia({
         </div>
       )}
 
+      {/* ═══════════════════════════════════════════════════════════════
+          MÓDULOS - 4 categorías
+          ═══════════════════════════════════════════════════════════════ */}
+      <div style={{ position: 'relative', zIndex: 1, marginBottom: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '18px' }}>
+          <span style={{ fontSize: '14px' }}>📂</span>
+          <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', letterSpacing: '1.5px', fontWeight: 500 }}>
+            MÓDULOS
+          </span>
+        </div>
+
+        {/* ─── Categoría: FINANZAS ─── */}
+        <CategoriaBanner cat={CATEGORIAS.finanzas} icon="💰" count={4}>
+          <Modulo emoji="🧾" label="Factura INABIE"   sublabel="Facturas mensuales" color={CATEGORIAS.finanzas.color} onClick={onIrFactura ? () => onIrFactura() : () => mostrarProximamente('Factura INABIE')} />
+          <Modulo emoji="🚚" label="Conduces"         sublabel="Mes en curso"       color={CATEGORIAS.finanzas.color} onClick={onIrConduces ? () => onIrConduces() : () => mostrarProximamente('Conduces')} />
+          <Modulo emoji="💸" label="Gastos"           sublabel="Categorías + RNC"   color={CATEGORIAS.finanzas.color} onClick={onIrGastos ? onIrGastos : () => mostrarProximamente('Gastos')} />
+          <Modulo emoji="📊" label="Reportes DGII"    sublabel="606 · 607"          color={CATEGORIAS.finanzas.color} proximamente onClick={() => mostrarProximamente('Reportes DGII 606/607')} />
+        </CategoriaBanner>
+
+        {/* ─── Categoría: INVENTARIO ─── */}
+        <CategoriaBanner cat={CATEGORIAS.inventario} icon="📦" count={4}>
+          <Modulo emoji="🥕" label="Ingredientes" sublabel="Catálogo"      color={CATEGORIAS.inventario.color} onClick={onIrIngredientes ? onIrIngredientes : () => mostrarProximamente('Ingredientes')} />
+          <Modulo emoji="🛒" label="Compras"       sublabel="Esta semana"   color={CATEGORIAS.inventario.color} onClick={onIrCompras ? onIrCompras : () => mostrarProximamente('Compras')} />
+          <Modulo emoji="🏪" label="Proveedores"   sublabel="Con RNC"       color={CATEGORIAS.inventario.color} proximamente onClick={() => mostrarProximamente('Proveedores')} />
+          <Modulo emoji="👨‍🍳" label="Recetas"      sublabel="Catálogo"      color={CATEGORIAS.inventario.color} onClick={onIrCatalogo ? onIrCatalogo : () => mostrarProximamente('Recetas')} />
+        </CategoriaBanner>
+
+        {/* ─── Categoría: PERSONAL ─── */}
+        <CategoriaBanner cat={CATEGORIAS.personal} icon="👥" count={4}>
+          <Modulo emoji="👤" label="Empleados"   sublabel="Equipo"          color={CATEGORIAS.personal.color} onClick={onIrEmpleados ? onIrEmpleados : () => mostrarProximamente('Empleados')} />
+          <Modulo emoji="💵" label="Nómina"      sublabel="Pagos"           color={CATEGORIAS.personal.color} onClick={onIrNomina ? onIrNomina : () => mostrarProximamente('Nómina')} />
+          <Modulo emoji="📄" label="Contratos"   sublabel="Por empleado"    color={CATEGORIAS.personal.color} onClick={onIrContratos ? onIrContratos : () => mostrarProximamente('Contratos')} />
+          <Modulo emoji="🧮" label="Calculadora" sublabel="Liquidación"     color={CATEGORIAS.personal.color} onClick={onIrCalculadora ? onIrCalculadora : () => mostrarProximamente('Calculadora')} />
+        </CategoriaBanner>
+
+        {/* ─── Categoría: OPERACIÓN ─── */}
+        <CategoriaBanner cat={CATEGORIAS.operacion} icon="🧠" count={4}>
+          <Modulo emoji="💡" label="Inteligencia"    sublabel="Análisis"    color={CATEGORIAS.operacion.color} onClick={onIrInteligencia ? onIrInteligencia : () => mostrarProximamente('Inteligencia')} />
+          <Modulo emoji="📜" label="Historial"       sublabel="Todas ops"   color={CATEGORIAS.operacion.color} onClick={onIrHistorial ? onIrHistorial : () => mostrarProximamente('Historial')} />
+          <Modulo emoji="🏫" label="Centros INABIE"  sublabel={`${escuelas.length} escuelas`} color={CATEGORIAS.operacion.color} proximamente onClick={() => mostrarProximamente('Centros INABIE')} />
+          <Modulo emoji="⚙️" label="Configuración"  sublabel="Empresa"     color={CATEGORIAS.operacion.color} onClick={onIrConfiguracion ? onIrConfiguracion : () => mostrarProximamente('Configuración')} />
+        </CategoriaBanner>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          FOOTER
+          ═══════════════════════════════════════════════════════════════ */}
+      <div style={{
+        position: 'relative', zIndex: 1,
+        paddingTop: '20px',
+        borderTop: '0.5px solid var(--color-border-subtle)',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        gap: '12px', flexWrap: 'wrap',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '14px' }}>🇩🇴</span>
+          <span style={{
+            color: 'var(--color-text-accent)', opacity: 0.6,
+            fontSize: '10px', fontWeight: 500, letterSpacing: '0.5px',
+          }}>
+            Andamio · Modo {usuario.rol === 'propietario' ? 'Propietario' : 'Administrador'} · Sincronizado
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {onCambiarUsuario && (
+            <button
+              onClick={onCambiarUsuario}
+              style={{
+                background: 'var(--color-bg-elevated)',
+                border: '0.5px solid var(--color-border-subtle)',
+                borderRadius: '20px', padding: '7px 14px',
+                color: 'var(--color-text-secondary)',
+                fontSize: '11px', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: '6px',
+                fontFamily: 'inherit',
+              }}
+            >
+              🔄 Cambiar usuario
+            </button>
+          )}
+          <button
+            onClick={confirmarCerrarSesion}
+            style={{
+              background: 'rgba(244, 67, 54, 0.1)',
+              border: '0.5px solid rgba(244, 67, 54, 0.3)',
+              borderRadius: '20px', padding: '7px 14px',
+              color: '#F4C0D1',
+              fontSize: '11px', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: '6px',
+              fontFamily: 'inherit',
+            }}
+          >
+            🚪 Cerrar sesión
+          </button>
+        </div>
+      </div>
     </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════
+// COMPONENTE: Banda de Categoría
+// ═══════════════════════════════════════════════════════════════
+function CategoriaBanner({ cat, icon, count, children }) {
+  return (
+    <div style={{
+      background: `linear-gradient(135deg, ${cat.glow} 0%, ${cat.glow.replace('0.15', '0.05').replace('0.18', '0.05')} 100%)`,
+      border: `0.5px solid ${cat.color}40`,
+      borderRadius: '14px', padding: '16px 18px', marginBottom: '14px',
+    }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginBottom: '14px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '20px' }}>{icon}</span>
+          <span style={{ fontSize: '15px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
+            {cat.label}
+          </span>
+        </div>
+        <span style={{
+          fontSize: '10px', color: cat.color,
+          background: `${cat.color}15`, padding: '3px 8px', borderRadius: '8px',
+        }}>
+          {count} módulos
+        </span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' }}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════
+// COMPONENTE: Tarjeta de Módulo
+// ═══════════════════════════════════════════════════════════════
+function Modulo({ emoji, label, sublabel, color, onClick, proximamente }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        background: 'var(--color-bg-card)',
+        border: '0.5px solid var(--color-border-subtle)',
+        borderRadius: '10px', padding: '10px 12px',
+        cursor: 'pointer', textAlign: 'left',
+        display: 'flex', flexDirection: 'column', gap: '4px',
+        fontFamily: 'inherit', position: 'relative',
+        transition: 'all 0.15s ease',
+        opacity: proximamente ? 0.7 : 1,
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = 'var(--color-bg-hover)'
+        e.currentTarget.style.borderColor = `${color}60`
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = 'var(--color-bg-card)'
+        e.currentTarget.style.borderColor = 'var(--color-border-subtle)'
+      }}
+    >
+      {proximamente && (
+        <span style={{
+          position: 'absolute', top: '6px', right: '6px',
+          fontSize: '8px', fontWeight: 600,
+          background: 'rgba(250, 199, 117, 0.2)',
+          color: '#FAC775',
+          padding: '2px 6px', borderRadius: '6px',
+          letterSpacing: '0.3px',
+        }}>
+          PRÓXIMO
+        </span>
+      )}
+      <div style={{ fontSize: '16px', lineHeight: 1 }}>{emoji}</div>
+      <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
+        {label}
+      </div>
+      <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
+        {sublabel}
+      </div>
+    </button>
   )
 }
 
