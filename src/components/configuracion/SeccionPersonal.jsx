@@ -10,277 +10,161 @@ const ROLES = [
   { id: 'contador',       emoji: '🧮', label: 'Contador' },
 ]
 
+const AZUL = { c: '#378ADD', claro: '#E6F1FB', dark: '#0C447C' }
+
 function SeccionPersonal({ empresaId, mostrarExito }) {
   const [usuarios, setUsuarios] = useState([])
   const [cargando, setCargando] = useState(true)
   const [editando, setEditando] = useState(null)
   const [agregando, setAgregando] = useState(false)
-  const [datosForm, setDatosForm] = useState({
-    nombre: '',
-    rol: 'ayudante',
-    pin: '',
-    telefono: '',
-    email: '',
-  })
+  const [datosForm, setDatosForm] = useState({ nombre: '', rol: 'ayudante', pin: '', telefono: '', email: '' })
 
+  const [esTropical, setEsTropical] = useState(
+    typeof document !== 'undefined' && document.documentElement.getAttribute('data-tema') === 'tropical'
+  )
   useEffect(() => {
-    cargarUsuarios()
-  }, [empresaId])
+    const obs = new MutationObserver(() => {
+      setEsTropical(document.documentElement.getAttribute('data-tema') === 'tropical')
+    })
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-tema'] })
+    return () => obs.disconnect()
+  }, [])
+
+  useEffect(() => { cargarUsuarios() }, [empresaId])
 
   async function cargarUsuarios() {
     setCargando(true)
-    const { data } = await supabase
-      .from('usuarios')
-      .select('*')
-      .eq('empresa_id', empresaId)
-      .eq('activo', true)
-      .order('rol')
+    const { data } = await supabase.from('usuarios').select('*').eq('empresa_id', empresaId).eq('activo', true).order('rol')
     setUsuarios(data || [])
     setCargando(false)
   }
 
-  function generarPIN() {
-    const pin = Math.floor(1000 + Math.random() * 9000).toString()
-    return pin
-  }
+  function generarPIN() { return Math.floor(1000 + Math.random() * 9000).toString() }
 
   function iniciarEdicion(usuario) {
     setEditando(usuario.id)
     setAgregando(false)
     setDatosForm({
-      nombre: usuario.nombre || '',
-      rol: usuario.rol || 'ayudante',
-      pin: usuario.pin || '',
-      telefono: usuario.telefono || '',
-      email: usuario.email || '',
+      nombre: usuario.nombre || '', rol: usuario.rol || 'ayudante',
+      pin: usuario.pin || '', telefono: usuario.telefono || '', email: usuario.email || '',
     })
   }
 
   function iniciarAgregado() {
     setAgregando(true)
     setEditando(null)
-    setDatosForm({
-      nombre: '',
-      rol: 'ayudante',
-      pin: generarPIN(),
-      telefono: '',
-      email: '',
-    })
+    setDatosForm({ nombre: '', rol: 'ayudante', pin: generarPIN(), telefono: '', email: '' })
   }
 
-  function cancelar() {
-    setEditando(null)
-    setAgregando(false)
-  }
+  function cancelar() { setEditando(null); setAgregando(false) }
 
   async function guardar() {
-    if (!datosForm.nombre.trim()) {
-      alert('El nombre es obligatorio')
-      return
-    }
-    if (!datosForm.pin || datosForm.pin.length !== 4) {
-      alert('El PIN debe tener 4 dígitos')
-      return
-    }
-
-    // Verificar PIN duplicado
-    const pinDuplicado = usuarios.some(u => 
-      u.pin === datosForm.pin && u.id !== editando
-    )
-    if (pinDuplicado) {
-      alert('Ese PIN ya está en uso por otro usuario')
-      return
-    }
-
+    if (!datosForm.nombre.trim()) { alert('El nombre es obligatorio'); return }
+    if (!datosForm.pin || datosForm.pin.length !== 4) { alert('El PIN debe tener 4 dígitos'); return }
+    const pinDuplicado = usuarios.some(u => u.pin === datosForm.pin && u.id !== editando)
+    if (pinDuplicado) { alert('Ese PIN ya está en uso por otro usuario'); return }
     if (editando) {
-      const { error } = await supabase
-        .from('usuarios')
-        .update(datosForm)
-        .eq('id', editando)
-      
-      if (error) {
-        alert('Error: ' + error.message)
-        return
-      }
+      const { error } = await supabase.from('usuarios').update(datosForm).eq('id', editando)
+      if (error) { alert('Error: ' + error.message); return }
       mostrarExito('Usuario actualizado')
     } else {
-      const { error } = await supabase
-        .from('usuarios')
-        .insert([{ ...datosForm, empresa_id: empresaId, activo: true }])
-      
-      if (error) {
-        alert('Error: ' + error.message)
-        return
-      }
+      const { error } = await supabase.from('usuarios').insert([{ ...datosForm, empresa_id: empresaId, activo: true }])
+      if (error) { alert('Error: ' + error.message); return }
       mostrarExito('Usuario agregado')
     }
-
     cancelar()
     cargarUsuarios()
   }
 
   async function desactivar(usuario) {
-    if (!confirm(`¿Desactivar a "${usuario.nombre}"? Ya no podrá hacer login.`)) {
-      return
-    }
-    
-    await supabase
-      .from('usuarios')
-      .update({ activo: false })
-      .eq('id', usuario.id)
-    
+    if (!confirm(`¿Desactivar a "${usuario.nombre}"? Ya no podrá hacer login.`)) return
+    await supabase.from('usuarios').update({ activo: false }).eq('id', usuario.id)
     mostrarExito('Usuario desactivado')
     cargarUsuarios()
   }
 
-  if (cargando) {
-    return <div className="text-center py-12 text-gray-500">Cargando personal...</div>
-  }
+  if (cargando) return <div style={{ textAlign: 'center', padding: '48px', color: 'var(--color-text-muted)' }}>⏳ Cargando personal...</div>
 
   const usuarioEditando = editando ? usuarios.find(u => u.id === editando) : null
 
   return (
     <div>
-      <div className="mb-6 flex justify-between items-start">
+      <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
         <div>
-          <h3 className="text-2xl font-bold text-gray-900">👥 Personal</h3>
-          <p className="text-gray-500 text-sm mt-1">{usuarios.length} usuarios activos</p>
+          <h3 style={{ fontSize: '22px', fontWeight: 600, color: 'var(--color-text-primary)', margin: 0 }}>👥 Personal</h3>
+          <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '4px' }}>{usuarios.length} usuarios activos</p>
         </div>
         {!agregando && !editando && (
-          <button
-            onClick={iniciarAgregado}
-            className="bg-green-600 hover:bg-green-700 text-white font-semibold px-4 py-2 rounded-xl text-sm"
-          >
+          <button onClick={iniciarAgregado} style={{ padding: '10px 18px', background: 'linear-gradient(135deg, #1D9E75 0%, #0F6E56 100%)', border: 'none', borderRadius: '10px', color: 'white', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
             ➕ Agregar usuario
           </button>
         )}
       </div>
 
-      {/* Formulario */}
       {(agregando || editando) && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
-          <h4 className="font-bold text-blue-900 mb-4">
+        <div style={{ background: esTropical ? AZUL.claro : `${AZUL.c}15`, border: `1px solid ${AZUL.c}${esTropical ? '50' : '40'}`, borderRadius: '12px', padding: '16px', marginBottom: '20px' }}>
+          <h4 style={{ fontSize: '15px', fontWeight: 600, color: esTropical ? AZUL.dark : AZUL.c, margin: '0 0 16px' }}>
             {agregando ? '➕ Nuevo usuario' : `✏️ Editando: ${usuarioEditando?.nombre}`}
           </h4>
-          
-          <div className="space-y-3">
-            <input
-              type="text"
-              placeholder="Nombre completo *"
-              value={datosForm.nombre}
-              onChange={(e) => setDatosForm({...datosForm, nombre: e.target.value.toUpperCase()})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-            />
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <input type="text" placeholder="Nombre completo *" value={datosForm.nombre} onChange={(e) => setDatosForm({ ...datosForm, nombre: e.target.value.toUpperCase() })} style={inputStyle()} />
 
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-2">ROL</label>
-              <div className="grid grid-cols-3 gap-2">
+              <label style={labelStyle()}>ROL</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
                 {ROLES.map(r => (
-                  <button
-                    key={r.id}
-                    onClick={() => setDatosForm({...datosForm, rol: r.id})}
-                    className={`p-2 rounded-lg border-2 text-xs font-semibold transition-colors ${
-                      datosForm.rol === r.id
-                        ? 'border-blue-500 bg-blue-100'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <div className="text-lg">{r.emoji}</div>
+                  <button key={r.id} onClick={() => setDatosForm({ ...datosForm, rol: r.id })} style={selectorStyle(datosForm.rol === r.id, esTropical)}>
+                    <div style={{ fontSize: '18px' }}>{r.emoji}</div>
                     {r.label}
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">PIN (4 dígitos)</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    maxLength={4}
-                    placeholder="0000"
-                    value={datosForm.pin}
-                    onChange={(e) => setDatosForm({...datosForm, pin: e.target.value.replace(/\D/g, '')})}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono text-center text-lg tracking-widest"
-                  />
-                  <button
-                    onClick={() => setDatosForm({...datosForm, pin: generarPIN()})}
-                    className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 rounded-lg text-xs"
-                    title="Generar PIN aleatorio"
-                  >
-                    🎲
-                  </button>
+                <label style={labelStyle()}>PIN (4 dígitos)</label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input type="text" maxLength={4} placeholder="0000" value={datosForm.pin} onChange={(e) => setDatosForm({ ...datosForm, pin: e.target.value.replace(/\D/g, '') })} style={{ ...inputStyle(), fontFamily: 'monospace', textAlign: 'center', fontSize: '16px', letterSpacing: '4px' }} />
+                  <button onClick={() => setDatosForm({ ...datosForm, pin: generarPIN() })} style={{ padding: '0 12px', background: 'var(--color-bg-card)', border: '1px solid var(--color-border-subtle)', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }} title="Generar PIN aleatorio">🎲</button>
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Teléfono</label>
-                <input
-                  type="text"
-                  placeholder="809-555-1234"
-                  value={datosForm.telefono}
-                  onChange={(e) => setDatosForm({...datosForm, telefono: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                />
+                <label style={labelStyle()}>Teléfono</label>
+                <input type="text" placeholder="809-555-1234" value={datosForm.telefono} onChange={(e) => setDatosForm({ ...datosForm, telefono: e.target.value })} style={inputStyle()} />
               </div>
             </div>
 
-            <input
-              type="email"
-              placeholder="Email (opcional)"
-              value={datosForm.email}
-              onChange={(e) => setDatosForm({...datosForm, email: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-            />
+            <input type="email" placeholder="Email (opcional)" value={datosForm.email} onChange={(e) => setDatosForm({ ...datosForm, email: e.target.value })} style={inputStyle()} />
           </div>
 
-          <div className="flex gap-2 mt-4">
-            <button
-              onClick={guardar}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg text-sm"
-            >
-              💾 Guardar
-            </button>
-            <button
-              onClick={cancelar}
-              className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm"
-            >
-              Cancelar
-            </button>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+            <button onClick={guardar} style={{ padding: '10px 20px', background: 'linear-gradient(135deg, #378ADD 0%, #185FA5 100%)', border: 'none', borderRadius: '10px', color: 'white', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>💾 Guardar</button>
+            <button onClick={cancelar} style={{ padding: '10px 20px', background: 'var(--color-bg-card)', border: '1px solid var(--color-border-subtle)', borderRadius: '10px', color: 'var(--color-text-secondary)', fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
           </div>
         </div>
       )}
 
-      {/* Lista de usuarios */}
-      <div className="space-y-2">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {usuarios.map(u => {
           const rolInfo = ROLES.find(r => r.id === u.rol) || ROLES[4]
           return (
-            <div key={u.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3 flex-1">
-                  <span className="text-2xl">{rolInfo.emoji}</span>
+            <div key={u.id} style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-subtle)', borderRadius: '12px', padding: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+                  <span style={{ fontSize: '24px' }}>{rolInfo.emoji}</span>
                   <div>
-                    <p className="font-bold text-gray-900 text-sm">{u.nombre}</p>
-                    <p className="text-xs text-gray-500">
-                      {rolInfo.label} · PIN: <span className="font-mono">••••</span>
+                    <p style={{ fontWeight: 600, color: 'var(--color-text-primary)', fontSize: '13px', margin: 0 }}>{u.nombre}</p>
+                    <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', margin: '2px 0 0' }}>
+                      {rolInfo.label} · PIN: <span style={{ fontFamily: 'monospace' }}>••••</span>
                       {u.telefono && ` · 📞 ${u.telefono}`}
                     </p>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => iniciarEdicion(u)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1 rounded-lg"
-                  >
-                    ✏️ Editar
-                  </button>
-                  <button
-                    onClick={() => desactivar(u)}
-                    className="bg-red-100 hover:bg-red-200 text-red-700 text-xs font-semibold px-3 py-1 rounded-lg"
-                  >
-                    🗑️ Quitar
-                  </button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button onClick={() => iniciarEdicion(u)} style={{ padding: '6px 12px', background: 'linear-gradient(135deg, #378ADD 0%, #185FA5 100%)', border: 'none', borderRadius: '8px', color: 'white', fontSize: '11px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>✏️ Editar</button>
+                  <button onClick={() => desactivar(u)} style={{ padding: '6px 12px', background: esTropical ? '#FCEBEB' : 'rgba(226, 75, 74, 0.15)', border: '1px solid rgba(226, 75, 74, 0.3)', borderRadius: '8px', color: esTropical ? '#A32D2D' : '#F4C0D1', fontSize: '11px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>🗑️ Quitar</button>
                 </div>
               </div>
             </div>
@@ -289,6 +173,29 @@ function SeccionPersonal({ empresaId, mostrarExito }) {
       </div>
     </div>
   )
+}
+
+function selectorStyle(activo, esTropical) {
+  return {
+    padding: '8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600,
+    cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center',
+    color: 'var(--color-text-primary)',
+    border: activo ? '2px solid #378ADD' : '2px solid var(--color-border-subtle)',
+    background: activo ? (esTropical ? '#E6F1FB' : 'rgba(55, 138, 221, 0.18)') : 'var(--color-bg-input)',
+  }
+}
+
+function labelStyle() {
+  return { display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: '4px', letterSpacing: '0.5px' }
+}
+
+function inputStyle() {
+  return {
+    width: '100%', boxSizing: 'border-box', padding: '9px 12px',
+    background: 'var(--color-bg-input)', border: '1px solid var(--color-border-subtle)',
+    borderRadius: '8px', color: 'var(--color-text-primary)', fontSize: '13px',
+    fontFamily: 'inherit', outline: 'none',
+  }
 }
 
 export default SeccionPersonal

@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 
+const COLOR_OP = '#7F77DD'
+const COLOR_OP_BG = '#AFA9EC'
+const COLOR_OP_DARKER = '#3C3489'
+const COLOR_OP_CLARO = '#EEEDFE'
+
 function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
   const [empresa, setEmpresa] = useState(null)
   const [finanzas, setFinanzas] = useState(null)
@@ -14,117 +19,69 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
   const [categoriasGasto, setCategoriasGasto] = useState([])
   const [cargando, setCargando] = useState(true)
 
+  const [tema, setTema] = useState(() => localStorage.getItem('cocina_pae_tema') || 'oscuro')
   useEffect(() => {
-    if (empresaId) cargarDatos()
-  }, [empresaId])
+    document.documentElement.setAttribute('data-tema', tema)
+    localStorage.setItem('cocina_pae_tema', tema)
+  }, [tema])
+  const esTropical = tema === 'tropical'
+
+  useEffect(() => { if (empresaId) cargarDatos() }, [empresaId])
 
   async function cargarDatos() {
     setCargando(true)
-    
     const hace30 = new Date()
     hace30.setDate(hace30.getDate() - 30)
     const hace30Str = hace30.toISOString().split('T')[0]
-    
-    const { data: empresaData } = await supabase
-      .from('empresas').select('*').eq('id', empresaId).single()
+
+    const { data: empresaData } = await supabase.from('empresas').select('*').eq('id', empresaId).single()
     setEmpresa(empresaData)
-    
-    const { data: finanzasData } = await supabase
-      .from('finanzas').select('*').eq('empresa_id', empresaId).maybeSingle()
+    const { data: finanzasData } = await supabase.from('finanzas').select('*').eq('empresa_id', empresaId).maybeSingle()
     setFinanzas(finanzasData)
-    
-    const { data: escuelasData } = await supabase
-      .from('escuelas').select('*').eq('empresa_id', empresaId).eq('activa', true)
+    const { data: escuelasData } = await supabase.from('escuelas').select('*').eq('empresa_id', empresaId).eq('activa', true)
     setEscuelas(escuelasData || [])
-    
-    const { data: recetasData } = await supabase
-      .from('recetas').select('*').eq('empresa_id', empresaId).eq('activa', true)
+    const { data: recetasData } = await supabase.from('recetas').select('*').eq('empresa_id', empresaId).eq('activa', true)
     setRecetas(recetasData || [])
-    
-    const { data: opsData } = await supabase
-      .from('operaciones_dia')
-      .select('*')
-      .eq('empresa_id', empresaId)
-      .gte('fecha', hace30Str)
+    const { data: opsData } = await supabase.from('operaciones_dia').select('*').eq('empresa_id', empresaId).gte('fecha', hace30Str)
     setOperaciones(opsData || [])
-    
-    const { data: pesajesDiaData } = await supabase
-      .from('pesajes_dia')
-      .select('*')
-      .eq('empresa_id', empresaId)
-      .gte('fecha', hace30Str)
+    const { data: pesajesDiaData } = await supabase.from('pesajes_dia').select('*').eq('empresa_id', empresaId).gte('fecha', hace30Str)
     setPesajesDia(pesajesDiaData || [])
-    
     if (pesajesDiaData && pesajesDiaData.length > 0) {
       const pesajeIds = pesajesDiaData.map(p => p.id)
-      const { data: ingsData } = await supabase
-        .from('pesajes_dia_ingredientes')
-        .select('*, ingredientes(*)')
-        .in('pesaje_dia_id', pesajeIds)
+      const { data: ingsData } = await supabase.from('pesajes_dia_ingredientes').select('*, ingredientes(*)').in('pesaje_dia_id', pesajeIds)
       setPesajesIngs(ingsData || [])
     }
-    
     if (opsData && opsData.length > 0) {
       const opIds = opsData.map(op => op.id)
-      const { data: pesajesOpData } = await supabase
-        .from('pesajes_operacion')
-        .select('*')
-        .in('operacion_id', opIds)
+      const { data: pesajesOpData } = await supabase.from('pesajes_operacion').select('*').in('operacion_id', opIds)
       setPesajesOperacion(pesajesOpData || [])
     }
-
-    // 🆕 INT-008: Cargar gastos últimos 30 días
-    const { data: gastosData } = await supabase
-      .from('gastos')
-      .select('*, categorias_gasto(id, nombre, icono, color)')
-      .eq('empresa_id', empresaId)
-      .gte('fecha', hace30Str)
-      .order('fecha', { ascending: false })
+    const { data: gastosData } = await supabase.from('gastos').select('*, categorias_gasto(id, nombre, icono, color)').eq('empresa_id', empresaId).gte('fecha', hace30Str).order('fecha', { ascending: false })
     setGastos(gastosData || [])
-
-    // 🆕 INT-008: Cargar todas las categorías
-    const { data: catsData } = await supabase
-      .from('categorias_gasto')
-      .select('*')
-      .eq('empresa_id', empresaId)
+    const { data: catsData } = await supabase.from('categorias_gasto').select('*').eq('empresa_id', empresaId)
     setCategoriasGasto(catsData || [])
-    
     setCargando(false)
   }
 
   if (cargando) {
-    return <div className="text-center py-12 text-gray-500">Calculando inteligencia...</div>
+    return <div style={{ minHeight: '100vh', background: 'var(--color-bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <p style={{ color: 'var(--color-text-muted)' }}>⏳ Calculando inteligencia...</p>
+    </div>
   }
 
-  // ═══════════════════════════════════════════════════════
-  // CÁLCULOS
-  // ═══════════════════════════════════════════════════════
-  
   const totalDiasOperados = pesajesDia.length
   const totalOperacionesActivas = operaciones.filter(op => !op.no_hubo_clase).length
-  
   const pesajesCocinado = pesajesOperacion.filter(p => p.tipo === 'cocinado').length
   const pesajesSobrante = pesajesOperacion.filter(p => p.tipo === 'retorno').length
-  
-  const tasaCocinado = totalOperacionesActivas > 0 
-    ? Math.round((pesajesCocinado / totalOperacionesActivas) * 100) 
-    : 0
-  const tasaSobrante = totalOperacionesActivas > 0 
-    ? Math.round((pesajesSobrante / totalOperacionesActivas) * 100) 
-    : 0
-  
+  const tasaCocinado = totalOperacionesActivas > 0 ? Math.round((pesajesCocinado / totalOperacionesActivas) * 100) : 0
+  const tasaSobrante = totalOperacionesActivas > 0 ? Math.round((pesajesSobrante / totalOperacionesActivas) * 100) : 0
   const fechasConOps = [...new Set(operaciones.filter(op => !op.no_hubo_clase).map(op => op.fecha))]
-  const tasaCrudo = fechasConOps.length > 0
-    ? Math.round((totalDiasOperados / fechasConOps.length) * 100)
-    : 0
-  
+  const tasaCrudo = fechasConOps.length > 0 ? Math.round((totalDiasOperados / fechasConOps.length) * 100) : 0
   const calidadDatos = Math.round((tasaCrudo * 0.5 + tasaCocinado * 0.3 + tasaSobrante * 0.2))
-  
   const costoObjetivo = parseFloat(finanzas?.costo_objetivo_racion || 35)
-  
+
   let costoTotalReal = 0
   let racionesTotalesReal = 0
-  
   pesajesDia.forEach(pd => {
     const ingsDePesaje = pesajesIngs.filter(pi => pi.pesaje_dia_id === pd.id)
     const costoDelDia = ingsDePesaje.reduce((sum, pi) => {
@@ -135,20 +92,14 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
     costoTotalReal += costoDelDia
     racionesTotalesReal += pd.total_raciones || 0
   })
-  
-  const costoRealPorRacion = racionesTotalesReal > 0 
-    ? costoTotalReal / racionesTotalesReal 
-    : 0
-  
+
+  const costoRealPorRacion = racionesTotalesReal > 0 ? costoTotalReal / racionesTotalesReal : 0
   const ahorroProRacion = costoObjetivo - costoRealPorRacion
   const ahorro30dias = ahorroProRacion * racionesTotalesReal
-  
   const ingsEditados = pesajesIngs.filter(pi => pi.fue_editado).length
   const totalIngsPesados = pesajesIngs.length
-  const tasaEdicion = totalIngsPesados > 0 
-    ? Math.round((ingsEditados / totalIngsPesados) * 100) 
-    : 0
-  
+  const tasaEdicion = totalIngsPesados > 0 ? Math.round((ingsEditados / totalIngsPesados) * 100) : 0
+
   const sobrantePorEscuela = {}
   pesajesOperacion.filter(p => p.tipo === 'retorno').forEach(p => {
     const op = operaciones.find(o => o.id === p.operacion_id)
@@ -156,70 +107,38 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
     const escuela = escuelas.find(e => e.id === op.escuela_id)
     if (!escuela) return
     if (!sobrantePorEscuela[escuela.id]) {
-      sobrantePorEscuela[escuela.id] = { 
-        nombre: escuela.nombre, 
-        totalSobrante: 0,
-        totalCocinado: 0,
-        muestras: 0,
-      }
+      sobrantePorEscuela[escuela.id] = { nombre: escuela.nombre, totalSobrante: 0, totalCocinado: 0, muestras: 0 }
     }
     sobrantePorEscuela[escuela.id].totalSobrante += parseFloat(p.peso || 0)
-    
     const cocinado = pesajesOperacion.find(c => c.operacion_id === op.id && c.tipo === 'cocinado')
-    if (cocinado) {
-      sobrantePorEscuela[escuela.id].totalCocinado += parseFloat(cocinado.peso || 0)
-    }
+    if (cocinado) sobrantePorEscuela[escuela.id].totalCocinado += parseFloat(cocinado.peso || 0)
     sobrantePorEscuela[escuela.id].muestras += 1
   })
-  
-  const escuelasOrdenadas = Object.values(sobrantePorEscuela)
-    .map(e => ({
-      ...e,
-      pctSobrante: e.totalCocinado > 0 ? (e.totalSobrante / e.totalCocinado * 100) : 0
-    }))
-    .sort((a, b) => b.pctSobrante - a.pctSobrante)
-  
+
+  const escuelasOrdenadas = Object.values(sobrantePorEscuela).map(e => ({
+    ...e,
+    pctSobrante: e.totalCocinado > 0 ? (e.totalSobrante / e.totalCocinado * 100) : 0
+  })).sort((a, b) => b.pctSobrante - a.pctSobrante)
+
   const opsSinClase = operaciones.filter(op => op.no_hubo_clase).length
 
-  // ═══════════════════════════════════════════════════════
-  // 🆕 INT-008: CÁLCULOS DE GASTOS Y MARGEN REAL
-  // ═══════════════════════════════════════════════════════
-
-  // Gasto total últimos 30 días
   const gastoTotal30dias = gastos.reduce((sum, g) => sum + parseFloat(g.total || 0), 0)
-
-  // Desglose por categoría
   const gastosPorCategoria = {}
   gastos.forEach(g => {
     const cat = g.categorias_gasto
     if (!cat) return
     if (!gastosPorCategoria[cat.id]) {
-      gastosPorCategoria[cat.id] = {
-        id: cat.id,
-        nombre: cat.nombre,
-        icono: cat.icono,
-        color: cat.color,
-        total: 0,
-        cantidad: 0,
-      }
+      gastosPorCategoria[cat.id] = { id: cat.id, nombre: cat.nombre, icono: cat.icono, color: cat.color, total: 0, cantidad: 0 }
     }
     gastosPorCategoria[cat.id].total += parseFloat(g.total || 0)
     gastosPorCategoria[cat.id].cantidad += 1
   })
+  const categoriasOrdenadas = Object.values(gastosPorCategoria).map(c => ({
+    ...c, pct: gastoTotal30dias > 0 ? (c.total / gastoTotal30dias * 100) : 0
+  })).sort((a, b) => b.total - a.total)
 
-  const categoriasOrdenadas = Object.values(gastosPorCategoria)
-    .map(c => ({
-      ...c,
-      pct: gastoTotal30dias > 0 ? (c.total / gastoTotal30dias * 100) : 0
-    }))
-    .sort((a, b) => b.total - a.total)
+  const top3Gastos = [...gastos].sort((a, b) => parseFloat(b.total || 0) - parseFloat(a.total || 0)).slice(0, 3)
 
-  // Top 3 gastos individuales
-  const top3Gastos = [...gastos]
-    .sort((a, b) => parseFloat(b.total || 0) - parseFloat(a.total || 0))
-    .slice(0, 3)
-
-  // Facturación real del mes (de operaciones entregadas)
   const facturacionReal30 = operaciones
     .filter(op => op.estado === 'entregada' || op.estado === 'cerrada')
     .reduce((sum, op) => {
@@ -231,274 +150,316 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
     .filter(op => op.estado === 'entregada' || op.estado === 'cerrada')
     .reduce((sum, op) => sum + (op.raciones_planificadas || 0), 0)
 
-  // Margen real
   const margenReal = facturacionReal30 - gastoTotal30dias
   const margenRealPct = facturacionReal30 > 0 ? (margenReal / facturacionReal30 * 100) : 0
   const margenMinimoObjetivo = parseFloat(finanzas?.margen_minimo_porcentaje || 25)
-
-  // Costo total por ración (todos los gastos)
-  const costoTotalPorRacion = racionesEntregadas30 > 0 
-    ? gastoTotal30dias / racionesEntregadas30 
-    : 0
-
-  // Diferencia entre costo total y costo de ingredientes
+  const costoTotalPorRacion = racionesEntregadas30 > 0 ? gastoTotal30dias / racionesEntregadas30 : 0
   const costoNoIngredientes = costoTotalPorRacion - costoRealPorRacion
 
-  // Colores para categorías
-  const COLORES_TW = {
-    amber: 'bg-amber-500',
-    orange: 'bg-orange-500',
-    red: 'bg-red-500',
-    rose: 'bg-rose-500',
-    pink: 'bg-pink-500',
-    purple: 'bg-purple-500',
-    blue: 'bg-blue-500',
-    green: 'bg-green-500',
-    emerald: 'bg-emerald-500',
-    teal: 'bg-teal-500',
-    cyan: 'bg-cyan-500',
-    gray: 'bg-gray-500',
+  const COLORES_HEX = {
+    amber: '#EF9F27', orange: '#D85A30', red: '#E24B4A', rose: '#D4537E', pink: '#ED93B1',
+    purple: '#7F77DD', blue: '#378ADD', green: '#1D9E75', emerald: '#0F6E56',
+    teal: '#1D9E75', cyan: '#5DCAA5', gray: '#888780',
   }
-  
+
   return (
-    <div className="w-full max-w-6xl">
-      
-      <div className="bg-gradient-to-br from-indigo-600 to-purple-800 rounded-2xl p-6 mb-6 text-white">
-        <div className="flex justify-between items-start">
+    <div style={{ minHeight: '100vh', background: 'var(--color-bg-primary)', position: 'relative', padding: '20px' }}>
+      <div style={{ position: 'fixed', inset: 0, backgroundImage: 'var(--glow-verde), var(--glow-ambar)', pointerEvents: 'none', zIndex: 0 }} />
+      <div style={{ maxWidth: '1200px', margin: '0 auto', position: 'relative', zIndex: 1 }}>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+          <button onClick={onVolver} style={btnVolver()}>← Volver</button>
+          <ToggleTema tema={tema} setTema={setTema} />
+        </div>
+
+        <div style={{
+          background: esTropical ? `linear-gradient(135deg, ${COLOR_OP_CLARO} 0%, #ffffff 100%)` : `linear-gradient(135deg, ${COLOR_OP}25 0%, ${COLOR_OP}10 100%)`,
+          border: esTropical ? `1.5px solid ${COLOR_OP_BG}` : `1px solid ${COLOR_OP}55`,
+          borderRadius: '18px', padding: '20px 24px', marginBottom: '20px',
+          boxShadow: esTropical ? `0 2px 12px ${COLOR_OP}15` : 'none',
+          display: 'flex', alignItems: 'center', gap: '16px',
+        }}>
+          <div style={{ width: '52px', height: '52px', borderRadius: '14px', background: esTropical ? COLOR_OP : `${COLOR_OP}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', boxShadow: esTropical ? `0 4px 12px ${COLOR_OP}40` : 'none' }}>🧠</div>
           <div>
-            <p className="text-indigo-100 text-xs font-semibold tracking-wider">INTELIGENCIA</p>
-            <h2 className="text-3xl font-bold mt-1">🧠 Inteligencia Operativa</h2>
-            <p className="text-indigo-200 mt-1">Últimos 30 días · {empresa?.nombre}</p>
+            <div style={{ fontSize: '10px', color: esTropical ? COLOR_OP : `${COLOR_OP}CC`, letterSpacing: '1.5px', fontWeight: 600 }}>INTELIGENCIA</div>
+            <div style={{ fontSize: '20px', fontWeight: 500, color: esTropical ? COLOR_OP_DARKER : 'var(--color-text-primary)', lineHeight: 1.2 }}>Inteligencia Operativa</div>
+            <div style={{ fontSize: '12px', color: esTropical ? COLOR_OP : `${COLOR_OP}CC`, marginTop: '4px', fontWeight: 500 }}>Últimos 30 días · {empresa?.nombre}</div>
           </div>
-          <button
-            onClick={onVolver}
-            className="bg-indigo-700 hover:bg-indigo-900 text-white text-sm px-4 py-2 rounded-lg"
-          >
-            ← Volver
-          </button>
         </div>
-      </div>
 
-      {totalDiasOperados === 0 && totalOperacionesActivas === 0 && gastos.length === 0 ? (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-12 text-center">
-          <p className="text-6xl mb-4">📊</p>
-          <h3 className="font-bold text-yellow-900 text-lg">Aún no hay datos suficientes</h3>
-          <p className="text-sm text-yellow-700 mt-2 max-w-md mx-auto">
-            Cuando empieces a aprobar pesajes en el día a día, esta pantalla se llenará con 
-            inteligencia real sobre tu operación.
-          </p>
-          <p className="text-xs text-yellow-600 mt-4">
-            💡 Empieza por aprobar el pesaje crudo de hoy en el dashboard.
-          </p>
-        </div>
-      ) : (
-        <>
-          {/* ─────────────────────────────────────────────── */}
-          {/* 🆕 INT-008: SECCIÓN VISIÓN FINANCIERA COMPLETA */}
-          {/* ─────────────────────────────────────────────── */}
-          <div className="bg-gradient-to-br from-slate-50 to-indigo-50 border-2 border-indigo-200 rounded-2xl shadow-xl p-6 mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <p className="text-xs text-indigo-700 font-semibold tracking-wider">
-                  💼 VISIÓN FINANCIERA REAL
-                </p>
-                <p className="text-xs text-indigo-600 mt-1">
-                  Todo lo que entra, todo lo que sale · últimos 30 días
-                </p>
-              </div>
-              <span className="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">
-                ECOSISTEMA COMPLETO
-              </span>
+        {totalDiasOperados === 0 && totalOperacionesActivas === 0 && gastos.length === 0 ? (
+          <div style={{
+            background: esTropical ? '#FAF3E5' : 'rgba(250, 199, 117, 0.08)',
+            border: '1px solid rgba(186, 117, 23, 0.3)', borderLeft: '4px solid #BA7517',
+            borderRadius: '14px', padding: '40px', textAlign: 'center', boxShadow: 'var(--modulo-sombra)',
+          }}>
+            <div style={{ fontSize: '56px', marginBottom: '12px' }}>📊</div>
+            <div style={{ fontSize: '16px', fontWeight: 600, color: esTropical ? '#854F0B' : '#FAC775', marginBottom: '8px' }}>
+              Aún no hay datos suficientes
             </div>
-
-            {/* 4 KPIs PRINCIPALES */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-              <div className="bg-white rounded-xl p-4 border-2 border-green-200">
-                <p className="text-xs text-green-700 font-bold tracking-wider">FACTURACIÓN</p>
-                <p className="text-2xl font-bold text-green-900 mt-1">
-                  RD$ {(facturacionReal30 / 1000).toFixed(0)}K
-                </p>
-                <p className="text-xs text-green-600 mt-1">
-                  {racionesEntregadas30.toLocaleString()} raciones entregadas
-                </p>
+            <p style={{ fontSize: '12px', color: esTropical ? '#633806' : 'var(--color-text-secondary)', maxWidth: '400px', margin: '0 auto' }}>
+              Cuando empieces a aprobar pesajes en el día a día, esta pantalla se llenará con inteligencia real sobre tu operación.
+            </p>
+            <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '12px' }}>
+              💡 Empieza por aprobar el pesaje crudo de hoy en el dashboard.
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* VISIÓN FINANCIERA */}
+            <div style={{
+              background: 'var(--color-modulo-bg)', border: '1px solid var(--color-modulo-border)',
+              borderLeft: `4px solid ${COLOR_OP}`,
+              borderRadius: '14px', padding: '20px', marginBottom: '20px', boxShadow: 'var(--modulo-sombra)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                <div>
+                  <div style={{ fontSize: '10px', color: COLOR_OP, letterSpacing: '1.5px', fontWeight: 600 }}>💼 VISIÓN FINANCIERA REAL</div>
+                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '4px' }}>Todo lo que entra, todo lo que sale · últimos 30 días</div>
+                </div>
+                <span style={{ background: esTropical ? COLOR_OP : `${COLOR_OP}25`, color: esTropical ? '#ffffff' : COLOR_OP, padding: '4px 12px', borderRadius: '12px', fontSize: '10px', fontWeight: 600 }}>
+                  ECOSISTEMA COMPLETO
+                </span>
               </div>
 
-              <div className="bg-white rounded-xl p-4 border-2 border-red-200">
-                <p className="text-xs text-red-700 font-bold tracking-wider">GASTOS TOTALES</p>
-                <p className="text-2xl font-bold text-red-900 mt-1">
-                  RD$ {(gastoTotal30dias / 1000).toFixed(0)}K
-                </p>
-                <p className="text-xs text-red-600 mt-1">
-                  {gastos.length} gastos registrados
-                </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', marginBottom: '16px' }}>
+                <KpiCardCompacto label="FACTURACIÓN" valor={`RD$ ${(facturacionReal30 / 1000).toFixed(0)}K`} sublabel={`${racionesEntregadas30.toLocaleString()} raciones entregadas`} colorBorde="#1D9E75" colorTexto={esTropical ? '#04342C' : '#5DCAA5'} />
+                <KpiCardCompacto label="GASTOS TOTALES" valor={`RD$ ${(gastoTotal30dias / 1000).toFixed(0)}K`} sublabel={`${gastos.length} gastos registrados`} colorBorde="#E24B4A" colorTexto={esTropical ? '#A32D2D' : '#F4C0D1'} />
+                <KpiCardCompacto label={margenReal >= 0 ? 'MARGEN NETO' : '⚠️ PÉRDIDA'} valor={`RD$ ${(Math.abs(margenReal) / 1000).toFixed(0)}K`} sublabel={`${margenRealPct.toFixed(1)}% de facturación`} colorBorde={margenReal >= 0 ? '#378ADD' : '#BA7517'} colorTexto={margenReal >= 0 ? (esTropical ? '#0C447C' : '#85B7EB') : (esTropical ? '#854F0B' : '#FAC775')} />
+                <KpiCardCompacto label="COSTO TOTAL/RACIÓN" valor={`RD$ ${costoTotalPorRacion.toFixed(2)}`} sublabel="Incluye todos los gastos" colorBorde={COLOR_OP} colorTexto={esTropical ? COLOR_OP_DARKER : COLOR_OP_BG} />
               </div>
 
-              <div className={`bg-white rounded-xl p-4 border-2 ${
-                margenReal >= 0 ? 'border-blue-200' : 'border-orange-300'
-              }`}>
-                <p className={`text-xs font-bold tracking-wider ${
-                  margenReal >= 0 ? 'text-blue-700' : 'text-orange-700'
-                }`}>
-                  {margenReal >= 0 ? 'MARGEN NETO' : '⚠️ PÉRDIDA'}
-                </p>
-                <p className={`text-2xl font-bold mt-1 ${
-                  margenReal >= 0 ? 'text-blue-900' : 'text-orange-900'
-                }`}>
-                  RD$ {(Math.abs(margenReal) / 1000).toFixed(0)}K
-                </p>
-                <p className={`text-xs mt-1 ${
-                  margenReal >= 0 ? 'text-blue-600' : 'text-orange-600'
-                }`}>
-                  {margenRealPct.toFixed(1)}% de facturación
-                </p>
-              </div>
-
-              <div className="bg-white rounded-xl p-4 border-2 border-purple-200">
-                <p className="text-xs text-purple-700 font-bold tracking-wider">COSTO TOTAL/RACIÓN</p>
-                <p className="text-2xl font-bold text-purple-900 mt-1">
-                  RD$ {costoTotalPorRacion.toFixed(2)}
-                </p>
-                <p className="text-xs text-purple-600 mt-1">
-                  Incluye todos los gastos
-                </p>
-              </div>
-            </div>
-
-            {/* COMPARATIVA INGREDIENTES VS TOTAL */}
-            {costoRealPorRacion > 0 && costoTotalPorRacion > 0 && (
-              <div className="bg-white rounded-xl p-4 mb-5 border border-indigo-200">
-                <p className="text-xs text-indigo-700 font-semibold tracking-wider mb-3">
-                  🔍 ¿DE QUÉ ESTÁ COMPUESTO TU COSTO POR RACIÓN?
-                </p>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-32 text-sm font-semibold text-gray-700">Ingredientes</div>
-                    <div className="flex-1 bg-gray-100 rounded-full h-6 relative overflow-hidden">
-                      <div 
-                        className="bg-emerald-500 h-6 rounded-full flex items-center justify-end pr-2"
-                        style={{ width: `${Math.min((costoRealPorRacion / costoTotalPorRacion * 100), 100)}%` }}
-                      >
-                        <span className="text-xs font-bold text-white">
-                          RD$ {costoRealPorRacion.toFixed(2)}
-                        </span>
-                      </div>
+              {costoRealPorRacion > 0 && costoTotalPorRacion > 0 && (
+                <div style={{ background: esTropical ? '#FBFAF6' : 'var(--color-bg-elevated)', borderRadius: '10px', padding: '14px', marginBottom: '14px', border: '1px solid var(--color-border-subtle)' }}>
+                  <div style={{ fontSize: '10px', color: COLOR_OP, fontWeight: 600, letterSpacing: '0.5px', marginBottom: '10px' }}>
+                    🔍 ¿DE QUÉ ESTÁ COMPUESTO TU COSTO POR RACIÓN?
+                  </div>
+                  <BarraComposicion label="Ingredientes" valor={costoRealPorRacion} total={costoTotalPorRacion} color="#1D9E75" />
+                  <BarraComposicion label="Resto del negocio" valor={costoNoIngredientes} total={costoTotalPorRacion} color="#D4537E" />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingTop: '10px', borderTop: '1px solid var(--color-border-subtle)' }}>
+                    <div style={{ width: '120px', fontSize: '12px', fontWeight: 700, color: esTropical ? COLOR_OP_DARKER : COLOR_OP_BG }}>TOTAL</div>
+                    <div style={{ flex: 1, textAlign: 'right', fontSize: '15px', fontWeight: 700, color: esTropical ? COLOR_OP_DARKER : 'var(--color-text-primary)' }}>
+                      RD$ {costoTotalPorRacion.toFixed(2)} por ración
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-32 text-sm font-semibold text-gray-700">Resto del negocio</div>
-                    <div className="flex-1 bg-gray-100 rounded-full h-6 relative overflow-hidden">
-                      <div 
-                        className="bg-rose-500 h-6 rounded-full flex items-center justify-end pr-2"
-                        style={{ width: `${Math.min((costoNoIngredientes / costoTotalPorRacion * 100), 100)}%` }}
-                      >
-                        <span className="text-xs font-bold text-white">
-                          RD$ {costoNoIngredientes.toFixed(2)}
-                        </span>
-                      </div>
-                    </div>
+                  <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '8px', fontStyle: 'italic' }}>
+                    💡 Nómina, gas, limpieza y demás suman <strong>RD$ {costoNoIngredientes.toFixed(2)}</strong> al costo real.
                   </div>
-                  <div className="flex items-center gap-3 pt-2 border-t border-gray-200">
-                    <div className="w-32 text-sm font-bold text-indigo-900">TOTAL</div>
-                    <div className="flex-1 text-right">
-                      <span className="text-lg font-bold text-indigo-900">
-                        RD$ {costoTotalPorRacion.toFixed(2)} por ración
+                </div>
+              )}
+
+              {facturacionReal30 > 0 && margenRealPct < margenMinimoObjetivo && (
+                <div style={{
+                  background: margenReal < 0 ? (esTropical ? '#FCEBEB' : 'rgba(226, 75, 74, 0.12)') : (esTropical ? '#FAF3E5' : 'rgba(186, 117, 23, 0.12)'),
+                  border: margenReal < 0 ? '1px solid rgba(226, 75, 74, 0.4)' : '1px solid rgba(186, 117, 23, 0.4)',
+                  borderLeft: margenReal < 0 ? '4px solid #E24B4A' : '4px solid #BA7517',
+                  borderRadius: '10px', padding: '12px 14px', marginBottom: '14px',
+                }}>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: margenReal < 0 ? (esTropical ? '#A32D2D' : '#F4C0D1') : (esTropical ? '#854F0B' : '#FAC775') }}>
+                    {margenReal < 0 ? '🚨 ALERTA: Estás operando con pérdida' : `⚠️ Margen por debajo del objetivo (${margenMinimoObjetivo}%)`}
+                  </div>
+                  <div style={{ fontSize: '11px', color: margenReal < 0 ? (esTropical ? '#A32D2D' : '#F4C0D1') : (esTropical ? '#854F0B' : '#FAC775'), marginTop: '4px', opacity: 0.85 }}>
+                    Tu margen real es {margenRealPct.toFixed(1)}%. Revisa gastos o ajusta operación.
+                  </div>
+                </div>
+              )}
+
+              {categoriasOrdenadas.length > 0 && (
+                <div style={{ background: esTropical ? '#FBFAF6' : 'var(--color-bg-elevated)', borderRadius: '10px', padding: '14px', marginBottom: '12px', border: '1px solid var(--color-border-subtle)' }}>
+                  <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', fontWeight: 600, letterSpacing: '0.5px', marginBottom: '12px' }}>
+                    📊 GASTOS POR CATEGORÍA
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {categoriasOrdenadas.map(cat => (
+                      <div key={cat.id}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary)' }}>
+                            {cat.icono} {cat.nombre}
+                            <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', fontWeight: 400, marginLeft: '6px' }}>
+                              ({cat.cantidad} gasto{cat.cantidad !== 1 ? 's' : ''})
+                            </span>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                              RD$ {cat.total.toLocaleString('es-DO', { maximumFractionDigits: 0 })}
+                            </span>
+                            <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginLeft: '6px' }}>
+                              {cat.pct.toFixed(1)}%
+                            </span>
+                          </div>
+                        </div>
+                        <div style={{ width: '100%', background: esTropical ? '#E5E3DC' : 'rgba(255,255,255,0.05)', borderRadius: '8px', height: '6px', overflow: 'hidden' }}>
+                          <div style={{ background: COLORES_HEX[cat.color] || '#888780', height: '6px', width: `${Math.min(cat.pct, 100)}%`, borderRadius: '8px' }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {top3Gastos.length > 0 && (
+                <div style={{ background: esTropical ? '#FBFAF6' : 'var(--color-bg-elevated)', borderRadius: '10px', padding: '14px', border: '1px solid var(--color-border-subtle)' }}>
+                  <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', fontWeight: 600, letterSpacing: '0.5px', marginBottom: '10px' }}>
+                    🏆 TOP 3 GASTOS DEL PERÍODO
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {top3Gastos.map((g, idx) => {
+                      const cat = g.categorias_gasto
+                      const colorRank = idx === 0 ? '#FAC775' : idx === 1 ? '#C5C5BE' : '#BA7517'
+                      return (
+                        <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', background: esTropical ? '#F1EFE8' : 'rgba(255,255,255,0.03)', borderRadius: '8px', padding: '10px 12px' }}>
+                          <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: colorRank, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '12px', flexShrink: 0 }}>{idx + 1}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {cat?.icono} {g.descripcion || 'Sin descripción'}
+                            </div>
+                            <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
+                              {cat?.nombre} · {new Date(g.fecha).toLocaleDateString('es-DO')}
+                            </div>
+                          </div>
+                          <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                            RD$ {parseFloat(g.total).toLocaleString('es-DO', { maximumFractionDigits: 0 })}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {gastos.length === 0 && (
+                <div style={{ background: esTropical ? '#FBFAF6' : 'var(--color-bg-elevated)', borderRadius: '10px', padding: '20px', textAlign: 'center', border: '1px solid var(--color-border-subtle)' }}>
+                  <div style={{ fontSize: '36px', marginBottom: '8px' }}>💸</div>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>Aún no hay gastos registrados</div>
+                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '4px' }}>Empieza a capturar gastos para ver tu costo total real y margen neto.</div>
+                </div>
+              )}
+            </div>
+
+            {/* SALUD DEL SISTEMA */}
+            <div style={{ background: 'var(--color-modulo-bg)', border: '1px solid var(--color-modulo-border)', borderLeft: '4px solid #1D9E75', borderRadius: '14px', padding: '20px', marginBottom: '20px', boxShadow: 'var(--modulo-sombra)' }}>
+              <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', letterSpacing: '1.5px', fontWeight: 600, marginBottom: '14px' }}>
+                📊 SALUD DEL SISTEMA
+              </div>
+              <BarraSalud label="Pesaje crudo del día" pct={tasaCrudo} count={totalDiasOperados} total={fechasConOps.length} color="#1D9E75" esTropical={esTropical} />
+              <BarraSalud label="Pesaje cocinado por escuela" pct={tasaCocinado} count={pesajesCocinado} total={totalOperacionesActivas} color="#D85A30" esTropical={esTropical} />
+              <BarraSalud label="Pesaje sobrante por escuela" pct={tasaSobrante} count={pesajesSobrante} total={totalOperacionesActivas} color={COLOR_OP} esTropical={esTropical} />
+
+              <div style={{ marginTop: '18px', paddingTop: '14px', borderTop: '1px solid var(--color-border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                  <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', letterSpacing: '1px', fontWeight: 600 }}>⭐ CALIDAD DE DATOS</div>
+                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '4px' }}>Mientras más pesajes registres, mejor afina el sistema</div>
+                </div>
+                <div style={{
+                  padding: '12px 24px', borderRadius: '12px', fontSize: '20px', fontWeight: 700,
+                  background: calidadDatos >= 75 ? (esTropical ? '#D7F0DD' : 'rgba(29, 158, 117, 0.2)')
+                    : calidadDatos >= 40 ? (esTropical ? '#FAF3E5' : 'rgba(186, 117, 23, 0.2)')
+                    : (esTropical ? '#FCEBEB' : 'rgba(226, 75, 74, 0.2)'),
+                  color: calidadDatos >= 75 ? (esTropical ? '#04342C' : '#5DCAA5')
+                    : calidadDatos >= 40 ? (esTropical ? '#854F0B' : '#FAC775')
+                    : (esTropical ? '#A32D2D' : '#F4C0D1'),
+                }}>
+                  {calidadDatos}%
+                </div>
+              </div>
+            </div>
+
+            {/* COSTO INGREDIENTES VS OBJETIVO */}
+            <div style={{ background: 'var(--color-modulo-bg)', border: '1px solid var(--color-modulo-border)', borderLeft: '4px solid #EF9F27', borderRadius: '14px', padding: '20px', marginBottom: '20px', boxShadow: 'var(--modulo-sombra)' }}>
+              <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', letterSpacing: '1.5px', fontWeight: 600, marginBottom: '14px' }}>
+                🥕 COSTO INGREDIENTES VS OBJETIVO
+              </div>
+              {totalDiasOperados === 0 ? (
+                <div style={{ textAlign: 'center', padding: '24px', fontSize: '13px', color: 'var(--color-text-muted)' }}>
+                  Aprueba al menos un pesaje crudo para ver el costo real
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+                    <KpiMini label="OBJETIVO" valor={`RD$ ${costoObjetivo.toFixed(2)}`} sublabel="por ración" esTropical={esTropical} color="#888780" />
+                    <KpiMini label="COSTO REAL"
+                      valor={`RD$ ${costoRealPorRacion.toFixed(2)}`}
+                      sublabel="solo ingredientes"
+                      esTropical={esTropical}
+                      color={costoRealPorRacion <= costoObjetivo ? '#1D9E75' : '#E24B4A'} />
+                    <KpiMini label={ahorroProRacion >= 0 ? 'AHORRO' : 'EXCESO'}
+                      valor={`RD$ ${Math.abs(ahorroProRacion).toFixed(2)}`}
+                      sublabel="por ración"
+                      esTropical={esTropical}
+                      color={ahorroProRacion >= 0 ? '#378ADD' : '#BA7517'} />
+                  </div>
+
+                  <div style={{
+                    marginTop: '14px', padding: '14px',
+                    background: esTropical ? COLOR_OP_CLARO : `${COLOR_OP}15`,
+                    border: `1px solid ${COLOR_OP}40`, borderRadius: '10px',
+                  }}>
+                    <div style={{ fontSize: '10px', color: esTropical ? COLOR_OP_DARKER : COLOR_OP, fontWeight: 600, letterSpacing: '0.5px' }}>
+                      💡 IMPACTO ACUMULADO (30 días)
+                    </div>
+                    <div style={{ fontSize: '22px', fontWeight: 700, color: esTropical ? COLOR_OP_DARKER : 'var(--color-text-primary)', marginTop: '4px' }}>
+                      RD$ {Math.abs(ahorro30dias).toLocaleString('es-DO', { maximumFractionDigits: 0 })}
+                      <span style={{ fontSize: '12px', fontWeight: 400, marginLeft: '6px', opacity: 0.85 }}>
+                        {ahorro30dias >= 0 ? '✅ ahorrados' : '⚠️ sobre-costo'}
                       </span>
                     </div>
+                    <div style={{ fontSize: '11px', color: esTropical ? COLOR_OP : `${COLOR_OP}CC`, marginTop: '4px' }}>
+                      Basado en {racionesTotalesReal.toLocaleString()} raciones pesadas en {totalDiasOperados} días
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* AJUSTES MANUALES */}
+            {totalIngsPesados > 0 && (
+              <div style={{ background: 'var(--color-modulo-bg)', border: '1px solid var(--color-modulo-border)', borderLeft: '4px solid #BA7517', borderRadius: '14px', padding: '20px', marginBottom: '20px', boxShadow: 'var(--modulo-sombra)' }}>
+                <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', letterSpacing: '1.5px', fontWeight: 600, marginBottom: '14px' }}>
+                  ✏️ AJUSTES MANUALES
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{totalIngsPesados}</div>
+                    <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '4px' }}>Ingredientes pesados</div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '28px', fontWeight: 700, color: esTropical ? '#854F0B' : '#FAC775' }}>{ingsEditados}</div>
+                    <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '4px' }}>Fueron editados</div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '28px', fontWeight: 700, color: tasaEdicion < 20 ? (esTropical ? '#04342C' : '#5DCAA5') : tasaEdicion < 50 ? (esTropical ? '#854F0B' : '#FAC775') : (esTropical ? '#A32D2D' : '#F4C0D1') }}>
+                      {tasaEdicion}%
+                    </div>
+                    <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '4px' }}>Tasa de edición</div>
                   </div>
                 </div>
-                <p className="text-xs text-gray-600 mt-3 italic">
-                  💡 Nómina, gas, limpieza, contador y demás suman <strong>RD$ {costoNoIngredientes.toFixed(2)}</strong> al costo real de cada ración.
-                </p>
-              </div>
-            )}
-
-            {/* ALERTA SI MARGEN BAJO */}
-            {facturacionReal30 > 0 && margenRealPct < margenMinimoObjetivo && (
-              <div className={`rounded-xl p-4 mb-5 ${
-                margenReal < 0 
-                  ? 'bg-red-50 border-2 border-red-300'
-                  : 'bg-orange-50 border-2 border-orange-300'
-              }`}>
-                <p className={`text-sm font-bold ${
-                  margenReal < 0 ? 'text-red-900' : 'text-orange-900'
-                }`}>
-                  {margenReal < 0 
-                    ? '🚨 ALERTA: Estás operando con pérdida'
-                    : `⚠️ Margen por debajo del objetivo (${margenMinimoObjetivo}%)`}
-                </p>
-                <p className={`text-xs mt-1 ${
-                  margenReal < 0 ? 'text-red-700' : 'text-orange-700'
-                }`}>
-                  Tu margen real es {margenRealPct.toFixed(1)}%. Revisa gastos o ajusta operación.
-                </p>
-              </div>
-            )}
-
-            {/* DESGLOSE POR CATEGORÍA */}
-            {categoriasOrdenadas.length > 0 && (
-              <div className="bg-white rounded-xl p-4 border border-indigo-200 mb-4">
-                <p className="text-xs text-gray-700 font-semibold tracking-wider mb-3">
-                  📊 GASTOS POR CATEGORÍA
-                </p>
-                <div className="space-y-3">
-                  {categoriasOrdenadas.map(cat => (
-                    <div key={cat.id}>
-                      <div className="flex justify-between items-center mb-1">
-                        <p className="text-sm font-semibold text-gray-700">
-                          {cat.icono} {cat.nombre}
-                          <span className="text-xs text-gray-500 font-normal ml-2">
-                            ({cat.cantidad} gasto{cat.cantidad !== 1 ? 's' : ''})
-                          </span>
-                        </p>
-                        <div className="text-right">
-                          <span className="text-sm font-bold text-gray-900">
-                            RD$ {cat.total.toLocaleString('es-DO', { maximumFractionDigits: 0 })}
-                          </span>
-                          <span className="text-xs text-gray-500 ml-2">
-                            {cat.pct.toFixed(1)}%
-                          </span>
-                        </div>
-                      </div>
-                      <div className="w-full bg-gray-100 rounded-full h-2">
-                        <div 
-                          className={`${COLORES_TW[cat.color] || 'bg-gray-400'} h-2 rounded-full transition-all`}
-                          style={{ width: `${Math.min(cat.pct, 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
+                <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '14px', fontStyle: 'italic' }}>
+                  💡 Si la tasa es alta, puede que las recetas necesiten ajuste. Mientras más uses la app, mejor afinarán los valores.
                 </div>
               </div>
             )}
 
-            {/* TOP 3 GASTOS INDIVIDUALES */}
-            {top3Gastos.length > 0 && (
-              <div className="bg-white rounded-xl p-4 border border-indigo-200">
-                <p className="text-xs text-gray-700 font-semibold tracking-wider mb-3">
-                  🏆 TOP 3 GASTOS DEL PERÍODO
-                </p>
-                <div className="space-y-2">
-                  {top3Gastos.map((g, idx) => {
-                    const cat = g.categorias_gasto
+            {/* SOBRANTE POR ESCUELA */}
+            {escuelasOrdenadas.length > 0 && (
+              <div style={{ background: 'var(--color-modulo-bg)', border: '1px solid var(--color-modulo-border)', borderLeft: '4px solid #D85A30', borderRadius: '14px', padding: '20px', marginBottom: '20px', boxShadow: 'var(--modulo-sombra)' }}>
+                <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', letterSpacing: '1.5px', fontWeight: 600, marginBottom: '14px' }}>
+                  🏫 SOBRANTE POR ESCUELA
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {escuelasOrdenadas.map((e, idx) => {
+                    const colorRank = e.pctSobrante > 15 ? '#E24B4A' : e.pctSobrante > 8 ? '#BA7517' : '#1D9E75'
                     return (
-                      <div key={g.id} className="flex items-center gap-3 bg-gray-50 rounded-lg p-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-sm ${
-                          idx === 0 ? 'bg-yellow-500' : idx === 1 ? 'bg-gray-400' : 'bg-amber-700'
-                        }`}>
+                      <div key={e.nombre} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: esTropical ? `${colorRank}20` : `${colorRank}30`, color: colorRank, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '13px', flexShrink: 0 }}>
                           {idx + 1}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-gray-900 text-sm truncate">
-                            {cat?.icono} {g.descripcion || 'Sin descripción'}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {cat?.nombre} · {new Date(g.fecha).toLocaleDateString('es-DO')}
-                          </p>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>{e.nombre}</div>
+                          <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>{e.muestras} pesajes registrados</div>
                         </div>
-                        <div className="text-right">
-                          <p className="text-lg font-bold text-gray-900">
-                            RD$ {parseFloat(g.total).toLocaleString('es-DO', { maximumFractionDigits: 0 })}
-                          </p>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '18px', fontWeight: 700, color: colorRank }}>{e.pctSobrante.toFixed(1)}%</div>
+                          <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>{e.totalSobrante.toFixed(0)} lb total</div>
                         </div>
                       </div>
                     )
@@ -507,242 +468,110 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
               </div>
             )}
 
-            {gastos.length === 0 && (
-              <div className="bg-white rounded-xl p-6 text-center border border-indigo-200">
-                <p className="text-4xl mb-2">💸</p>
-                <p className="text-sm font-bold text-gray-700">Aún no hay gastos registrados</p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Empieza a capturar gastos para ver tu costo total real y margen neto.
-                </p>
+            {/* DÍAS SIN CLASE */}
+            {opsSinClase > 0 && (
+              <div style={{
+                background: esTropical ? '#FAF3E5' : 'rgba(186, 117, 23, 0.08)',
+                border: '1px solid rgba(186, 117, 23, 0.3)', borderLeft: '4px solid #BA7517',
+                borderRadius: '14px', padding: '18px 20px', marginBottom: '20px', boxShadow: 'var(--modulo-sombra)',
+              }}>
+                <div style={{ fontSize: '10px', color: esTropical ? '#854F0B' : '#FAC775', letterSpacing: '1.5px', fontWeight: 600 }}>
+                  🚫 DÍAS SIN CLASE (30 días)
+                </div>
+                <div style={{ fontSize: '20px', fontWeight: 700, color: esTropical ? '#854F0B' : 'var(--color-text-primary)', marginTop: '4px' }}>
+                  {opsSinClase} operaciones canceladas
+                </div>
+                <div style={{ fontSize: '11px', color: esTropical ? '#633806' : 'var(--color-text-muted)', marginTop: '4px' }}>
+                  Por lluvia, paros u otras razones. Estas no se facturaron.
+                </div>
               </div>
             )}
-          </div>
-
-          {/* ─── SALUD DEL SISTEMA ─── */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-            <p className="text-xs text-gray-500 font-semibold tracking-wider mb-4">
-              📊 SALUD DEL SISTEMA
-            </p>
-            
-            <div className="space-y-4">
-              <BarraSalud
-                label="Pesaje crudo del día"
-                pct={tasaCrudo}
-                count={totalDiasOperados}
-                total={fechasConOps.length}
-                color="emerald"
-              />
-              <BarraSalud
-                label="Pesaje cocinado por escuela"
-                pct={tasaCocinado}
-                count={pesajesCocinado}
-                total={totalOperacionesActivas}
-                color="orange"
-              />
-              <BarraSalud
-                label="Pesaje sobrante por escuela"
-                pct={tasaSobrante}
-                count={pesajesSobrante}
-                total={totalOperacionesActivas}
-                color="purple"
-              />
-            </div>
-            
-            <div className="mt-6 pt-4 border-t border-gray-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-gray-500 font-semibold tracking-wider">⭐ CALIDAD DE DATOS</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Mientras más pesajes registres, mejor afina el sistema
-                  </p>
-                </div>
-                <div className={`px-6 py-3 rounded-xl font-bold text-lg ${
-                  calidadDatos >= 75 ? 'bg-green-100 text-green-900' :
-                  calidadDatos >= 40 ? 'bg-yellow-100 text-yellow-900' :
-                  'bg-red-100 text-red-900'
-                }`}>
-                  {calidadDatos}%
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* ─── COSTO INGREDIENTES VS OBJETIVO ─── */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-            <p className="text-xs text-gray-500 font-semibold tracking-wider mb-4">
-              🥕 COSTO INGREDIENTES VS OBJETIVO
-            </p>
-            
-            {totalDiasOperados === 0 ? (
-              <div className="text-center py-8 text-gray-500 text-sm">
-                <p>Aprueba al menos un pesaje crudo para ver el costo real</p>
-              </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-gray-50 rounded-xl p-4 text-center">
-                    <p className="text-xs text-gray-600 font-semibold tracking-wider">OBJETIVO</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">
-                      RD$ {costoObjetivo.toFixed(2)}
-                    </p>
-                    <p className="text-xs text-gray-500">por ración</p>
-                  </div>
-                  <div className={`rounded-xl p-4 text-center border ${
-                    costoRealPorRacion <= costoObjetivo 
-                      ? 'bg-green-50 border-green-200'
-                      : 'bg-red-50 border-red-200'
-                  }`}>
-                    <p className={`text-xs font-semibold tracking-wider ${
-                      costoRealPorRacion <= costoObjetivo ? 'text-green-700' : 'text-red-700'
-                    }`}>COSTO REAL</p>
-                    <p className={`text-2xl font-bold mt-1 ${
-                      costoRealPorRacion <= costoObjetivo ? 'text-green-900' : 'text-red-900'
-                    }`}>
-                      RD$ {costoRealPorRacion.toFixed(2)}
-                    </p>
-                    <p className={`text-xs ${
-                      costoRealPorRacion <= costoObjetivo ? 'text-green-600' : 'text-red-600'
-                    }`}>solo ingredientes</p>
-                  </div>
-                  <div className={`rounded-xl p-4 text-center border ${
-                    ahorroProRacion >= 0
-                      ? 'bg-blue-50 border-blue-200'
-                      : 'bg-orange-50 border-orange-200'
-                  }`}>
-                    <p className={`text-xs font-semibold tracking-wider ${
-                      ahorroProRacion >= 0 ? 'text-blue-700' : 'text-orange-700'
-                    }`}>{ahorroProRacion >= 0 ? 'AHORRO' : 'EXCESO'}</p>
-                    <p className={`text-2xl font-bold mt-1 ${
-                      ahorroProRacion >= 0 ? 'text-blue-900' : 'text-orange-900'
-                    }`}>
-                      RD$ {Math.abs(ahorroProRacion).toFixed(2)}
-                    </p>
-                    <p className={`text-xs ${
-                      ahorroProRacion >= 0 ? 'text-blue-600' : 'text-orange-600'
-                    }`}>por ración</p>
-                  </div>
-                </div>
-                
-                <div className="mt-4 p-4 bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-200 rounded-xl">
-                  <p className="text-xs text-indigo-700 font-semibold tracking-wider">
-                    💡 IMPACTO ACUMULADO (30 días)
-                  </p>
-                  <p className="text-2xl font-bold text-indigo-900 mt-1">
-                    RD$ {Math.abs(ahorro30dias).toLocaleString('es-DO', { maximumFractionDigits: 0 })}
-                    <span className="text-sm font-normal ml-2">
-                      {ahorro30dias >= 0 ? '✅ ahorrados' : '⚠️ sobre-costo'}
-                    </span>
-                  </p>
-                  <p className="text-xs text-indigo-600 mt-1">
-                    Basado en {racionesTotalesReal.toLocaleString()} raciones pesadas en {totalDiasOperados} días
-                  </p>
-                </div>
-              </>
-            )}
-          </div>
-
-          {totalIngsPesados > 0 && (
-            <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-              <p className="text-xs text-gray-500 font-semibold tracking-wider mb-4">
-                ✏️ AJUSTES MANUALES
-              </p>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="text-center">
-                  <p className="text-3xl font-bold text-gray-900">{totalIngsPesados}</p>
-                  <p className="text-xs text-gray-500 mt-1">Ingredientes pesados</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-3xl font-bold text-orange-600">{ingsEditados}</p>
-                  <p className="text-xs text-gray-500 mt-1">Fueron editados</p>
-                </div>
-                <div className="text-center">
-                  <p className={`text-3xl font-bold ${
-                    tasaEdicion < 20 ? 'text-green-600' : 
-                    tasaEdicion < 50 ? 'text-yellow-600' : 'text-red-600'
-                  }`}>{tasaEdicion}%</p>
-                  <p className="text-xs text-gray-500 mt-1">Tasa de edición</p>
-                </div>
-              </div>
-              <p className="text-xs text-gray-500 mt-4 italic">
-                💡 Si la tasa es alta, puede que las recetas necesiten ajuste. Mientras más uses la app, mejor afinarán los valores sugeridos.
-              </p>
-            </div>
-          )}
-
-          {escuelasOrdenadas.length > 0 && (
-            <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-              <p className="text-xs text-gray-500 font-semibold tracking-wider mb-4">
-                🏫 SOBRANTE POR ESCUELA
-              </p>
-              <div className="space-y-3">
-                {escuelasOrdenadas.map((e, idx) => (
-                  <div key={e.nombre} className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
-                      e.pctSobrante > 15 ? 'bg-red-100 text-red-700' :
-                      e.pctSobrante > 8 ? 'bg-yellow-100 text-yellow-700' :
-                      'bg-green-100 text-green-700'
-                    }`}>
-                      {idx + 1}
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-sm">{e.nombre}</p>
-                      <p className="text-xs text-gray-500">{e.muestras} pesajes registrados</p>
-                    </div>
-                    <div className="text-right">
-                      <p className={`text-xl font-bold ${
-                        e.pctSobrante > 15 ? 'text-red-700' :
-                        e.pctSobrante > 8 ? 'text-yellow-700' :
-                        'text-green-700'
-                      }`}>{e.pctSobrante.toFixed(1)}%</p>
-                      <p className="text-xs text-gray-500">{e.totalSobrante.toFixed(0)} lb total</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {opsSinClase > 0 && (
-            <div className="bg-orange-50 border border-orange-200 rounded-2xl p-6 mb-6">
-              <p className="text-xs text-orange-700 font-semibold tracking-wider mb-2">
-                🚫 DÍAS SIN CLASE (30 días)
-              </p>
-              <p className="text-2xl font-bold text-orange-900">{opsSinClase} operaciones canceladas</p>
-              <p className="text-xs text-orange-600 mt-1">
-                Por lluvia, paros u otras razones. Estas no se facturaron.
-              </p>
-            </div>
-          )}
-        </>
-      )}
+          </>
+        )}
+      </div>
     </div>
   )
 }
 
-function BarraSalud({ label, pct, count, total, color }) {
-  const colores = {
-    emerald: { bg: 'bg-emerald-500', text: 'text-emerald-700' },
-    orange:  { bg: 'bg-orange-500',  text: 'text-orange-700' },
-    purple:  { bg: 'bg-purple-500',  text: 'text-purple-700' },
-  }
-  const c = colores[color] || colores.emerald
-  
+function KpiCardCompacto({ label, valor, sublabel, colorBorde, colorTexto }) {
   return (
-    <div>
-      <div className="flex justify-between items-center mb-1">
-        <p className="text-sm font-semibold text-gray-700">{label}</p>
-        <p className={`text-sm font-bold ${c.text}`}>
-          {pct}% <span className="text-xs font-normal text-gray-500">({count} de {total})</span>
-        </p>
+    <div style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-subtle)', borderLeft: `4px solid ${colorBorde}`, borderRadius: '10px', padding: '12px' }}>
+      <div style={{ fontSize: '9px', color: 'var(--color-text-muted)', fontWeight: 700, letterSpacing: '1px' }}>{label}</div>
+      <div style={{ fontSize: '20px', fontWeight: 700, color: colorTexto, marginTop: '6px' }}>{valor}</div>
+      {sublabel && <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '4px' }}>{sublabel}</div>}
+    </div>
+  )
+}
+
+function KpiMini({ label, valor, sublabel, color, esTropical }) {
+  return (
+    <div style={{
+      background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-subtle)', borderLeft: `4px solid ${color}`,
+      borderRadius: '10px', padding: '14px', textAlign: 'center',
+    }}>
+      <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', fontWeight: 700, letterSpacing: '1px' }}>{label}</div>
+      <div style={{ fontSize: '20px', fontWeight: 700, color: esTropical ? color : color, marginTop: '6px' }}>{valor}</div>
+      <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '4px' }}>{sublabel}</div>
+    </div>
+  )
+}
+
+function BarraSalud({ label, pct, count, total, color, esTropical }) {
+  return (
+    <div style={{ marginBottom: '14px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+        <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary)' }}>{label}</div>
+        <div style={{ fontSize: '12px', fontWeight: 700, color }}>
+          {pct}% <span style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>({count} de {total})</span>
+        </div>
       </div>
-      <div className="w-full bg-gray-200 rounded-full h-3">
-        <div 
-          className={`${c.bg} h-3 rounded-full transition-all`}
-          style={{ width: `${Math.min(pct, 100)}%` }}
-        />
+      <div style={{ width: '100%', background: esTropical ? '#E5E3DC' : 'rgba(255,255,255,0.06)', borderRadius: '8px', height: '8px', overflow: 'hidden' }}>
+        <div style={{ background: color, height: '8px', width: `${Math.min(pct, 100)}%`, borderRadius: '8px' }} />
       </div>
     </div>
   )
+}
+
+function BarraComposicion({ label, valor, total, color }) {
+  const pct = total > 0 ? (valor / total * 100) : 0
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+      <div style={{ width: '120px', fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary)' }}>{label}</div>
+      <div style={{ flex: 1, background: 'rgba(0,0,0,0.05)', borderRadius: '12px', height: '24px', position: 'relative', overflow: 'hidden' }}>
+        <div style={{
+          background: color, height: '24px', borderRadius: '12px',
+          width: `${Math.min(pct, 100)}%`,
+          display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+          paddingRight: '8px',
+        }}>
+          <span style={{ fontSize: '11px', fontWeight: 700, color: 'white' }}>RD$ {valor.toFixed(2)}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ToggleTema({ tema, setTema }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-subtle)', borderRadius: '20px', padding: '3px', gap: '2px' }}>
+      <button onClick={() => setTema('oscuro')} style={tabTemaStyle(tema === 'oscuro')}>
+        <span style={{ fontSize: '11px' }}>🌙</span>
+        <span style={{ fontSize: '10px', fontWeight: 500, color: tema === 'oscuro' ? 'white' : 'var(--color-text-muted)' }}>Oscuro</span>
+      </button>
+      <button onClick={() => setTema('tropical')} style={tabTemaStyle(tema === 'tropical')}>
+        <span style={{ fontSize: '11px' }}>☀️</span>
+        <span style={{ fontSize: '10px', fontWeight: 500, color: tema === 'tropical' ? 'white' : 'var(--color-text-muted)' }}>Claro</span>
+      </button>
+    </div>
+  )
+}
+
+function btnVolver() {
+  return { background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-subtle)', borderRadius: '20px', padding: '8px 16px', color: 'var(--color-text-secondary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }
+}
+
+function tabTemaStyle(activo) {
+  return { background: activo ? 'var(--gradient-toggle-active)' : 'transparent', border: 'none', borderRadius: '16px', padding: '6px 10px', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }
 }
 
 export default InteligenciaOperativa

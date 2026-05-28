@@ -1,197 +1,120 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 
+const AZUL = { c: '#378ADD', claro: '#E6F1FB', dark: '#0C447C' }
+
 function SeccionMiCocina({ empresa, onActualizado, mostrarExito }) {
   const [datos, setDatos] = useState({
-    nombre: '',
-    rnc: '',
-    direccion: '',
-    telefono: '',
-    email: '',
-    banco: '',
-    cuenta_bancaria: '',
-    modo_operacion: 'aprendizaje',
+    nombre: '', rnc: '', direccion: '', telefono: '', email: '',
+    banco: '', cuenta_bancaria: '', modo_operacion: 'aprendizaje',
   })
   const [guardando, setGuardando] = useState(false)
+
+  const [esTropical, setEsTropical] = useState(
+    typeof document !== 'undefined' && document.documentElement.getAttribute('data-tema') === 'tropical'
+  )
+  useEffect(() => {
+    const obs = new MutationObserver(() => {
+      setEsTropical(document.documentElement.getAttribute('data-tema') === 'tropical')
+    })
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-tema'] })
+    return () => obs.disconnect()
+  }, [])
 
   useEffect(() => {
     if (empresa) {
       setDatos({
-        nombre: empresa.nombre || '',
-        rnc: empresa.rnc || '',
-        direccion: empresa.direccion || '',
-        telefono: empresa.telefono || '',
-        email: empresa.email || '',
-        banco: empresa.banco || '',
+        nombre: empresa.nombre || '', rnc: empresa.rnc || '',
+        direccion: empresa.direccion || '', telefono: empresa.telefono || '',
+        email: empresa.email || '', banco: empresa.banco || '',
         cuenta_bancaria: empresa.cuenta_bancaria || '',
         modo_operacion: empresa.modo_operacion || 'aprendizaje',
       })
     }
   }, [empresa])
 
-  function actualizarCampo(campo, valor) {
-    setDatos({ ...datos, [campo]: valor })
-  }
+  function actualizarCampo(campo, valor) { setDatos({ ...datos, [campo]: valor }) }
 
   async function guardar() {
     setGuardando(true)
-    
-    const { error } = await supabase
-      .from('empresas')
-      .update(datos)
-      .eq('id', empresa.id)
-    
+    const { error } = await supabase.from('empresas').update(datos).eq('id', empresa.id)
     setGuardando(false)
-    
-    if (error) {
-      alert('Error guardando: ' + error.message)
-      return
-    }
-    
+    if (error) { alert('Error guardando: ' + error.message); return }
     mostrarExito('Datos de la cocina actualizados')
     if (onActualizado) onActualizado()
   }
 
+  function modoStyle(activo) {
+    return {
+      padding: '16px', borderRadius: '12px', textAlign: 'left', cursor: 'pointer',
+      fontFamily: 'inherit', color: 'var(--color-text-primary)',
+      border: activo ? '2px solid #378ADD' : '2px solid var(--color-border-subtle)',
+      background: activo ? (esTropical ? '#E6F1FB' : 'rgba(55, 138, 221, 0.18)') : 'var(--color-bg-input)',
+    }
+  }
+
   return (
     <div>
-      <div className="mb-6">
-        <h3 className="text-2xl font-bold text-gray-900">🏢 Mi Cocina</h3>
-        <p className="text-gray-500 text-sm mt-1">Datos generales de tu empresa</p>
+      <div style={{ marginBottom: '20px' }}>
+        <h3 style={{ fontSize: '22px', fontWeight: 600, color: 'var(--color-text-primary)', margin: 0 }}>🏢 Mi Cocina</h3>
+        <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '4px' }}>Datos generales de tu empresa</p>
       </div>
 
-      <div className="space-y-4">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-600 mb-1 tracking-wider">
-            NOMBRE DE LA COCINA
-          </label>
-          <input
-            type="text"
-            value={datos.nombre}
-            onChange={(e) => actualizarCampo('nombre', e.target.value)}
-            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-blue-500"
-            placeholder="Ej: Elba Gourmet"
-          />
+          <label style={labelStyle()}>NOMBRE DE LA COCINA</label>
+          <input type="text" value={datos.nombre} onChange={(e) => actualizarCampo('nombre', e.target.value)} style={inputStyle()} placeholder="Ej: Elba Gourmet" />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1 tracking-wider">
-              RNC
-            </label>
-            <input
-              type="text"
-              value={datos.rnc}
-              onChange={(e) => actualizarCampo('rnc', e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-blue-500"
-              placeholder="1-31-12345-6"
-            />
+            <label style={labelStyle()}>RNC</label>
+            <input type="text" value={datos.rnc} onChange={(e) => actualizarCampo('rnc', e.target.value)} style={inputStyle()} placeholder="1-31-12345-6" />
           </div>
-
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1 tracking-wider">
-              TELÉFONO
-            </label>
-            <input
-              type="text"
-              value={datos.telefono}
-              onChange={(e) => actualizarCampo('telefono', e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-blue-500"
-              placeholder="809-555-1234"
-            />
+            <label style={labelStyle()}>TELÉFONO</label>
+            <input type="text" value={datos.telefono} onChange={(e) => actualizarCampo('telefono', e.target.value)} style={inputStyle()} placeholder="809-555-1234" />
           </div>
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-600 mb-1 tracking-wider">
-            DIRECCIÓN
-          </label>
-          <input
-            type="text"
-            value={datos.direccion}
-            onChange={(e) => actualizarCampo('direccion', e.target.value)}
-            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-blue-500"
-            placeholder="Jícome, Esperanza, Valverde"
-          />
+          <label style={labelStyle()}>DIRECCIÓN</label>
+          <input type="text" value={datos.direccion} onChange={(e) => actualizarCampo('direccion', e.target.value)} style={inputStyle()} placeholder="Jícome, Esperanza, Valverde" />
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-600 mb-1 tracking-wider">
-            EMAIL
-          </label>
-          <input
-            type="email"
-            value={datos.email}
-            onChange={(e) => actualizarCampo('email', e.target.value)}
-            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-blue-500"
-            placeholder="contacto@elbagourmet.com"
-          />
+          <label style={labelStyle()}>EMAIL</label>
+          <input type="email" value={datos.email} onChange={(e) => actualizarCampo('email', e.target.value)} style={inputStyle()} placeholder="contacto@elbagourmet.com" />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1 tracking-wider">
-              BANCO
-            </label>
-            <input
-              type="text"
-              value={datos.banco}
-              onChange={(e) => actualizarCampo('banco', e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-blue-500"
-              placeholder="Ej: Banreservas"
-            />
+            <label style={labelStyle()}>BANCO</label>
+            <input type="text" value={datos.banco} onChange={(e) => actualizarCampo('banco', e.target.value)} style={inputStyle()} placeholder="Ej: Banreservas" />
           </div>
-
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1 tracking-wider">
-              CUENTA BANCARIA
-            </label>
-            <input
-              type="text"
-              value={datos.cuenta_bancaria}
-              onChange={(e) => actualizarCampo('cuenta_bancaria', e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-blue-500"
-              placeholder="000-0000000-0"
-            />
+            <label style={labelStyle()}>CUENTA BANCARIA</label>
+            <input type="text" value={datos.cuenta_bancaria} onChange={(e) => actualizarCampo('cuenta_bancaria', e.target.value)} style={inputStyle()} placeholder="000-0000000-0" />
           </div>
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-600 mb-2 tracking-wider">
-            MODO DE OPERACIÓN
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={() => actualizarCampo('modo_operacion', 'aprendizaje')}
-              className={`p-4 rounded-xl border-2 text-left transition-colors ${
-                datos.modo_operacion === 'aprendizaje'
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}
-            >
-              <div className="font-bold text-sm">📚 Aprendizaje</div>
-              <p className="text-xs text-gray-500 mt-1">La app aprende y sugiere</p>
+          <label style={labelStyle()}>MODO DE OPERACIÓN</label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <button onClick={() => actualizarCampo('modo_operacion', 'aprendizaje')} style={modoStyle(datos.modo_operacion === 'aprendizaje')}>
+              <div style={{ fontWeight: 700, fontSize: '13px' }}>📚 Aprendizaje</div>
+              <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', margin: '4px 0 0' }}>La app aprende y sugiere</p>
             </button>
-            <button
-              onClick={() => actualizarCampo('modo_operacion', 'detallado')}
-              className={`p-4 rounded-xl border-2 text-left transition-colors ${
-                datos.modo_operacion === 'detallado'
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}
-            >
-              <div className="font-bold text-sm">📊 Detallado</div>
-              <p className="text-xs text-gray-500 mt-1">Control fino de cada operación</p>
+            <button onClick={() => actualizarCampo('modo_operacion', 'detallado')} style={modoStyle(datos.modo_operacion === 'detallado')}>
+              <div style={{ fontWeight: 700, fontSize: '13px' }}>📊 Detallado</div>
+              <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', margin: '4px 0 0' }}>Control fino de cada operación</p>
             </button>
           </div>
         </div>
 
-        <div className="pt-4 flex justify-end">
-          <button
-            onClick={guardar}
-            disabled={guardando}
-            className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold px-6 py-3 rounded-xl"
-          >
+        <div style={{ paddingTop: '4px', display: 'flex', justifyContent: 'flex-end' }}>
+          <button onClick={guardar} disabled={guardando} style={{ padding: '12px 24px', background: guardando ? 'var(--color-bg-card)' : 'linear-gradient(135deg, #378ADD 0%, #185FA5 100%)', border: 'none', borderRadius: '10px', color: 'white', fontSize: '13px', fontWeight: 600, cursor: guardando ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
             {guardando ? '⏳ Guardando...' : '💾 Guardar Cambios'}
           </button>
         </div>
@@ -199,6 +122,19 @@ function SeccionMiCocina({ empresa, onActualizado, mostrarExito }) {
       </div>
     </div>
   )
+}
+
+function labelStyle() {
+  return { display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: '4px', letterSpacing: '0.5px' }
+}
+
+function inputStyle() {
+  return {
+    width: '100%', boxSizing: 'border-box', padding: '11px 14px',
+    background: 'var(--color-bg-input)', border: '1px solid var(--color-border-subtle)',
+    borderRadius: '10px', color: 'var(--color-text-primary)', fontSize: '13px',
+    fontFamily: 'inherit', outline: 'none',
+  }
 }
 
 export default SeccionMiCocina

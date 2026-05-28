@@ -203,9 +203,7 @@ function App() {
           onIrCatalogo={() => setVistaActual('catalogo_recetas')}
           onIrHistorial={() => setVistaActual('historial')}
           onIrMiContrato={() => setVistaActual('mi_contrato')}
-          onIrMisRecibos={
-            puedeVerMisRecibos ? () => setVistaActual('mis_recibos') : null
-          }
+          onIrMisRecibos={puedeVerMisRecibos ? () => setVistaActual('mis_recibos') : null}
         />
       )
     }
@@ -256,6 +254,7 @@ function App() {
         onIrContratos={puedeGestionarContratos ? () => setVistaActual('contratos') : null}
         onIrMiContrato={puedeVerMiContrato ? () => setVistaActual('mi_contrato') : null}
         onIrMisRecibos={puedeVerMisRecibos ? () => setVistaActual('mis_recibos') : null}
+        onIrProveedores={puedeGestionarProveedores ? () => setVistaActual('proveedores') : null}
         onIrCompras={puedeGestionarCompras ? () => setVistaActual('compras') : null}
         onIrIngredientes={puedeGestionarIngredientes ? () => setVistaActual('ingredientes') : null}
         onIrGastos={puedeGestionarGastos ? () => setVistaActual('gastos') : null}
@@ -283,14 +282,18 @@ function App() {
 
   return (
     <>
-      {/* WIZARD - mantiene su fondo viejo (aún no refactorizado) */}
+      {/* ═══════════════════════════════════════════════════
+          WIZARD (Paso 1-6) - aún NO refactorizado
+          ═══════════════════════════════════════════════════ */}
       {pasoActual < 7 && (
         <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
           {renderPasoWizard()}
         </div>
       )}
       
-      {/* AUTH - pantallas con tema propio */}
+      {/* ═══════════════════════════════════════════════════
+          AUTH - REFACTORIZADAS
+          ═══════════════════════════════════════════════════ */}
       {pasoActual === 7 && vistaActual === 'login_empresa' && (
         <LoginEmpresa onLoginExitoso={loginEmpresaExitoso} />
       )}
@@ -311,12 +314,14 @@ function App() {
         />
       )}
       
-      {/* DASHBOARD según rol - pantallas con tema propio */}
+      {/* ═══════════════════════════════════════════════════
+          DASHBOARD según rol - REFACTORIZADAS
+          ═══════════════════════════════════════════════════ */}
       {pasoActual === 7 && vistaActual === 'dashboard' && usuarioLogueado && (
         renderVistaSegunRol()
       )}
       
-      {/* VISTA SECRETARIA en modo admin - SIN WRAPPER */}
+      {/* VISTA SECRETARIA en modo admin - REFACTORIZADA */}
       {pasoActual === 7 && vistaActual === 'vista_secretaria_admin' && usuarioLogueado && (
         <VistaSecretaria 
           usuario={usuarioLogueado}
@@ -340,7 +345,11 @@ function App() {
         />
       )}
       
-      {/* DESPACHADOR - YA REFACTORIZADO, SIN WRAPPER */}
+      {/* ═══════════════════════════════════════════════════
+          OPERACIÓN DIARIA - REFACTORIZADAS
+          ═══════════════════════════════════════════════════ */}
+      
+      {/* DESPACHADOR */}
       {pasoActual === 7 && vistaActual === 'despacho' && usuarioLogueado && puedeDespachar && (
         <VistaDespachador 
           usuario={usuarioLogueado}
@@ -351,18 +360,7 @@ function App() {
         />
       )}
       
-      {/* CONFIGURACIÓN - aún NO refactorizada, mantiene wrapper viejo */}
-      {pasoActual === 7 && vistaActual === 'configuracion' && usuarioLogueado && puedeConfigurar && (
-        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
-          <Configuracion 
-            usuario={usuarioLogueado}
-            empresaId={empresaActual?.id}
-            onVolver={() => setVistaActual('dashboard')}
-          />
-        </div>
-      )}
-      
-      {/* CIERRE DEL DÍA - YA REFACTORIZADO, SIN WRAPPER */}
+      {/* CIERRE DEL DÍA */}
       {pasoActual === 7 && vistaActual === 'cierre' && usuarioLogueado && (
         <CierreDelDia 
           usuario={usuarioLogueado}
@@ -371,7 +369,7 @@ function App() {
         />
       )}
       
-      {/* FACTURA INABIE - YA REFACTORIZADO, SIN WRAPPER */}
+      {/* FACTURA INABIE */}
       {pasoActual === 7 && vistaActual === 'factura' && usuarioLogueado && (
         <FacturaInabie 
           usuario={usuarioLogueado}
@@ -381,7 +379,7 @@ function App() {
         />
       )}
       
-      {/* CALCULADORA - YA REFACTORIZADO, SIN WRAPPER */}
+      {/* CALCULADORA */}
       {pasoActual === 7 && vistaActual === 'calculadora' && usuarioLogueado && (
         <CalculadoraProduccion 
           usuario={usuarioLogueado}
@@ -390,29 +388,112 @@ function App() {
         />
       )}
       
-      {/* INTELIGENCIA - aún NO refactorizada, mantiene wrapper viejo */}
-      {pasoActual === 7 && vistaActual === 'inteligencia' && usuarioLogueado && puedeVerInteligencia && (
-        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
-          <InteligenciaOperativa 
-            usuario={usuarioLogueado}
-            empresaId={empresaActual?.id}
-            onVolver={() => setVistaActual('dashboard')}
-          />
-        </div>
+      {/* ═══════════════════════════════════════════════════
+          INVENTARIO - REFACTORIZADAS
+          ═══════════════════════════════════════════════════ */}
+      
+      {/* COMPRAS */}
+      {pasoActual === 7 && vistaActual === 'compras' && usuarioLogueado && puedeGestionarCompras && (
+        <VistaCompras 
+          usuario={usuarioLogueado}
+          empresaId={empresaActual?.id}
+          onVolver={() => setVistaActual('dashboard')}
+        />
       )}
       
-      {/* EMPLEADOS - aún NO refactorizada, mantiene wrapper viejo */}
+      {/* INGREDIENTES */}
+      {pasoActual === 7 && vistaActual === 'ingredientes' && usuarioLogueado && puedeGestionarIngredientes && (
+        <VistaIngredientes 
+          usuario={usuarioLogueado}
+          empresaId={empresaActual?.id}
+          onVolver={() => setVistaActual('dashboard')}
+        />
+      )}
+      
+      {/* PROVEEDORES */}
+      {pasoActual === 7 && vistaActual === 'proveedores' && usuarioLogueado && puedeGestionarProveedores && (
+        <VistaProveedores 
+          usuario={usuarioLogueado}
+          empresaId={empresaActual?.id}
+          onVolver={() => setVistaActual('dashboard')}
+        />
+      )}
+      
+      {/* GASTOS */}
+      {pasoActual === 7 && vistaActual === 'gastos' && usuarioLogueado && puedeGestionarGastos && (
+        <VistaGastos 
+          usuario={usuarioLogueado}
+          empresaId={empresaActual?.id}
+          onVolver={() => setVistaActual('dashboard')}
+        />
+      )}
+      
+      {/* ═══════════════════════════════════════════════════
+          PERSONAL - REFACTORIZADAS
+          ═══════════════════════════════════════════════════ */}
+      
+      {/* EMPLEADOS */}
       {pasoActual === 7 && vistaActual === 'empleados' && usuarioLogueado && puedeGestionarEmpleados && (
-        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
-          <VistaEmpleados 
-            usuario={usuarioLogueado}
-            empresaId={empresaActual?.id}
-            onVolver={() => setVistaActual('dashboard')}
-          />
-        </div>
+        <VistaEmpleados 
+          usuario={usuarioLogueado}
+          empresaId={empresaActual?.id}
+          onVolver={() => setVistaActual('dashboard')}
+        />
       )}
       
-      {/* CONTRATOS - aún NO refactorizada, mantiene wrapper viejo */}
+      {/* NÓMINA */}
+      {pasoActual === 7 && vistaActual === 'nomina' && usuarioLogueado && puedeGestionarNomina && (
+        <VistaNomina 
+          usuario={usuarioLogueado}
+          empresaId={empresaActual?.id}
+          onVolver={() => setVistaActual('dashboard')}
+        />
+      )}
+      
+      {/* ═══════════════════════════════════════════════════
+          CONSULTA - REFACTORIZADAS ⭐ (LOTE 3)
+          ═══════════════════════════════════════════════════ */}
+      
+      {/* CONFIGURACIÓN - REFACTORIZADO ⭐ */}
+      {pasoActual === 7 && vistaActual === 'configuracion' && usuarioLogueado && puedeConfigurar && (
+        <Configuracion 
+          usuario={usuarioLogueado}
+          empresaId={empresaActual?.id}
+          onVolver={() => setVistaActual('dashboard')}
+        />
+      )}
+      
+      {/* INTELIGENCIA - REFACTORIZADO ⭐ */}
+      {pasoActual === 7 && vistaActual === 'inteligencia' && usuarioLogueado && puedeVerInteligencia && (
+        <InteligenciaOperativa 
+          usuario={usuarioLogueado}
+          empresaId={empresaActual?.id}
+          onVolver={() => setVistaActual('dashboard')}
+        />
+      )}
+      
+      {/* CATÁLOGO RECETAS - REFACTORIZADO ⭐ */}
+      {pasoActual === 7 && vistaActual === 'catalogo_recetas' && usuarioLogueado && puedeVerCatalogo && (
+        <VistaCatalogoRecetas 
+          empresa_id={empresaActual?.id}
+          onVolver={() => setVistaActual('dashboard')}
+        />
+      )}
+      
+      {/* HISTORIAL - REFACTORIZADO ⭐ */}
+      {pasoActual === 7 && vistaActual === 'historial' && usuarioLogueado && puedeVerHistorial && (
+        <VistaHistorial 
+          usuario={usuarioLogueado}
+          empresaId={empresaActual?.id}
+          onVolver={() => setVistaActual('dashboard')}
+        />
+      )}
+      
+      {/* ═══════════════════════════════════════════════════
+          AÚN NO REFACTORIZADAS (mantienen wrapper viejo)
+          ═══════════════════════════════════════════════════ */}
+      
+      {/* CONTRATOS */}
       {pasoActual === 7 && vistaActual === 'contratos' && usuarioLogueado && puedeGestionarContratos && (
         <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
           <VistaContratos 
@@ -423,7 +504,7 @@ function App() {
         </div>
       )}
       
-      {/* MI CONTRATO - aún NO refactorizada */}
+      {/* MI CONTRATO */}
       {pasoActual === 7 && vistaActual === 'mi_contrato' && usuarioLogueado && puedeVerMiContrato && (
         <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
           <VistaMiContrato 
@@ -434,84 +515,10 @@ function App() {
         </div>
       )}
       
-      {/* MIS RECIBOS - aún NO refactorizada */}
+      {/* MIS RECIBOS */}
       {pasoActual === 7 && vistaActual === 'mis_recibos' && usuarioLogueado && puedeVerMisRecibos && (
         <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
           <MisRecibos 
-            usuario={usuarioLogueado}
-            empresaId={empresaActual?.id}
-            onVolver={() => setVistaActual('dashboard')}
-          />
-        </div>
-      )}
-      
-      {/* PROVEEDORES - aún NO refactorizada */}
-      {pasoActual === 7 && vistaActual === 'proveedores' && usuarioLogueado && puedeGestionarProveedores && (
-        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
-          <VistaProveedores 
-            usuario={usuarioLogueado}
-            empresaId={empresaActual?.id}
-            onVolver={() => setVistaActual('dashboard')}
-          />
-        </div>
-      )}
-      
-      {/* COMPRAS - aún NO refactorizada (faltó del lote) */}
-      {pasoActual === 7 && vistaActual === 'compras' && usuarioLogueado && puedeGestionarCompras && (
-        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
-          <VistaCompras 
-            usuario={usuarioLogueado}
-            empresaId={empresaActual?.id}
-            onVolver={() => setVistaActual('dashboard')}
-          />
-        </div>
-      )}
-      
-      {/* INGREDIENTES - aún NO refactorizada */}
-      {pasoActual === 7 && vistaActual === 'ingredientes' && usuarioLogueado && puedeGestionarIngredientes && (
-        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
-          <VistaIngredientes 
-            usuario={usuarioLogueado}
-            empresaId={empresaActual?.id}
-            onVolver={() => setVistaActual('dashboard')}
-          />
-        </div>
-      )}
-      
-      {/* GASTOS - YA REFACTORIZADO, SIN WRAPPER */}
-      {pasoActual === 7 && vistaActual === 'gastos' && usuarioLogueado && puedeGestionarGastos && (
-        <VistaGastos 
-          usuario={usuarioLogueado}
-          empresaId={empresaActual?.id}
-          onVolver={() => setVistaActual('dashboard')}
-        />
-      )}
-      
-      {/* NÓMINA - aún NO refactorizada */}
-      {pasoActual === 7 && vistaActual === 'nomina' && usuarioLogueado && puedeGestionarNomina && (
-        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
-          <VistaNomina 
-            usuario={usuarioLogueado}
-            empresaId={empresaActual?.id}
-            onVolver={() => setVistaActual('dashboard')}
-          />
-        </div>
-      )}
-      
-      {/* CATÁLOGO - aún NO refactorizada */}
-      {pasoActual === 7 && vistaActual === 'catalogo_recetas' && usuarioLogueado && puedeVerCatalogo && (
-        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
-          <VistaCatalogoRecetas 
-            empresa_id={empresaActual?.id}
-            onVolver={() => setVistaActual('dashboard')}
-          />
-        </div>
-      )}
-      
-      {/* HISTORIAL - aún NO refactorizada */}
-      {pasoActual === 7 && vistaActual === 'historial' && usuarioLogueado && puedeVerHistorial && (
-        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
-          <VistaHistorial 
             usuario={usuarioLogueado}
             empresaId={empresaActual?.id}
             onVolver={() => setVistaActual('dashboard')}
