@@ -8,9 +8,9 @@ const MESES = [
 
 const ROLES_PUEDEN_FIRMAR = ['propietario', 'administrador']
 
-function FacturaInabie({ usuario, empresaId, onVolver }) {
+function FacturaInabie({ usuario, empresaId, onVolver, tabInicial = 'factura' }) {
   const hoy = new Date()
-  const [modo, setModo] = useState('mensual')
+  const [modo, setModo] = useState(tabInicial === 'conduces' ? 'diaria' : 'mensual')
   const [tipoVistaConduces, setTipoVistaConduces] = useState('dia')
   const [mes, setMes] = useState(hoy.getMonth())
   const [anio, setAnio] = useState(hoy.getFullYear())
@@ -22,6 +22,15 @@ function FacturaInabie({ usuario, empresaId, onVolver }) {
   const [operaciones, setOperaciones] = useState([])
   const [recetas, setRecetas] = useState([])
   const [cargando, setCargando] = useState(true)
+
+  const [tema, setTema] = useState(() => localStorage.getItem('cocina_pae_tema') || 'oscuro')
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-tema', tema)
+    localStorage.setItem('cocina_pae_tema', tema)
+  }, [tema])
+
+  const esTropical = tema === 'tropical'
 
   useEffect(() => {
     cargarDatos()
@@ -118,128 +127,219 @@ function FacturaInabie({ usuario, empresaId, onVolver }) {
   }
 
   if (cargando) {
-    return <div className="text-center py-12 text-gray-500">Cargando...</div>
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--color-bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <p style={{ color: 'var(--color-text-muted)' }}>⏳ Cargando facturación...</p>
+      </div>
+    )
   }
 
   return (
-    <div className="w-full max-w-5xl">
-      
-      <div className="print:hidden bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-2xl p-6 mb-6 text-white">
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <p className="text-indigo-100 text-xs font-semibold tracking-wider">FACTURACIÓN INABIE</p>
-            <h2 className="text-3xl font-bold mt-1">📄 Factura / Conduce</h2>
-            <p className="text-indigo-200 mt-1">{empresa?.nombre}</p>
-          </div>
-          <button
-            onClick={onVolver}
-            className="bg-indigo-700 hover:bg-indigo-900 text-white text-sm px-4 py-2 rounded-lg"
-          >
-            ← Volver
+    <div style={{ minHeight: '100vh', background: 'var(--color-bg-primary)', position: 'relative', padding: '20px' }}>
+      <div style={{ position: 'fixed', inset: 0, backgroundImage: 'var(--glow-verde), var(--glow-ambar)', pointerEvents: 'none', zIndex: 0 }} className="print:hidden" />
+
+      {/* HEADER (no se imprime) */}
+      <div className="print:hidden" style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+        <button
+          onClick={onVolver}
+          style={{
+            background: 'var(--color-bg-elevated)',
+            border: '1px solid var(--color-border-subtle)',
+            borderRadius: '20px', padding: '8px 16px',
+            color: 'var(--color-text-secondary)',
+            fontSize: '13px', fontWeight: 500, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: '6px',
+            fontFamily: 'inherit',
+          }}
+        >
+          ← Volver
+        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-subtle)', borderRadius: '20px', padding: '3px', gap: '2px' }}>
+          <button onClick={() => setTema('oscuro')} style={{ background: tema === 'oscuro' ? 'var(--gradient-toggle-active)' : 'transparent', border: 'none', borderRadius: '16px', padding: '6px 10px', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
+            <span style={{ fontSize: '11px' }}>🌙</span>
+            <span style={{ fontSize: '10px', fontWeight: 500, color: tema === 'oscuro' ? 'white' : 'var(--color-text-muted)' }}>Oscuro</span>
+          </button>
+          <button onClick={() => setTema('tropical')} style={{ background: tema === 'tropical' ? 'var(--gradient-toggle-active)' : 'transparent', border: 'none', borderRadius: '16px', padding: '6px 10px', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
+            <span style={{ fontSize: '11px' }}>☀️</span>
+            <span style={{ fontSize: '10px', fontWeight: 500, color: tema === 'tropical' ? 'white' : 'var(--color-text-muted)' }}>Claro</span>
           </button>
         </div>
+      </div>
 
-        <div className="flex gap-2 mb-4">
+      {/* TÍTULO con cuadro azul */}
+      <div className="print:hidden" style={{
+        position: 'relative', zIndex: 1,
+        background: esTropical 
+          ? 'linear-gradient(135deg, #E6F1FB 0%, #ffffff 100%)'
+          : 'linear-gradient(135deg, rgba(55, 138, 221, 0.25) 0%, rgba(55, 138, 221, 0.1) 100%)',
+        border: esTropical ? '1.5px solid #85B7EB' : '1px solid rgba(55, 138, 221, 0.55)',
+        borderRadius: '18px', padding: '20px 24px', marginBottom: '20px',
+        display: 'flex', alignItems: 'center', gap: '16px',
+        boxShadow: esTropical ? '0 2px 12px rgba(55, 138, 221, 0.15)' : 'none',
+      }}>
+        <div style={{
+          width: '52px', height: '52px', borderRadius: '14px',
+          background: esTropical ? '#378ADD' : 'rgba(55, 138, 221, 0.3)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '26px',
+          boxShadow: esTropical ? '0 4px 12px rgba(55, 138, 221, 0.4)' : 'none',
+        }}>📄</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: '20px', fontWeight: 500, color: esTropical ? '#0C447C' : 'var(--color-text-primary)', lineHeight: 1.2 }}>
+            Factura / Conduces
+          </div>
+          <div style={{ fontSize: '12px', color: esTropical ? '#378ADD' : 'rgba(55, 138, 221, 0.85)', marginTop: '4px', fontWeight: 500 }}>
+            {empresa?.nombre} · Documentación INABIE
+          </div>
+        </div>
+      </div>
+
+      {/* TOGGLE MODO + CONDUCES SUB-TOGGLE */}
+      <div className="print:hidden" style={{ position: 'relative', zIndex: 1, marginBottom: '20px' }}>
+        <div style={{
+          background: 'var(--color-modulo-bg)',
+          border: '1px solid var(--color-modulo-border)',
+          borderRadius: '14px', padding: '8px',
+          boxShadow: 'var(--modulo-sombra)',
+          display: 'flex', gap: '4px',
+        }}>
           <button
             onClick={() => setModo('mensual')}
-            className={`flex-1 px-4 py-3 rounded-xl text-sm font-bold transition-colors ${
-              modo === 'mensual' ? 'bg-white text-indigo-700' : 'bg-indigo-700 hover:bg-indigo-900 text-white'
-            }`}
+            style={{
+              flex: 1, padding: '12px',
+              background: modo === 'mensual' ? (esTropical ? '#378ADD' : 'rgba(55, 138, 221, 0.25)') : 'transparent',
+              border: 'none', borderRadius: '10px',
+              color: modo === 'mensual' ? (esTropical ? '#ffffff' : '#378ADD') : 'var(--color-text-secondary)',
+              fontSize: '13px', fontWeight: modo === 'mensual' ? 600 : 500,
+              cursor: 'pointer', fontFamily: 'inherit',
+              boxShadow: modo === 'mensual' && esTropical ? '0 2px 8px rgba(55, 138, 221, 0.4)' : 'none',
+            }}
           >
             📊 Factura Mensual
           </button>
           <button
             onClick={() => setModo('diaria')}
-            className={`flex-1 px-4 py-3 rounded-xl text-sm font-bold transition-colors ${
-              modo === 'diaria' ? 'bg-white text-indigo-700' : 'bg-indigo-700 hover:bg-indigo-900 text-white'
-            }`}
+            style={{
+              flex: 1, padding: '12px',
+              background: modo === 'diaria' ? (esTropical ? '#378ADD' : 'rgba(55, 138, 221, 0.25)') : 'transparent',
+              border: 'none', borderRadius: '10px',
+              color: modo === 'diaria' ? (esTropical ? '#ffffff' : '#378ADD') : 'var(--color-text-secondary)',
+              fontSize: '13px', fontWeight: modo === 'diaria' ? 600 : 500,
+              cursor: 'pointer', fontFamily: 'inherit',
+              boxShadow: modo === 'diaria' && esTropical ? '0 2px 8px rgba(55, 138, 221, 0.4)' : 'none',
+            }}
           >
             📅 Conduces
           </button>
         </div>
 
+        {/* Sub-toggle de conduces */}
         {modo === 'diaria' && (
-          <div className="flex gap-2 mb-4">
+          <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
             <button
               onClick={() => setTipoVistaConduces('dia')}
-              className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${
-                tipoVistaConduces === 'dia' 
-                  ? 'bg-indigo-200 text-indigo-900' 
-                  : 'bg-indigo-700/50 hover:bg-indigo-700 text-white'
-              }`}
+              style={{
+                flex: 1, padding: '10px',
+                background: tipoVistaConduces === 'dia' ? (esTropical ? 'rgba(55, 138, 221, 0.15)' : 'rgba(55, 138, 221, 0.2)') : 'var(--color-bg-elevated)',
+                border: tipoVistaConduces === 'dia' ? `1px solid #378ADD` : '1px solid var(--color-border-subtle)',
+                borderRadius: '10px',
+                color: tipoVistaConduces === 'dia' ? (esTropical ? '#0C447C' : '#85B7EB') : 'var(--color-text-secondary)',
+                fontSize: '12px', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
+              }}
             >
               📅 Un día
             </button>
             <button
               onClick={() => setTipoVistaConduces('mes')}
-              className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${
-                tipoVistaConduces === 'mes' 
-                  ? 'bg-indigo-200 text-indigo-900' 
-                  : 'bg-indigo-700/50 hover:bg-indigo-700 text-white'
-              }`}
+              style={{
+                flex: 1, padding: '10px',
+                background: tipoVistaConduces === 'mes' ? (esTropical ? 'rgba(55, 138, 221, 0.15)' : 'rgba(55, 138, 221, 0.2)') : 'var(--color-bg-elevated)',
+                border: tipoVistaConduces === 'mes' ? `1px solid #378ADD` : '1px solid var(--color-border-subtle)',
+                borderRadius: '10px',
+                color: tipoVistaConduces === 'mes' ? (esTropical ? '#0C447C' : '#85B7EB') : 'var(--color-text-secondary)',
+                fontSize: '12px', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
+              }}
             >
               🗓️ Mes completo
             </button>
           </div>
         )}
 
-        <div className="flex gap-3 flex-wrap">
+        {/* Controles de fecha */}
+        <div style={{ display: 'flex', gap: '10px', marginTop: '12px', flexWrap: 'wrap' }}>
           {modo === 'mensual' ? (
             <>
-              <select value={mes} onChange={(e) => setMes(parseInt(e.target.value))} className="bg-white text-gray-900 px-4 py-2 rounded-lg text-sm font-semibold">
+              <select value={mes} onChange={(e) => setMes(parseInt(e.target.value))} style={selectStyle(esTropical)}>
                 {MESES.map((m, i) => (<option key={i} value={i}>{m}</option>))}
               </select>
-              <select value={anio} onChange={(e) => setAnio(parseInt(e.target.value))} className="bg-white text-gray-900 px-4 py-2 rounded-lg text-sm font-semibold">
+              <select value={anio} onChange={(e) => setAnio(parseInt(e.target.value))} style={selectStyle(esTropical)}>
                 {[2024, 2025, 2026, 2027, 2028].map(a => (<option key={a} value={a}>{a}</option>))}
               </select>
             </>
           ) : tipoVistaConduces === 'dia' ? (
-            <input 
-              type="date" 
-              value={fechaSeleccionada} 
-              onChange={(e) => setFechaSeleccionada(e.target.value)} 
-              className="bg-white text-gray-900 px-4 py-2 rounded-lg text-sm font-semibold" 
-            />
+            <input type="date" value={fechaSeleccionada} onChange={(e) => setFechaSeleccionada(e.target.value)} style={selectStyle(esTropical)} />
           ) : (
             <>
-              <select value={mes} onChange={(e) => setMes(parseInt(e.target.value))} className="bg-white text-gray-900 px-4 py-2 rounded-lg text-sm font-semibold">
+              <select value={mes} onChange={(e) => setMes(parseInt(e.target.value))} style={selectStyle(esTropical)}>
                 {MESES.map((m, i) => (<option key={i} value={i}>{m}</option>))}
               </select>
-              <select value={anio} onChange={(e) => setAnio(parseInt(e.target.value))} className="bg-white text-gray-900 px-4 py-2 rounded-lg text-sm font-semibold">
+              <select value={anio} onChange={(e) => setAnio(parseInt(e.target.value))} style={selectStyle(esTropical)}>
                 {[2024, 2025, 2026, 2027, 2028].map(a => (<option key={a} value={a}>{a}</option>))}
               </select>
             </>
           )}
-          <button onClick={imprimir} className="bg-white text-indigo-700 hover:bg-gray-100 font-bold px-4 py-2 rounded-lg text-sm ml-auto">
+          <button
+            onClick={imprimir}
+            style={{
+              marginLeft: 'auto', padding: '10px 18px',
+              background: 'linear-gradient(135deg, #378ADD 0%, #185FA5 100%)',
+              border: 'none', borderRadius: '10px',
+              color: 'white', fontSize: '13px', fontWeight: 500,
+              cursor: 'pointer', fontFamily: 'inherit',
+              boxShadow: esTropical ? '0 4px 12px rgba(55, 138, 221, 0.3)' : 'none',
+            }}
+          >
             🖨️ Imprimir / PDF
           </button>
         </div>
 
         {modo === 'diaria' && tipoVistaConduces === 'mes' && operaciones.length > 0 && (
-          <div className="mt-3 bg-indigo-700/50 rounded-lg px-3 py-2 text-xs text-indigo-100">
-            📊 <strong>{operaciones.length} conduce(s)</strong> en {MESES[mes]} {anio} · 
-            Cada uno saldrá en una página separada al imprimir
+          <div style={{
+            marginTop: '12px',
+            background: esTropical ? '#E6F1FB' : 'rgba(55, 138, 221, 0.15)',
+            border: '1px solid rgba(55, 138, 221, 0.3)',
+            borderLeft: '4px solid #378ADD',
+            borderRadius: '10px',
+            padding: '10px 14px',
+            fontSize: '12px',
+            color: esTropical ? '#0C447C' : '#85B7EB',
+          }}>
+            📊 <strong>{operaciones.length} conduce(s)</strong> en {MESES[mes]} {anio} · Cada uno saldrá en una página separada al imprimir
           </div>
         )}
       </div>
 
-      {modo === 'mensual' ? (
-        <FacturaMensual empresa={empresa} finanzas={finanzas} escuelas={escuelas} operaciones={operaciones} mes={mes} anio={anio} />
-      ) : (
-        <ConducesDiarios 
-          empresa={empresa} 
-          finanzas={finanzas} 
-          escuelas={escuelas} 
-          operaciones={operaciones} 
-          recetas={recetas} 
-          fecha={fechaSeleccionada} 
-          usuario={usuario} 
-          onFirmar={firmarComoPropietario}
-          tipoVista={tipoVistaConduces}
-          mes={mes}
-          anio={anio}
-        />
-      )}
+      {/* CONTENIDO IMPRIMIBLE */}
+      <div style={{ position: 'relative', zIndex: 1 }}>
+        {modo === 'mensual' ? (
+          <FacturaMensual empresa={empresa} finanzas={finanzas} escuelas={escuelas} operaciones={operaciones} mes={mes} anio={anio} />
+        ) : (
+          <ConducesDiarios 
+            empresa={empresa} 
+            finanzas={finanzas} 
+            escuelas={escuelas} 
+            operaciones={operaciones} 
+            recetas={recetas} 
+            fecha={fechaSeleccionada} 
+            usuario={usuario} 
+            onFirmar={firmarComoPropietario}
+            tipoVista={tipoVistaConduces}
+            mes={mes}
+            anio={anio}
+          />
+        )}
+      </div>
 
       <style>{`
         @media print {
@@ -248,28 +348,15 @@ function FacturaInabie({ usuario, empresaId, onVolver }) {
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
-          
-          @page { 
-            margin: 1cm; 
-            size: letter;
-          }
-          
-          .page-break { 
-            page-break-after: always; 
-            break-after: page;
-          }
-          .page-break:last-child { 
-            page-break-after: auto;
-            break-after: auto;
-          }
-          
+          @page { margin: 1cm; size: letter; }
+          .page-break { page-break-after: always; break-after: page; }
+          .page-break:last-child { page-break-after: auto; break-after: auto; }
           .bg-white.rounded-2xl.shadow-xl {
             padding: 0.5rem !important;
             box-shadow: none !important;
             page-break-inside: avoid;
             break-inside: avoid;
           }
-          
           .mb-6 { margin-bottom: 0.75rem !important; }
           .mb-8 { margin-bottom: 1rem !important; }
           .mt-12 { margin-top: 1.5rem !important; }
@@ -279,30 +366,36 @@ function FacturaInabie({ usuario, empresaId, onVolver }) {
           .pb-4 { padding-bottom: 0.5rem !important; }
           .gap-6 { gap: 1rem !important; }
           .gap-12 { gap: 2rem !important; }
-          
           .h-20 { height: 3.5rem !important; }
-          
           .text-2xl { font-size: 1.25rem !important; }
           .text-xl { font-size: 1.1rem !important; }
           .text-base { font-size: 0.9rem !important; }
           .text-sm { font-size: 0.8rem !important; }
           .text-xs { font-size: 0.7rem !important; }
-          
-          table th, table td { 
-            padding-top: 0.5rem !important; 
-            padding-bottom: 0.5rem !important; 
-          }
-          
-          img[alt*="firma"], img[alt*="Firma"] {
-            max-height: 3rem !important;
-          }
+          table th, table td { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
+          img[alt*="firma"], img[alt*="Firma"] { max-height: 3rem !important; }
         }
       `}</style>
-
     </div>
   )
 }
 
+function selectStyle(esTropical) {
+  return {
+    padding: '10px 14px',
+    background: 'var(--color-modulo-bg)',
+    border: '1px solid var(--color-border-subtle)',
+    borderRadius: '10px',
+    color: 'var(--color-text-primary)',
+    fontSize: '13px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    boxShadow: esTropical ? '0 1px 3px rgba(15, 110, 86, 0.05)' : 'none',
+  }
+}
+
+// FacturaMensual (preservado 100% - es contenido imprimible blanco)
 function FacturaMensual({ empresa, finanzas, escuelas, operaciones, mes, anio }) {
   const resumenPorEscuela = escuelas.map(escuela => {
     const opsEscuela = operaciones.filter(op => op.escuela_id === escuela.id)
@@ -311,7 +404,6 @@ function FacturaMensual({ empresa, finanzas, escuelas, operaciones, mes, anio })
     const subtotal = totalRaciones * precioRacion
     const diasTrabajados = opsEscuela.length
     const conducesFirmados = opsEscuela.filter(op => op.firma_imagen).length
-
     return { escuela, diasTrabajados, totalRaciones, precioRacion, subtotal, conducesFirmados }
   }).filter(item => item.totalRaciones > 0)
 
@@ -420,8 +512,9 @@ function FacturaMensual({ empresa, finanzas, escuelas, operaciones, mes, anio })
   )
 }
 
+// ConducesDiarios (preservado 100% - contenido imprimible)
 function ConducesDiarios({ empresa, finanzas, escuelas, operaciones, recetas, fecha, usuario, onFirmar, tipoVista, mes, anio }) {
-  const operacionesAMostrar = tipoVista === 'dia' ? operaciones : operaciones
+  const operacionesAMostrar = operaciones
 
   if (operacionesAMostrar.length === 0) {
     const fechaCorta = tipoVista === 'dia' 
@@ -446,17 +539,14 @@ function ConducesDiarios({ empresa, finanzas, escuelas, operaciones, recetas, fe
     const partes = [esc.provincia, esc.municipio].filter(Boolean)
     return partes.length > 0 ? partes.join(' / ').toUpperCase() : '—'
   }
-
   const formatearHoraRecepcion = (op) => {
     if (!op.firmado_en) return null
     return new Date(op.firmado_en).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit', hour12: true })
   }
-
   const formatearFechaRecepcion = (op) => {
     if (!op.firmado_en) return null
     return new Date(op.firmado_en).toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' })
   }
-
   const formatearFechaHoraPropietario = (op) => {
     if (!op.firma_propietario_at) return null
     const fechaObj = new Date(op.firma_propietario_at)
@@ -465,7 +555,6 @@ function ConducesDiarios({ empresa, finanzas, escuelas, operaciones, recetas, fe
       hora: fechaObj.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit', hour12: true })
     }
   }
-
   const usuarioPuedeFirmar = usuario && ROLES_PUEDEN_FIRMAR.includes(usuario.rol)
 
   return (
@@ -496,7 +585,6 @@ function ConducesDiarios({ empresa, finanzas, escuelas, operaciones, recetas, fe
 
         return (
           <div key={op.id} className={`bg-white rounded-2xl shadow-xl p-10 print:shadow-none print:p-6 mb-6 ${idx < operacionesAMostrar.length - 1 ? 'page-break' : ''}`}>
-
             <div className="text-center pb-4 mb-6 border-b-2 border-gray-900">
               <h1 className="text-2xl font-black text-gray-900 tracking-tight uppercase">{empresa?.nombre || 'Mi Cocina'}</h1>
               {empresa?.direccion && (<p className="text-xs text-gray-700 mt-1 uppercase tracking-wide">{empresa.direccion}</p>)}
@@ -569,10 +657,8 @@ function ConducesDiarios({ empresa, finanzas, escuelas, operaciones, recetas, fe
             </div>
 
             <div className="grid grid-cols-2 gap-12 mt-12">
-              
               <div>
                 <p className="text-sm font-bold text-gray-900 mb-4">Firma y sello del Propietario:</p>
-                
                 {propietarioFirmo ? (
                   <div className="space-y-3">
                     <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-2 mb-3">
@@ -616,7 +702,6 @@ function ConducesDiarios({ empresa, finanzas, escuelas, operaciones, recetas, fe
 
               <div>
                 <p className="text-sm font-bold text-gray-900 mb-4">Recibido por (Director):</p>
-                
                 {op.firma_imagen ? (
                   <div className="space-y-3">
                     <div className="bg-green-50 border-2 border-green-300 rounded-lg p-2 mb-3">
@@ -636,7 +721,6 @@ function ConducesDiarios({ empresa, finanzas, escuelas, operaciones, recetas, fe
                   </div>
                 )}
               </div>
-
             </div>
 
             <div className="mt-8 text-center flex justify-center gap-2 flex-wrap">
@@ -661,7 +745,6 @@ function ConducesDiarios({ empresa, finanzas, escuelas, operaciones, recetas, fe
               </p>
               <p>Página: <span className="font-bold">{idx + 1}</span></p>
             </div>
-
           </div>
         )
       })}

@@ -2,20 +2,19 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import ModalNuevoGasto from './ModalNuevoGasto'
 
-const MESES = [
-  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-]
+const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 
-// ═══════════════════════════════════════════════════
-// 🔗 MAPA DE ORÍGENES (ecosistema)
-// ═══════════════════════════════════════════════════
+const COLOR_GASTOS = '#D4537E'
+const COLOR_GASTOS_BG = '#ED93B1'
+const COLOR_GASTOS_DARKER = '#72243E'
+const COLOR_GASTOS_CLARO = '#FBEAF0'
+
 const ORIGENES_INFO = {
-  manual: { emoji: '✋', label: 'Manual', color: 'gray', descripcion: 'Registrado manualmente' },
-  nomina_pago: { emoji: '💸', label: 'Nómina', color: 'blue', descripcion: 'Generado desde pago de nómina' },
-  nomina_bonificacion: { emoji: '🎁', label: 'Bonificación', color: 'purple', descripcion: 'Generado desde bonificación' },
-  nomina_liquidacion: { emoji: '📋', label: 'Liquidación', color: 'indigo', descripcion: 'Generado desde liquidación de empleado' },
-  compra_inventario: { emoji: '📦', label: 'Compra', color: 'amber', descripcion: 'Generado desde compra de inventario' },
+  manual: { emoji: '✋', label: 'Manual', color: '#888780', descripcion: 'Registrado manualmente' },
+  nomina_pago: { emoji: '💸', label: 'Nómina', color: '#378ADD', descripcion: 'Generado desde pago de nómina' },
+  nomina_bonificacion: { emoji: '🎁', label: 'Bonificación', color: '#7F77DD', descripcion: 'Generado desde bonificación' },
+  nomina_liquidacion: { emoji: '📋', label: 'Liquidación', color: '#534AB7', descripcion: 'Generado desde liquidación de empleado' },
+  compra_inventario: { emoji: '📦', label: 'Compra', color: '#EF9F27', descripcion: 'Generado desde compra de inventario' },
 }
 
 function VistaGastos({ usuario, empresaId, onVolver }) {
@@ -23,87 +22,56 @@ function VistaGastos({ usuario, empresaId, onVolver }) {
   const [categorias, setCategorias] = useState([])
   const [proveedores, setProveedores] = useState([])
   const [cargando, setCargando] = useState(true)
-  
-  // Filtros
   const hoy = new Date()
   const [mes, setMes] = useState(hoy.getMonth())
   const [anio, setAnio] = useState(hoy.getFullYear())
   const [filtroCategoria, setFiltroCategoria] = useState('')
   const [filtroBusqueda, setFiltroBusqueda] = useState('')
-  const [filtroPagado, setFiltroPagado] = useState('todos') // todos | pagado | pendiente
-  const [filtroOrigen, setFiltroOrigen] = useState('todos') // todos | manual | automatico
-  
-  // Modal
+  const [filtroPagado, setFiltroPagado] = useState('todos')
+  const [filtroOrigen, setFiltroOrigen] = useState('todos')
   const [modalAbierto, setModalAbierto] = useState(false)
   const [gastoEditando, setGastoEditando] = useState(null)
 
+  const [tema, setTema] = useState(() => localStorage.getItem('cocina_pae_tema') || 'oscuro')
+
   useEffect(() => {
-    if (empresaId) cargarDatos()
-  }, [empresaId, mes, anio])
+    document.documentElement.setAttribute('data-tema', tema)
+    localStorage.setItem('cocina_pae_tema', tema)
+  }, [tema])
+
+  const esTropical = tema === 'tropical'
+
+  useEffect(() => { if (empresaId) cargarDatos() }, [empresaId, mes, anio])
 
   async function cargarDatos() {
     setCargando(true)
-
-    // Fechas del mes seleccionado
     const inicioMes = new Date(anio, mes, 1).toISOString().split('T')[0]
     const finMes = new Date(anio, mes + 1, 0).toISOString().split('T')[0]
-    
     const [gastosRes, catRes, provRes] = await Promise.all([
-      supabase
-        .from('gastos')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .gte('fecha', inicioMes)
-        .lte('fecha', finMes)
-        .order('fecha', { ascending: false }),
-      supabase
-        .from('categorias_gasto')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .eq('activa', true)
-        .order('orden'),
-      supabase
-        .from('proveedores')
-        .select('*')
-        .eq('empresa_id', empresaId)
+      supabase.from('gastos').select('*').eq('empresa_id', empresaId).gte('fecha', inicioMes).lte('fecha', finMes).order('fecha', { ascending: false }),
+      supabase.from('categorias_gasto').select('*').eq('empresa_id', empresaId).eq('activa', true).order('orden'),
+      supabase.from('proveedores').select('*').eq('empresa_id', empresaId)
     ])
-    
     setGastos(gastosRes.data || [])
     setCategorias(catRes.data || [])
     setProveedores(provRes.data || [])
     setCargando(false)
   }
 
-  function getCategoria(catId) {
-    return categorias.find(c => c.id === catId)
-  }
-
-  function getProveedor(provId) {
-    return proveedores.find(p => p.id === provId)
-  }
-
-  // ═══════════════════════════════════════════════════
-  // 🔗 Helper: determinar si un gasto es automático
-  // ═══════════════════════════════════════════════════
-  function esAutomatico(gasto) {
-    return gasto.origen && gasto.origen !== 'manual' && gasto.origen !== null
-  }
-
+  function getCategoria(catId) { return categorias.find(c => c.id === catId) }
+  function getProveedor(provId) { return proveedores.find(p => p.id === provId) }
+  function esAutomatico(gasto) { return gasto.origen && gasto.origen !== 'manual' && gasto.origen !== null }
   function getOrigenInfo(gasto) {
     const origen = gasto.origen || 'manual'
     return ORIGENES_INFO[origen] || ORIGENES_INFO.manual
   }
 
-  // Filtros aplicados
   const gastosFiltrados = gastos.filter(g => {
     if (filtroCategoria && g.categoria_id !== filtroCategoria) return false
     if (filtroPagado === 'pagado' && !g.pagado) return false
     if (filtroPagado === 'pendiente' && g.pagado) return false
-    
-    // Filtro por origen
     if (filtroOrigen === 'manual' && esAutomatico(g)) return false
     if (filtroOrigen === 'automatico' && !esAutomatico(g)) return false
-    
     if (filtroBusqueda.trim()) {
       const q = filtroBusqueda.toLowerCase()
       const enDescripcion = g.descripcion?.toLowerCase().includes(q)
@@ -113,11 +81,9 @@ function VistaGastos({ usuario, empresaId, onVolver }) {
       const enRnc = g.rnc?.toLowerCase().includes(q)
       if (!enDescripcion && !enProveedor && !enProveedorBD && !enRnc) return false
     }
-    
     return true
   })
 
-  // Estadísticas
   const totalMes = gastosFiltrados.reduce((sum, g) => sum + parseFloat(g.total || 0), 0)
   const totalPagado = gastosFiltrados.filter(g => g.pagado).reduce((sum, g) => sum + parseFloat(g.total || 0), 0)
   const totalPendiente = totalMes - totalPagado
@@ -126,358 +92,356 @@ function VistaGastos({ usuario, empresaId, onVolver }) {
   const automaticosCount = gastosFiltrados.filter(g => esAutomatico(g)).length
   const automaticosMonto = gastosFiltrados.filter(g => esAutomatico(g)).reduce((sum, g) => sum + parseFloat(g.total || 0), 0)
 
-  // Agregaciones por categoría
   const gastosPorCategoria = categorias.map(cat => {
     const items = gastosFiltrados.filter(g => g.categoria_id === cat.id)
     const total = items.reduce((sum, g) => sum + parseFloat(g.total || 0), 0)
-    return {
-      ...cat,
-      cantidad: items.length,
-      total
-    }
+    return { ...cat, cantidad: items.length, total }
   }).filter(c => c.total > 0).sort((a, b) => b.total - a.total)
 
   if (cargando) {
-    return <div className="text-center py-12 text-gray-500">Cargando gastos...</div>
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--color-bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <p style={{ color: 'var(--color-text-muted)' }}>⏳ Cargando gastos...</p>
+      </div>
+    )
   }
 
   return (
-    <div className="w-full max-w-6xl">
-      
-      {/* HEADER */}
-      <div className="bg-gradient-to-br from-rose-600 to-pink-700 rounded-2xl p-6 mb-6 text-white">
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <p className="text-pink-100 text-xs font-semibold tracking-wider">MÓDULO GASTOS</p>
-            <h2 className="text-3xl font-bold mt-1">💸 Gastos Operativos</h2>
-            <p className="text-pink-200 mt-1">{MESES[mes]} de {anio} · {cantidadGastos} registros</p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => { setGastoEditando(null); setModalAbierto(true); }}
-              className="bg-white text-rose-700 hover:bg-rose-50 font-bold px-5 py-3 rounded-xl shadow-lg"
-            >
-              ➕ Nuevo gasto
+    <div style={{ minHeight: '100vh', background: 'var(--color-bg-primary)', position: 'relative', padding: '20px' }}>
+      <div style={{ position: 'fixed', inset: 0, backgroundImage: 'var(--glow-verde), var(--glow-ambar)', pointerEvents: 'none', zIndex: 0 }} />
+
+      <div style={{ maxWidth: '1200px', margin: '0 auto', position: 'relative', zIndex: 1 }}>
+        {/* HEADER */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+          <button onClick={onVolver} style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-subtle)', borderRadius: '20px', padding: '8px 16px', color: 'var(--color-text-secondary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>← Volver</button>
+          <div style={{ display: 'flex', alignItems: 'center', background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-subtle)', borderRadius: '20px', padding: '3px', gap: '2px' }}>
+            <button onClick={() => setTema('oscuro')} style={tabTemaStyle(tema === 'oscuro')}>
+              <span style={{ fontSize: '11px' }}>🌙</span>
+              <span style={{ fontSize: '10px', fontWeight: 500, color: tema === 'oscuro' ? 'white' : 'var(--color-text-muted)' }}>Oscuro</span>
             </button>
-            <button
-              onClick={onVolver}
-              className="bg-rose-800 hover:bg-rose-900 text-white text-sm px-4 py-2 rounded-lg"
-            >
-              ← Volver
+            <button onClick={() => setTema('tropical')} style={tabTemaStyle(tema === 'tropical')}>
+              <span style={{ fontSize: '11px' }}>☀️</span>
+              <span style={{ fontSize: '10px', fontWeight: 500, color: tema === 'tropical' ? 'white' : 'var(--color-text-muted)' }}>Claro</span>
             </button>
           </div>
         </div>
 
-        {/* Selector de mes */}
-        <div className="grid grid-cols-2 gap-2 mt-4">
-          <select
-            value={mes}
-            onChange={(e) => setMes(parseInt(e.target.value))}
-            className="px-3 py-2 bg-white/20 backdrop-blur text-white rounded-lg text-sm font-semibold border border-white/30"
+        {/* TÍTULO */}
+        <div style={{
+          background: esTropical ? `linear-gradient(135deg, ${COLOR_GASTOS_CLARO} 0%, #ffffff 100%)` : `linear-gradient(135deg, ${COLOR_GASTOS}25 0%, ${COLOR_GASTOS}10 100%)`,
+          border: esTropical ? `1.5px solid ${COLOR_GASTOS_BG}` : `1px solid ${COLOR_GASTOS}55`,
+          borderRadius: '18px', padding: '20px 24px', marginBottom: '20px',
+          display: 'flex', alignItems: 'center', gap: '16px', justifyContent: 'space-between', flexWrap: 'wrap',
+          boxShadow: esTropical ? `0 2px 12px ${COLOR_GASTOS}15` : 'none',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{
+              width: '52px', height: '52px', borderRadius: '14px',
+              background: esTropical ? COLOR_GASTOS : `${COLOR_GASTOS}30`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px',
+              boxShadow: esTropical ? `0 4px 12px ${COLOR_GASTOS}40` : 'none',
+            }}>💸</div>
+            <div>
+              <div style={{ fontSize: '20px', fontWeight: 500, color: esTropical ? COLOR_GASTOS_DARKER : 'var(--color-text-primary)', lineHeight: 1.2 }}>
+                Gastos Operativos
+              </div>
+              <div style={{ fontSize: '12px', color: esTropical ? COLOR_GASTOS : `${COLOR_GASTOS}CC`, marginTop: '4px', fontWeight: 500 }}>
+                {MESES[mes]} {anio} · {cantidadGastos} registros
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => { setGastoEditando(null); setModalAbierto(true); }}
+            style={{
+              padding: '12px 24px',
+              background: `linear-gradient(135deg, ${COLOR_GASTOS} 0%, ${COLOR_GASTOS_DARKER} 100%)`,
+              border: 'none', borderRadius: '12px',
+              color: 'white', fontSize: '14px', fontWeight: 600,
+              cursor: 'pointer', fontFamily: 'inherit',
+              boxShadow: `0 4px 12px ${COLOR_GASTOS}40`,
+            }}
           >
-            {MESES.map((m, i) => (
-              <option key={i} value={i} className="text-gray-900">{m}</option>
-            ))}
-          </select>
-          <select
-            value={anio}
-            onChange={(e) => setAnio(parseInt(e.target.value))}
-            className="px-3 py-2 bg-white/20 backdrop-blur text-white rounded-lg text-sm font-semibold border border-white/30"
-          >
-            {[2025, 2026, 2027, 2028].map(a => (
-              <option key={a} value={a} className="text-gray-900">{a}</option>
-            ))}
-          </select>
+            ➕ Nuevo gasto
+          </button>
         </div>
-      </div>
 
-      {/* STATS - Ahora con 5 tarjetas */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-        <div className="bg-white rounded-xl shadow-sm p-4">
-          <p className="text-xs text-gray-500 font-semibold tracking-wider">TOTAL MES</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">
-            RD$ {totalMes.toLocaleString('es-DO', { maximumFractionDigits: 0 })}
-          </p>
-          <p className="text-xs text-gray-500 mt-1">{cantidadGastos} gastos</p>
+        {/* SELECTORES MES/AÑO */}
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
+          <select value={mes} onChange={(e) => setMes(parseInt(e.target.value))} style={selectStyle()}>
+            {MESES.map((m, i) => (<option key={i} value={i}>{m}</option>))}
+          </select>
+          <select value={anio} onChange={(e) => setAnio(parseInt(e.target.value))} style={selectStyle()}>
+            {[2025, 2026, 2027, 2028].map(a => (<option key={a} value={a}>{a}</option>))}
+          </select>
         </div>
-        <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-          <p className="text-xs text-green-700 font-semibold tracking-wider">PAGADO</p>
-          <p className="text-2xl font-bold text-green-900 mt-1">
-            RD$ {totalPagado.toLocaleString('es-DO', { maximumFractionDigits: 0 })}
-          </p>
-          <p className="text-xs text-green-600 mt-1">ya saldado</p>
-        </div>
-        <div className={`border rounded-xl p-4 ${totalPendiente > 0 ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-gray-200'}`}>
-          <p className={`text-xs font-semibold tracking-wider ${totalPendiente > 0 ? 'text-orange-700' : 'text-gray-500'}`}>PENDIENTE</p>
-          <p className={`text-2xl font-bold mt-1 ${totalPendiente > 0 ? 'text-orange-900' : 'text-gray-900'}`}>
-            RD$ {totalPendiente.toLocaleString('es-DO', { maximumFractionDigits: 0 })}
-          </p>
-          <p className={`text-xs mt-1 ${totalPendiente > 0 ? 'text-orange-600' : 'text-gray-500'}`}>por pagar</p>
-        </div>
-        <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
-          <p className="text-xs text-purple-700 font-semibold tracking-wider">CON RNC</p>
-          <p className="text-2xl font-bold text-purple-900 mt-1">{conRncCount}</p>
-          <p className="text-xs text-purple-600 mt-1">para 606 DGII</p>
-        </div>
-        {/* 🔗 NUEVA TARJETA - AUTOMÁTICOS */}
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-          <p className="text-xs text-blue-700 font-semibold tracking-wider">🔗 AUTOMÁTICOS</p>
-          <p className="text-2xl font-bold text-blue-900 mt-1">{automaticosCount}</p>
-          <p className="text-xs text-blue-600 mt-1">
-            RD$ {automaticosMonto.toLocaleString('es-DO', { maximumFractionDigits: 0 })}
-          </p>
-        </div>
-      </div>
 
-      {/* DESGLOSE POR CATEGORÍA */}
-      {gastosPorCategoria.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
-          <p className="text-xs text-gray-500 font-semibold tracking-wider mb-4">
-            📊 DESGLOSE POR CATEGORÍA
-          </p>
-          <div className="space-y-2">
-            {gastosPorCategoria.map(cat => {
-              const porcentaje = totalMes > 0 ? (cat.total / totalMes) * 100 : 0
-              return (
-                <div key={cat.id} className="flex items-center gap-3">
-                  <span className="text-xl w-8">{cat.icono}</span>
-                  <div className="flex-1">
-                    <div className="flex justify-between items-center mb-1">
-                      <p className="font-semibold text-sm text-gray-900">{cat.nombre}</p>
-                      <p className="text-sm font-bold text-gray-900 font-mono">
-                        RD$ {cat.total.toLocaleString('es-DO', { maximumFractionDigits: 0 })}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 bg-gray-100 rounded-full h-2">
-                        <div 
-                          className="bg-rose-500 h-2 rounded-full" 
-                          style={{ width: `${porcentaje}%` }}
-                        />
+        {/* STATS */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '20px' }}>
+          <KpiCard label="TOTAL MES" valor={`RD$ ${totalMes.toLocaleString('es-DO', { maximumFractionDigits: 0 })}`} sublabel={`${cantidadGastos} gastos`} colorBorde={COLOR_GASTOS} colorTexto={esTropical ? COLOR_GASTOS_DARKER : 'var(--color-text-primary)'} />
+          <KpiCard label="PAGADO" valor={`RD$ ${totalPagado.toLocaleString('es-DO', { maximumFractionDigits: 0 })}`} sublabel="ya saldado" colorBorde="#1D9E75" colorTexto={esTropical ? '#04342C' : '#5DCAA5'} />
+          <KpiCard label="PENDIENTE" valor={`RD$ ${totalPendiente.toLocaleString('es-DO', { maximumFractionDigits: 0 })}`} sublabel="por pagar" colorBorde={totalPendiente > 0 ? '#BA7517' : '#888780'} colorTexto={totalPendiente > 0 ? (esTropical ? '#854F0B' : '#FAC775') : 'var(--color-text-muted)'} />
+          <KpiCard label="CON RNC" valor={conRncCount} sublabel="para 606 DGII" colorBorde="#534AB7" colorTexto={esTropical ? '#3C3489' : '#AFA9EC'} />
+          <KpiCard label="🔗 AUTOMÁTICOS" valor={automaticosCount} sublabel={`RD$ ${automaticosMonto.toLocaleString('es-DO', { maximumFractionDigits: 0 })}`} colorBorde="#378ADD" colorTexto={esTropical ? '#0C447C' : '#85B7EB'} />
+        </div>
+
+        {/* DESGLOSE POR CATEGORÍA */}
+        {gastosPorCategoria.length > 0 && (
+          <div style={{
+            background: 'var(--color-modulo-bg)', border: '1px solid var(--color-modulo-border)',
+            borderRadius: '14px', padding: '20px', marginBottom: '20px', boxShadow: 'var(--modulo-sombra)',
+          }}>
+            <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', letterSpacing: '1.5px', fontWeight: 600, marginBottom: '14px' }}>
+              📊 DESGLOSE POR CATEGORÍA
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {gastosPorCategoria.map(cat => {
+                const porcentaje = totalMes > 0 ? (cat.total / totalMes) * 100 : 0
+                return (
+                  <div key={cat.id} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ fontSize: '22px', width: '32px' }}>{cat.icono}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>{cat.nombre}</div>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)', fontFamily: 'monospace' }}>
+                          RD$ {cat.total.toLocaleString('es-DO', { maximumFractionDigits: 0 })}
+                        </div>
                       </div>
-                      <p className="text-xs text-gray-500 w-12 text-right">{porcentaje.toFixed(0)}%</p>
-                      <p className="text-xs text-gray-500 w-16 text-right">{cat.cantidad} items</p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ flex: 1, background: 'var(--color-bg-elevated)', borderRadius: '8px', height: '6px', overflow: 'hidden' }}>
+                          <div style={{ background: COLOR_GASTOS, height: '100%', width: `${porcentaje}%` }} />
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', width: '40px', textAlign: 'right' }}>{porcentaje.toFixed(0)}%</div>
+                        <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', width: '60px', textAlign: 'right' }}>{cat.cantidad} items</div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* FILTROS - Ahora con filtro de origen */}
-      <div className="bg-white rounded-xl shadow-sm p-4 mb-4 flex flex-wrap gap-3">
-        <input
-          type="text"
-          value={filtroBusqueda}
-          onChange={(e) => setFiltroBusqueda(e.target.value)}
-          placeholder="🔍 Buscar gasto..."
-          className="flex-1 min-w-[200px] px-3 py-2 border border-gray-300 rounded-lg text-sm"
-        />
-        <select
-          value={filtroCategoria}
-          onChange={(e) => setFiltroCategoria(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
-        >
-          <option value="">Todas las categorías</option>
-          {categorias.map(c => (
-            <option key={c.id} value={c.id}>{c.icono} {c.nombre}</option>
-          ))}
-        </select>
-        <select
-          value={filtroPagado}
-          onChange={(e) => setFiltroPagado(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
-        >
-          <option value="todos">Todos los estados</option>
-          <option value="pagado">✅ Pagados</option>
-          <option value="pendiente">⏰ Pendientes</option>
-        </select>
-        {/* 🔗 NUEVO FILTRO DE ORIGEN */}
-        <select
-          value={filtroOrigen}
-          onChange={(e) => setFiltroOrigen(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
-        >
-          <option value="todos">Todos los orígenes</option>
-          <option value="manual">✋ Solo manuales</option>
-          <option value="automatico">🔗 Solo automáticos</option>
-        </select>
-      </div>
-
-      {/* TABLA */}
-      <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-        {gastosFiltrados.length === 0 ? (
-          <div className="p-12 text-center">
-            <p className="text-6xl mb-3">💸</p>
-            <p className="text-gray-900 font-bold text-lg mb-2">
-              {gastos.length === 0 ? 'Sin gastos en este mes' : 'Sin resultados'}
-            </p>
-            <p className="text-sm text-gray-500 mb-4">
-              {gastos.length === 0 
-                ? 'Comienza registrando los gastos operativos del mes.' 
-                : 'Ajusta los filtros para ver más gastos.'}
-            </p>
-            {gastos.length === 0 && (
-              <button
-                onClick={() => { setGastoEditando(null); setModalAbierto(true); }}
-                className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-6 py-3 rounded-lg"
-              >
-                ➕ Registrar primer gasto
-              </button>
-            )}
-          </div>
-        ) : (
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 tracking-wider">FECHA</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 tracking-wider">CATEGORÍA</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 tracking-wider">DESCRIPCIÓN</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 tracking-wider">PROVEEDOR</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 tracking-wider">MONTO</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 tracking-wider">RNC</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 tracking-wider">ORIGEN</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 tracking-wider">ESTADO</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {gastosFiltrados.map(g => {
-                const cat = getCategoria(g.categoria_id)
-                const prov = getProveedor(g.proveedor_id)
-                const fechaFormat = new Date(g.fecha + 'T12:00:00').toLocaleDateString('es-DO', { day: '2-digit', month: 'short' })
-                const auto = esAutomatico(g)
-                const origenInfo = getOrigenInfo(g)
-
-                return (
-                  <tr 
-                    key={g.id} 
-                    className={`hover:bg-gray-50 ${auto ? 'bg-blue-50/30' : ''}`}
-                  >
-                    <td className="px-4 py-3">
-                      <p className="text-sm text-gray-900 font-mono">{fechaFormat}</p>
-                    </td>
-                    <td className="px-4 py-3">
-                      {cat ? (
-                        <span className="text-sm">
-                          {cat.icono} {cat.nombre}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-gray-400">Sin categoría</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className="text-sm font-semibold text-gray-900">{g.descripcion}</p>
-                      {g.notas && (
-                        <p className="text-xs text-gray-500 truncate max-w-xs">{g.notas}</p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {prov ? (
-                        <p className="text-xs text-gray-700">{prov.nombre}</p>
-                      ) : g.proveedor_nombre ? (
-                        <p className="text-xs text-gray-600 italic">{g.proveedor_nombre}</p>
-                      ) : (
-                        <span className="text-xs text-gray-400">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <p className="text-sm font-bold text-gray-900 font-mono">
-                        RD$ {parseFloat(g.total).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                      </p>
-                      {g.aplica_itbis && (
-                        <p className="text-xs text-amber-600">incl. ITBIS</p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {g.con_rnc ? (
-                        <div>
-                          <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full font-semibold">
-                            🧾 {g.tipo_ncf}
-                          </span>
-                          <p className="text-xs text-gray-500 mt-1 font-mono">{g.rnc}</p>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-gray-400">—</span>
-                      )}
-                    </td>
-                    {/* 🔗 NUEVA COLUMNA - ORIGEN */}
-                    <td className="px-4 py-3 text-center">
-                      {auto ? (
-                        <span 
-                          className={`text-xs bg-${origenInfo.color}-100 text-${origenInfo.color}-800 px-2 py-1 rounded-full font-semibold inline-flex items-center gap-1`}
-                          title={origenInfo.descripcion}
-                        >
-                          🔗 {origenInfo.label}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-gray-500">
-                          ✋ Manual
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {g.pagado ? (
-                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-semibold">
-                          ✅ Pagado
-                        </span>
-                      ) : (
-                        <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded-full font-semibold">
-                          ⏰ Pendiente
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {auto ? (
-                        <span 
-                          className="text-xs text-gray-400 px-2 py-1 inline-flex items-center gap-1"
-                          title="Este gasto se generó automáticamente desde otro módulo. No se puede editar directamente para mantener la trazabilidad."
-                        >
-                          🔒 Auto
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => { setGastoEditando(g); setModalAbierto(true); }}
-                          className="text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1 rounded font-semibold"
-                        >
-                          ✏️ Editar
-                        </button>
-                      )}
-                    </td>
-                  </tr>
                 )
               })}
-            </tbody>
-          </table>
+            </div>
+          </div>
         )}
+
+        {/* FILTROS */}
+        <div style={{
+          background: 'var(--color-modulo-bg)', border: '1px solid var(--color-modulo-border)',
+          borderRadius: '12px', padding: '14px', marginBottom: '12px',
+          display: 'flex', flexWrap: 'wrap', gap: '10px',
+          boxShadow: 'var(--modulo-sombra)',
+        }}>
+          <input
+            type="text" value={filtroBusqueda} onChange={(e) => setFiltroBusqueda(e.target.value)}
+            placeholder="🔍 Buscar gasto..."
+            style={{ flex: 1, minWidth: '200px', padding: '8px 12px', background: 'var(--color-bg-input)', border: '1px solid var(--color-border-subtle)', borderRadius: '8px', color: 'var(--color-text-primary)', fontSize: '13px', fontFamily: 'inherit', outline: 'none' }}
+          />
+          <select value={filtroCategoria} onChange={(e) => setFiltroCategoria(e.target.value)} style={selectStyle()}>
+            <option value="">Todas las categorías</option>
+            {categorias.map(c => (<option key={c.id} value={c.id}>{c.icono} {c.nombre}</option>))}
+          </select>
+          <select value={filtroPagado} onChange={(e) => setFiltroPagado(e.target.value)} style={selectStyle()}>
+            <option value="todos">Todos los estados</option>
+            <option value="pagado">✅ Pagados</option>
+            <option value="pendiente">⏰ Pendientes</option>
+          </select>
+          <select value={filtroOrigen} onChange={(e) => setFiltroOrigen(e.target.value)} style={selectStyle()}>
+            <option value="todos">Todos los orígenes</option>
+            <option value="manual">✋ Solo manuales</option>
+            <option value="automatico">🔗 Solo automáticos</option>
+          </select>
+        </div>
+
+        {/* TABLA */}
+        <div style={{
+          background: 'var(--color-modulo-bg)', border: '1px solid var(--color-modulo-border)',
+          borderRadius: '14px', overflow: 'hidden', boxShadow: 'var(--modulo-sombra)',
+        }}>
+          {gastosFiltrados.length === 0 ? (
+            <div style={{ padding: '48px 24px', textAlign: 'center' }}>
+              <div style={{ fontSize: '56px', marginBottom: '12px' }}>💸</div>
+              <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: '6px' }}>
+                {gastos.length === 0 ? 'Sin gastos en este mes' : 'Sin resultados'}
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '16px' }}>
+                {gastos.length === 0 ? 'Comienza registrando los gastos operativos del mes.' : 'Ajusta los filtros para ver más gastos.'}
+              </div>
+              {gastos.length === 0 && (
+                <button
+                  onClick={() => { setGastoEditando(null); setModalAbierto(true); }}
+                  style={{
+                    padding: '12px 24px',
+                    background: `linear-gradient(135deg, ${COLOR_GASTOS} 0%, ${COLOR_GASTOS_DARKER} 100%)`,
+                    border: 'none', borderRadius: '10px',
+                    color: 'white', fontSize: '13px', fontWeight: 600,
+                    cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  ➕ Registrar primer gasto
+                </button>
+              )}
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead style={{ background: esTropical ? '#FBFAF6' : 'var(--color-bg-elevated)', borderBottom: '1px solid var(--color-border-subtle)' }}>
+                  <tr>
+                    <Th>FECHA</Th>
+                    <Th>CATEGORÍA</Th>
+                    <Th>DESCRIPCIÓN</Th>
+                    <Th>PROVEEDOR</Th>
+                    <Th align="right">MONTO</Th>
+                    <Th align="center">RNC</Th>
+                    <Th align="center">ORIGEN</Th>
+                    <Th align="center">ESTADO</Th>
+                    <Th></Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {gastosFiltrados.map(g => {
+                    const cat = getCategoria(g.categoria_id)
+                    const prov = getProveedor(g.proveedor_id)
+                    const fechaFormat = new Date(g.fecha + 'T12:00:00').toLocaleDateString('es-DO', { day: '2-digit', month: 'short' })
+                    const auto = esAutomatico(g)
+                    const origenInfo = getOrigenInfo(g)
+                    return (
+                      <tr key={g.id} style={{
+                        background: auto ? (esTropical ? '#F0F7FE' : 'rgba(55, 138, 221, 0.05)') : 'transparent',
+                        borderBottom: '1px solid var(--color-border-subtle)',
+                      }}>
+                        <Td><span style={{ fontFamily: 'monospace' }}>{fechaFormat}</span></Td>
+                        <Td>{cat ? <span>{cat.icono} {cat.nombre}</span> : <span style={{ color: 'var(--color-text-muted)', fontSize: '11px' }}>Sin categoría</span>}</Td>
+                        <Td>
+                          <div style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{g.descripcion}</div>
+                          {g.notas && <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{g.notas}</div>}
+                        </Td>
+                        <Td>
+                          {prov ? <span style={{ fontSize: '12px' }}>{prov.nombre}</span>
+                            : g.proveedor_nombre ? <span style={{ fontSize: '12px', fontStyle: 'italic', color: 'var(--color-text-secondary)' }}>{g.proveedor_nombre}</span>
+                            : <span style={{ color: 'var(--color-text-muted)' }}>—</span>}
+                        </Td>
+                        <Td align="right">
+                          <div style={{ fontWeight: 600, fontFamily: 'monospace', color: 'var(--color-text-primary)' }}>
+                            RD$ {parseFloat(g.total).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                          </div>
+                          {g.aplica_itbis && <div style={{ fontSize: '10px', color: '#BA7517' }}>incl. ITBIS</div>}
+                        </Td>
+                        <Td align="center">
+                          {g.con_rnc ? (
+                            <div>
+                              <BadgeStatus emoji="🧾" label={g.tipo_ncf} color="#534AB7" />
+                              <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '2px', fontFamily: 'monospace' }}>{g.rnc}</div>
+                            </div>
+                          ) : <span style={{ color: 'var(--color-text-muted)' }}>—</span>}
+                        </Td>
+                        <Td align="center">
+                          {auto ? <BadgeStatus emoji="🔗" label={origenInfo.label} color={origenInfo.color} />
+                            : <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>✋ Manual</span>}
+                        </Td>
+                        <Td align="center">
+                          {g.pagado
+                            ? <BadgeStatus emoji="✅" label="Pagado" color="#1D9E75" />
+                            : <BadgeStatus emoji="⏰" label="Pendiente" color="#BA7517" />}
+                        </Td>
+                        <Td align="center">
+                          {auto ? (
+                            <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }} title="Generado automáticamente">🔒 Auto</span>
+                          ) : (
+                            <button
+                              onClick={() => { setGastoEditando(g); setModalAbierto(true); }}
+                              style={{
+                                fontSize: '11px', color: '#378ADD',
+                                background: esTropical ? '#E6F1FB' : 'rgba(55, 138, 221, 0.15)',
+                                border: 'none', borderRadius: '6px',
+                                padding: '4px 8px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600,
+                              }}
+                            >
+                              ✏️ Editar
+                            </button>
+                          )}
+                        </Td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* MODAL */}
       {modalAbierto && (
         <ModalNuevoGasto
-          empresaId={empresaId}
-          usuario={usuario}
-          categorias={categorias}
-          proveedores={proveedores}
+          empresaId={empresaId} usuario={usuario}
+          categorias={categorias} proveedores={proveedores}
           gastoEditando={gastoEditando}
           onCerrar={() => setModalAbierto(false)}
-          onGuardado={() => {
-            cargarDatos()
-            setModalAbierto(false)
-          }}
-          onCategoriaCreada={(nueva) => {
-            setCategorias([...categorias, nueva])
-          }}
-          onProveedorCreado={(nuevo) => {
-            setProveedores([...proveedores, nuevo])
-          }}
+          onGuardado={() => { cargarDatos(); setModalAbierto(false) }}
+          onCategoriaCreada={(nueva) => setCategorias([...categorias, nueva])}
+          onProveedorCreado={(nuevo) => setProveedores([...proveedores, nuevo])}
         />
       )}
-
     </div>
   )
+}
+
+function KpiCard({ label, valor, sublabel, colorBorde, colorTexto }) {
+  return (
+    <div style={{
+      background: 'var(--color-modulo-bg)', border: '1px solid var(--color-modulo-border)',
+      borderLeft: `4px solid ${colorBorde}`,
+      borderRadius: '12px', padding: '14px', boxShadow: 'var(--modulo-sombra)',
+    }}>
+      <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginBottom: '8px', fontWeight: 600, letterSpacing: '1px' }}>{label}</div>
+      <div style={{ fontSize: '20px', fontWeight: 600, color: colorTexto || 'var(--color-text-primary)' }}>{valor}</div>
+      {sublabel && <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '4px' }}>{sublabel}</div>}
+    </div>
+  )
+}
+
+function Th({ children, align = 'left' }) {
+  return (
+    <th style={{
+      padding: '12px 14px', textAlign: align,
+      fontSize: '10px', fontWeight: 600,
+      color: 'var(--color-text-muted)',
+      letterSpacing: '1px',
+    }}>{children}</th>
+  )
+}
+
+function Td({ children, align = 'left' }) {
+  return (
+    <td style={{ padding: '12px 14px', textAlign: align, fontSize: '12px', color: 'var(--color-text-primary)' }}>{children}</td>
+  )
+}
+
+function BadgeStatus({ emoji, label, color }) {
+  return (
+    <span style={{
+      fontSize: '10px', fontWeight: 600,
+      padding: '4px 8px', borderRadius: '8px',
+      background: `${color}25`, color,
+      whiteSpace: 'nowrap',
+    }}>
+      {emoji} {label}
+    </span>
+  )
+}
+
+function selectStyle() {
+  return {
+    padding: '8px 12px',
+    background: 'var(--color-bg-input)',
+    border: '1px solid var(--color-border-subtle)',
+    borderRadius: '8px', color: 'var(--color-text-primary)',
+    fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit',
+  }
+}
+
+function tabTemaStyle(activo) {
+  return {
+    background: activo ? 'var(--gradient-toggle-active)' : 'transparent',
+    border: 'none', borderRadius: '16px', padding: '6px 10px',
+    display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer',
+  }
 }
 
 export default VistaGastos

@@ -73,13 +73,8 @@ function App() {
     setCargando(false)
   }
 
-  function avanzarPaso() {
-    setPasoActual(pasoActual + 1)
-  }
-
-  function retrocederPaso() {
-    setPasoActual(pasoActual - 1)
-  }
+  function avanzarPaso() { setPasoActual(pasoActual + 1) }
+  function retrocederPaso() { setPasoActual(pasoActual - 1) }
 
   function loginEmpresaExitoso(empresa) {
     setEmpresaLogueada(empresa)
@@ -209,9 +204,7 @@ function App() {
           onIrHistorial={() => setVistaActual('historial')}
           onIrMiContrato={() => setVistaActual('mi_contrato')}
           onIrMisRecibos={
-            puedeVerMisRecibos
-              ? () => setVistaActual('mis_recibos')
-              : null
+            puedeVerMisRecibos ? () => setVistaActual('mis_recibos') : null
           }
         />
       )
@@ -224,84 +217,24 @@ function App() {
           empresaId={empresaActual?.id}
           onCerrarSesion={cerrarSesionTotal}
           onCambiarUsuario={cambiarDeUsuario}
-          onIrConfiguracion={
-            puedeConfigurar
-              ? () => setVistaActual('configuracion')
-              : null
-          }
+          onIrConfiguracion={puedeConfigurar ? () => setVistaActual('configuracion') : null}
           onIrFactura={irAFactura}
           onIrConduces={irAConduces}
           onIrCalculadora={() => setVistaActual('calculadora')}
-          onIrInteligencia={
-            usuarioLogueado.rol === 'administrador' 
-              ? () => setVistaActual('inteligencia') 
-              : null
-          }
-          onIrDespacho={
-            usuarioLogueado.rol === 'administrador'
-              ? () => setVistaActual('despacho')
-              : null
-          }
-          onIrEmpleados={
-            puedeGestionarEmpleados
-              ? () => setVistaActual('empleados')
-              : null
-          }
-          onIrContratos={
-            puedeGestionarContratos
-              ? () => setVistaActual('contratos')
-              : null
-          }
-          onIrMiContrato={
-            puedeVerMiContrato
-              ? () => setVistaActual('mi_contrato')
-              : null
-          }
-          onIrMisRecibos={
-            puedeVerMisRecibos
-              ? () => setVistaActual('mis_recibos')
-              : null
-          }
-          onIrProveedores={
-            puedeGestionarProveedores
-              ? () => setVistaActual('proveedores')
-              : null
-          }
-          onIrCompras={
-            puedeGestionarCompras
-              ? () => setVistaActual('compras')
-              : null
-          }
-          onIrIngredientes={
-            puedeGestionarIngredientes
-              ? () => setVistaActual('ingredientes')
-              : null
-          }
-          onIrGastos={
-            puedeGestionarGastos
-              ? () => setVistaActual('gastos')
-              : null
-          }
-          onIrNomina={
-            puedeGestionarNomina
-              ? () => setVistaActual('nomina')
-              : null
-          }
-          onVerComoSecretaria={
-            usuarioLogueado.rol === 'administrador'
-              ? () => setVistaActual('vista_secretaria_admin')
-              : null
-          }
-          onIrCatalogo={
-            puedeVerCatalogo
-              ? () => setVistaActual('catalogo_recetas')
-              : null
-          }
-          onIrHistorial={
-            puedeVerHistorial
-              ? () => setVistaActual('historial')
-              : null
-          }
+          onIrInteligencia={usuarioLogueado.rol === 'administrador' ? () => setVistaActual('inteligencia') : null}
+          onIrDespacho={usuarioLogueado.rol === 'administrador' ? () => setVistaActual('despacho') : null}
+          onIrEmpleados={puedeGestionarEmpleados ? () => setVistaActual('empleados') : null}
+          onIrContratos={puedeGestionarContratos ? () => setVistaActual('contratos') : null}
+          onIrMiContrato={puedeVerMiContrato ? () => setVistaActual('mi_contrato') : null}
+          onIrMisRecibos={puedeVerMisRecibos ? () => setVistaActual('mis_recibos') : null}
+          onIrProveedores={puedeGestionarProveedores ? () => setVistaActual('proveedores') : null}
+          onIrCompras={puedeGestionarCompras ? () => setVistaActual('compras') : null}
+          onIrIngredientes={puedeGestionarIngredientes ? () => setVistaActual('ingredientes') : null}
+          onIrGastos={puedeGestionarGastos ? () => setVistaActual('gastos') : null}
+          onIrNomina={puedeGestionarNomina ? () => setVistaActual('nomina') : null}
+          onVerComoSecretaria={usuarioLogueado.rol === 'administrador' ? () => setVistaActual('vista_secretaria_admin') : null}
+          onIrCatalogo={puedeVerCatalogo ? () => setVistaActual('catalogo_recetas') : null}
+          onIrHistorial={puedeVerHistorial ? () => setVistaActual('historial') : null}
         />
       )
     }
@@ -312,80 +245,24 @@ function App() {
         empresaId={empresaActual?.id}
         onCerrarSesion={cerrarSesionTotal}
         onCambiarUsuario={cambiarDeUsuario}
-        onIrConfiguracion={
-          puedeConfigurar
-            ? () => setVistaActual('configuracion')
-            : null
-        }
+        onIrConfiguracion={puedeConfigurar ? () => setVistaActual('configuracion') : null}
         onIrCierre={() => setVistaActual('cierre')}
         onIrFactura={irAFactura}
         onIrConduces={irAConduces}
         onIrCalculadora={() => setVistaActual('calculadora')}
-        onIrInteligencia={
-          puedeVerInteligencia 
-            ? () => setVistaActual('inteligencia') 
-            : null
-        }
-        onIrDespacho={
-          puedeDespachar
-            ? () => setVistaActual('despacho')
-            : null
-        }
-        onIrEmpleados={
-          puedeGestionarEmpleados
-            ? () => setVistaActual('empleados')
-            : null
-        }
-        onIrContratos={
-          puedeGestionarContratos
-            ? () => setVistaActual('contratos')
-            : null
-        }
-        onIrMiContrato={
-          puedeVerMiContrato
-            ? () => setVistaActual('mi_contrato')
-            : null
-        }
-        onIrMisRecibos={
-          puedeVerMisRecibos
-            ? () => setVistaActual('mis_recibos')
-            : null
-        }
-        onIrCompras={
-          puedeGestionarCompras
-            ? () => setVistaActual('compras')
-            : null
-        }
-        onIrIngredientes={
-          puedeGestionarIngredientes
-            ? () => setVistaActual('ingredientes')
-            : null
-        }
-        onIrGastos={
-          puedeGestionarGastos
-            ? () => setVistaActual('gastos')
-            : null
-        }
-        onIrNomina={
-          puedeGestionarNomina
-            ? () => setVistaActual('nomina')
-            : null
-        }
-        onVerComoSecretaria={
-          usuarioLogueado.rol === 'propietario'
-            ? () => setVistaActual('vista_secretaria_admin')
-            : null
-        }
-        onIrCatalogo={
-          puedeVerCatalogo
-            ? () => setVistaActual('catalogo_recetas')
-            : null
-        }
-        onIrHistorial={
-          puedeVerHistorial
-            ? () => setVistaActual('historial')
-            : null
-        }
+        onIrInteligencia={puedeVerInteligencia ? () => setVistaActual('inteligencia') : null}
+        onIrDespacho={puedeDespachar ? () => setVistaActual('despacho') : null}
+        onIrEmpleados={puedeGestionarEmpleados ? () => setVistaActual('empleados') : null}
+        onIrContratos={puedeGestionarContratos ? () => setVistaActual('contratos') : null}
+        onIrMiContrato={puedeVerMiContrato ? () => setVistaActual('mi_contrato') : null}
+        onIrMisRecibos={puedeVerMisRecibos ? () => setVistaActual('mis_recibos') : null}
+        onIrCompras={puedeGestionarCompras ? () => setVistaActual('compras') : null}
+        onIrIngredientes={puedeGestionarIngredientes ? () => setVistaActual('ingredientes') : null}
+        onIrGastos={puedeGestionarGastos ? () => setVistaActual('gastos') : null}
+        onIrNomina={puedeGestionarNomina ? () => setVistaActual('nomina') : null}
+        onVerComoSecretaria={usuarioLogueado.rol === 'propietario' ? () => setVistaActual('vista_secretaria_admin') : null}
+        onIrCatalogo={puedeVerCatalogo ? () => setVistaActual('catalogo_recetas') : null}
+        onIrHistorial={puedeVerHistorial ? () => setVistaActual('historial') : null}
       />
     )
   }
@@ -406,12 +283,14 @@ function App() {
 
   return (
     <>
+      {/* WIZARD - mantiene su fondo viejo (aún no refactorizado) */}
       {pasoActual < 7 && (
         <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
           {renderPasoWizard()}
         </div>
       )}
       
+      {/* AUTH - pantallas con tema propio */}
       {pasoActual === 7 && vistaActual === 'login_empresa' && (
         <LoginEmpresa onLoginExitoso={loginEmpresaExitoso} />
       )}
@@ -432,46 +311,47 @@ function App() {
         />
       )}
       
+      {/* DASHBOARD según rol - pantallas con tema propio */}
       {pasoActual === 7 && vistaActual === 'dashboard' && usuarioLogueado && (
         renderVistaSegunRol()
       )}
       
+      {/* VISTA SECRETARIA en modo admin - SIN WRAPPER */}
       {pasoActual === 7 && vistaActual === 'vista_secretaria_admin' && usuarioLogueado && (
-        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
-          <VistaSecretaria 
-            usuario={usuarioLogueado}
-            empresaId={empresaActual?.id}
-            onCerrarSesion={cerrarSesionTotal}
-            onCambiarUsuario={cambiarDeUsuario}
-            onIrFactura={irAFactura}
-            onIrConduces={irAConduces}
-            onIrCalculadora={() => setVistaActual('calculadora')}
-            onIrInteligencia={() => setVistaActual('inteligencia')}
-            onIrDespacho={() => setVistaActual('despacho')}
-            onIrProveedores={() => setVistaActual('proveedores')}
-            onIrCompras={() => setVistaActual('compras')}
-            onIrIngredientes={() => setVistaActual('ingredientes')}
-            onIrGastos={() => setVistaActual('gastos')}
-            onIrNomina={() => setVistaActual('nomina')}
-            onIrCatalogo={() => setVistaActual('catalogo_recetas')}
-            onIrHistorial={() => setVistaActual('historial')}
-            onVolverAlPanel={() => setVistaActual('dashboard')}
-            modoAdmin={true}
-          />
-        </div>
+        <VistaSecretaria 
+          usuario={usuarioLogueado}
+          empresaId={empresaActual?.id}
+          onCerrarSesion={cerrarSesionTotal}
+          onCambiarUsuario={cambiarDeUsuario}
+          onIrFactura={irAFactura}
+          onIrConduces={irAConduces}
+          onIrCalculadora={() => setVistaActual('calculadora')}
+          onIrInteligencia={() => setVistaActual('inteligencia')}
+          onIrDespacho={() => setVistaActual('despacho')}
+          onIrProveedores={() => setVistaActual('proveedores')}
+          onIrCompras={() => setVistaActual('compras')}
+          onIrIngredientes={() => setVistaActual('ingredientes')}
+          onIrGastos={() => setVistaActual('gastos')}
+          onIrNomina={() => setVistaActual('nomina')}
+          onIrCatalogo={() => setVistaActual('catalogo_recetas')}
+          onIrHistorial={() => setVistaActual('historial')}
+          onVolverAlPanel={() => setVistaActual('dashboard')}
+          modoAdmin={true}
+        />
       )}
       
+      {/* DESPACHADOR - YA REFACTORIZADO, SIN WRAPPER */}
       {pasoActual === 7 && vistaActual === 'despacho' && usuarioLogueado && puedeDespachar && (
-        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
-          <VistaDespachador 
-            usuario={usuarioLogueado}
-            empresaId={empresaActual?.id}
-            onCerrarSesion={cerrarSesionTotal}
-            onCambiarUsuario={cambiarDeUsuario}
-            onVolver={() => setVistaActual('dashboard')}
-          />
-        </div>
+        <VistaDespachador 
+          usuario={usuarioLogueado}
+          empresaId={empresaActual?.id}
+          onCerrarSesion={cerrarSesionTotal}
+          onCambiarUsuario={cambiarDeUsuario}
+          onVolver={() => setVistaActual('dashboard')}
+        />
       )}
+      
+      {/* CONFIGURACIÓN - aún NO refactorizada, mantiene wrapper viejo */}
       {pasoActual === 7 && vistaActual === 'configuracion' && usuarioLogueado && puedeConfigurar && (
         <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
           <Configuracion 
@@ -481,34 +361,36 @@ function App() {
           />
         </div>
       )}
+      
+      {/* CIERRE DEL DÍA - YA REFACTORIZADO, SIN WRAPPER */}
       {pasoActual === 7 && vistaActual === 'cierre' && usuarioLogueado && (
-        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
-          <CierreDelDia 
-            usuario={usuarioLogueado}
-            empresaId={empresaActual?.id}
-            onVolver={() => setVistaActual('dashboard')}
-          />
-        </div>
+        <CierreDelDia 
+          usuario={usuarioLogueado}
+          empresaId={empresaActual?.id}
+          onVolver={() => setVistaActual('dashboard')}
+        />
       )}
+      
+      {/* FACTURA INABIE - YA REFACTORIZADO, SIN WRAPPER */}
       {pasoActual === 7 && vistaActual === 'factura' && usuarioLogueado && (
-        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
-          <FacturaInabie 
-            usuario={usuarioLogueado}
-            empresaId={empresaActual?.id}
-            tabInicial={tabFacturaInicial}
-            onVolver={() => setVistaActual('dashboard')}
-          />
-        </div>
+        <FacturaInabie 
+          usuario={usuarioLogueado}
+          empresaId={empresaActual?.id}
+          tabInicial={tabFacturaInicial}
+          onVolver={() => setVistaActual('dashboard')}
+        />
       )}
+      
+      {/* CALCULADORA - YA REFACTORIZADO, SIN WRAPPER */}
       {pasoActual === 7 && vistaActual === 'calculadora' && usuarioLogueado && (
-        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
-          <CalculadoraProduccion 
-            usuario={usuarioLogueado}
-            empresaId={empresaActual?.id}
-            onVolver={() => setVistaActual('dashboard')}
-          />
-        </div>
+        <CalculadoraProduccion 
+          usuario={usuarioLogueado}
+          empresaId={empresaActual?.id}
+          onVolver={() => setVistaActual('dashboard')}
+        />
       )}
+      
+      {/* INTELIGENCIA - aún NO refactorizada, mantiene wrapper viejo */}
       {pasoActual === 7 && vistaActual === 'inteligencia' && usuarioLogueado && puedeVerInteligencia && (
         <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
           <InteligenciaOperativa 
@@ -518,6 +400,8 @@ function App() {
           />
         </div>
       )}
+      
+      {/* EMPLEADOS - aún NO refactorizada, mantiene wrapper viejo */}
       {pasoActual === 7 && vistaActual === 'empleados' && usuarioLogueado && puedeGestionarEmpleados && (
         <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
           <VistaEmpleados 
@@ -527,6 +411,8 @@ function App() {
           />
         </div>
       )}
+      
+      {/* CONTRATOS - aún NO refactorizada, mantiene wrapper viejo */}
       {pasoActual === 7 && vistaActual === 'contratos' && usuarioLogueado && puedeGestionarContratos && (
         <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
           <VistaContratos 
@@ -536,6 +422,8 @@ function App() {
           />
         </div>
       )}
+      
+      {/* MI CONTRATO - aún NO refactorizada */}
       {pasoActual === 7 && vistaActual === 'mi_contrato' && usuarioLogueado && puedeVerMiContrato && (
         <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
           <VistaMiContrato 
@@ -545,6 +433,8 @@ function App() {
           />
         </div>
       )}
+      
+      {/* MIS RECIBOS - aún NO refactorizada */}
       {pasoActual === 7 && vistaActual === 'mis_recibos' && usuarioLogueado && puedeVerMisRecibos && (
         <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
           <MisRecibos 
@@ -554,6 +444,8 @@ function App() {
           />
         </div>
       )}
+      
+      {/* PROVEEDORES - aún NO refactorizada */}
       {pasoActual === 7 && vistaActual === 'proveedores' && usuarioLogueado && puedeGestionarProveedores && (
         <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
           <VistaProveedores 
@@ -563,6 +455,8 @@ function App() {
           />
         </div>
       )}
+      
+      {/* COMPRAS - aún NO refactorizada (faltó del lote) */}
       {pasoActual === 7 && vistaActual === 'compras' && usuarioLogueado && puedeGestionarCompras && (
         <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
           <VistaCompras 
@@ -572,6 +466,8 @@ function App() {
           />
         </div>
       )}
+      
+      {/* INGREDIENTES - aún NO refactorizada */}
       {pasoActual === 7 && vistaActual === 'ingredientes' && usuarioLogueado && puedeGestionarIngredientes && (
         <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
           <VistaIngredientes 
@@ -581,15 +477,17 @@ function App() {
           />
         </div>
       )}
+      
+      {/* GASTOS - YA REFACTORIZADO, SIN WRAPPER */}
       {pasoActual === 7 && vistaActual === 'gastos' && usuarioLogueado && puedeGestionarGastos && (
-        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
-          <VistaGastos 
-            usuario={usuarioLogueado}
-            empresaId={empresaActual?.id}
-            onVolver={() => setVistaActual('dashboard')}
-          />
-        </div>
+        <VistaGastos 
+          usuario={usuarioLogueado}
+          empresaId={empresaActual?.id}
+          onVolver={() => setVistaActual('dashboard')}
+        />
       )}
+      
+      {/* NÓMINA - aún NO refactorizada */}
       {pasoActual === 7 && vistaActual === 'nomina' && usuarioLogueado && puedeGestionarNomina && (
         <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
           <VistaNomina 
@@ -599,6 +497,8 @@ function App() {
           />
         </div>
       )}
+      
+      {/* CATÁLOGO - aún NO refactorizada */}
       {pasoActual === 7 && vistaActual === 'catalogo_recetas' && usuarioLogueado && puedeVerCatalogo && (
         <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
           <VistaCatalogoRecetas 
@@ -607,6 +507,8 @@ function App() {
           />
         </div>
       )}
+      
+      {/* HISTORIAL - aún NO refactorizada */}
       {pasoActual === 7 && vistaActual === 'historial' && usuarioLogueado && puedeVerHistorial && (
         <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
           <VistaHistorial 
