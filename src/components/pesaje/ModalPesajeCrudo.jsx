@@ -1,30 +1,17 @@
-// src/components/pesaje/ModalPesajeCrudo.jsx
-// Modal de Pesaje Crudo — Cocina PAE
-// Actualizado 16-may-2026: + Modo Edición (revierte y rehace inventario + borra cocido/sobrante)
-
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 
 const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']
-
 const DIAS_LABEL = {
-  lunes: 'Lunes',
-  martes: 'Martes',
-  miercoles: 'Miércoles',
-  jueves: 'Jueves',
-  viernes: 'Viernes',
-  sabado: 'Sábado',
-  domingo: 'Domingo'
+  lunes: 'Lunes', martes: 'Martes', miercoles: 'Miércoles',
+  jueves: 'Jueves', viernes: 'Viernes', sabado: 'Sábado', domingo: 'Domingo'
 }
 
+const AMBAR = { c: '#EF9F27', claro: '#FAEEDA', dark: '#633806' }
+
 export default function ModalPesajeCrudo({ 
-  empresaId, 
-  usuario, 
-  operacionesPreparando,
-  escuelas,
-  onCerrar, 
-  onAprobado,
-  modoEdicion = false  // 🆕 si es true, precarga movimientos existentes
+  empresaId, usuario, operacionesPreparando, escuelas,
+  onCerrar, onAprobado, modoEdicion = false
 }) {
   const [recetasDisponibles, setRecetasDisponibles] = useState([])
   const [recetaSeleccionada, setRecetaSeleccionada] = useState(null)
@@ -36,13 +23,19 @@ export default function ModalPesajeCrudo({
   const [error, setError] = useState(null)
   const [notas, setNotas] = useState('')
 
-  // ─── Cargar todas las recetas activas al abrir ───────────────
+  const [esTropical, setEsTropical] = useState(
+    typeof document !== 'undefined' && document.documentElement.getAttribute('data-tema') === 'tropical'
+  )
   useEffect(() => {
-    cargarRecetasYDelDia()
+    const obs = new MutationObserver(() => {
+      setEsTropical(document.documentElement.getAttribute('data-tema') === 'tropical')
+    })
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-tema'] })
+    return () => obs.disconnect()
   }, [])
 
-  // ─── Recalcular sugerencias cuando cambian raciones o receta ──
-  // (Solo en modo normal — en edición los valores vienen de la BD)
+  useEffect(() => { cargarRecetasYDelDia() }, [])
+
   useEffect(() => {
     if (!modoEdicion && recetaSeleccionada && racionesEditables > 0) {
       construirListaIngredientes(recetaSeleccionada, racionesEditables)
@@ -53,156 +46,54 @@ export default function ModalPesajeCrudo({
     try {
       setCargando(true)
       setError(null)
-
-      // 1. Calcular raciones totales (igual en ambos modos)
-      const totalRaciones = operacionesPreparando.reduce((sum, op) => {
-        return sum + (op.raciones_planificadas || 0)
-      }, 0)
+      const totalRaciones = operacionesPreparando.reduce((sum, op) => sum + (op.raciones_planificadas || 0), 0)
       setRacionesTotales(totalRaciones)
       setRacionesEditables(totalRaciones)
-
-      // 2. Cargar TODAS las recetas activas con sus ingredientes
       const { data: recetasData, error: errRecetas } = await supabase
         .from('recetas')
-        .select(`
-          id,
-          nombre,
-          emoji,
-          dia_semana,
-          notas_operativas,
-          recetas_ingredientes (
-            id,
-            cantidad_crudo_por_racion,
-            unidad,
-            notas,
-            ingredientes (
-              id,
-              nombre,
-              categoria,
-              unidad_compra,
-              factor_rendimiento,
-              stock_actual,
-              precio_unitario
-            )
-          )
-        `)
-        .eq('empresa_id', empresaId)
-        .eq('activa', true)
-
+        .select(`id, nombre, emoji, dia_semana, notas_operativas, recetas_ingredientes (id, cantidad_crudo_por_racion, unidad, notas, ingredientes (id, nombre, categoria, unidad_compra, factor_rendimiento, stock_actual, precio_unitario))`)
+        .eq('empresa_id', empresaId).eq('activa', true)
       if (errRecetas) throw errRecetas
-      if (!recetasData || recetasData.length === 0) {
-        throw new Error('No hay recetas activas configuradas')
-      }
-
-      const ordenadas = recetasData.sort((a, b) => {
-        const idxA = DIAS_SEMANA.indexOf(a.dia_semana)
-        const idxB = DIAS_SEMANA.indexOf(b.dia_semana)
-        return idxA - idxB
-      })
-
+      if (!recetasData || recetasData.length === 0) throw new Error('No hay recetas activas configuradas')
+      const ordenadas = recetasData.sort((a, b) => DIAS_SEMANA.indexOf(a.dia_semana) - DIAS_SEMANA.indexOf(b.dia_semana))
       setRecetasDisponibles(ordenadas)
-
-      // 🆕 SI ES MODO EDICIÓN: precargar desde movimientos_inventario
-      if (modoEdicion) {
-        await precargarDesdeEdicion(ordenadas)
-        return
-      }
-
-      // ─── MODO NORMAL: auto-detectar receta del día ──────────
+      if (modoEdicion) { await precargarDesdeEdicion(ordenadas); return }
       const hoy = new Date()
-      const diaSemana = DIAS_SEMANA[hoy.getDay()]
-      const recetaDelDia = ordenadas.find(r => r.dia_semana === diaSemana)
-
-      if (recetaDelDia) {
-        setRecetaSeleccionada(recetaDelDia)
-      } else {
-        setRecetaSeleccionada(null)
-      }
+      const recetaDelDia = ordenadas.find(r => r.dia_semana === DIAS_SEMANA[hoy.getDay()])
+      setRecetaSeleccionada(recetaDelDia || null)
     } catch (err) {
       console.error('Error cargando recetas:', err)
       setError(err.message)
-    } finally {
-      setCargando(false)
-    }
+    } finally { setCargando(false) }
   }
 
-  // 🆕 Precarga datos en modo edición
   async function precargarDesdeEdicion(recetasOrdenadas) {
     const fechaHoy = new Date().toISOString().split('T')[0]
-
-    // 1. Cargar movimientos existentes del día
     const { data: movimientosExistentes, error: errMov } = await supabase
       .from('movimientos_inventario')
-      .select(`
-        id,
-        ingrediente_id,
-        cantidad,
-        unidad,
-        precio_unitario,
-        stock_antes,
-        stock_despues,
-        notas,
-        ingredientes (
-          id,
-          nombre,
-          categoria,
-          factor_rendimiento,
-          stock_actual,
-          precio_unitario
-        )
-      `)
-      .eq('empresa_id', empresaId)
-      .eq('fecha', fechaHoy)
-      .eq('origen', 'consumo_operacion')
-
+      .select(`id, ingrediente_id, cantidad, unidad, precio_unitario, stock_antes, stock_despues, notas, ingredientes (id, nombre, categoria, factor_rendimiento, stock_actual, precio_unitario)`)
+      .eq('empresa_id', empresaId).eq('fecha', fechaHoy).eq('origen', 'consumo_operacion')
     if (errMov) throw errMov
-    if (!movimientosExistentes || movimientosExistentes.length === 0) {
-      throw new Error('No hay pesaje crudo previo para editar')
-    }
-
-    // 2. Extraer la receta del campo notas (formato: "Pesaje crudo · NOMBRE · X raciones")
+    if (!movimientosExistentes || movimientosExistentes.length === 0) throw new Error('No hay pesaje crudo previo para editar')
     const primerNota = movimientosExistentes[0].notas || ''
     const matchReceta = primerNota.match(/Pesaje crudo · (.+?) · \d+ raciones/)
     const nombreReceta = matchReceta ? matchReceta[1].trim() : null
-
-    // 3. Buscar la receta por nombre
-    let recetaEncontrada = null
-    if (nombreReceta) {
-      recetaEncontrada = recetasOrdenadas.find(r => r.nombre === nombreReceta)
-    }
-    if (!recetaEncontrada) {
-      // Fallback: primera receta activa
-      recetaEncontrada = recetasOrdenadas[0]
-    }
-
+    let recetaEncontrada = nombreReceta ? recetasOrdenadas.find(r => r.nombre === nombreReceta) : null
+    if (!recetaEncontrada) recetaEncontrada = recetasOrdenadas[0]
     setRecetaSeleccionada(recetaEncontrada)
-
-    // 4. Extraer notas del usuario (lo que está después del último "· ")
     const matchNotas = primerNota.match(/Pesaje crudo · .+? · \d+ raciones · (.+)$/)
-    if (matchNotas) {
-      setNotas(matchNotas[1].trim())
-    }
-
-    // 5. Construir lista de ingredientes precargados con valores actuales
+    if (matchNotas) setNotas(matchNotas[1].trim())
     const lista = movimientosExistentes.map(mov => {
       const ing = mov.ingredientes
       return {
-        ingrediente_id: ing.id,
-        nombre: ing.nombre,
-        categoria: ing.categoria,
-        unidad: mov.unidad || 'lb',
-        cantidad_por_racion: 0, // no aplica en edición
-        cantidad_sugerida: Number(mov.cantidad), // la sugerencia es lo que ya estaba
-        cantidad_real: Number(mov.cantidad),
-        stock_actual: Number(ing.stock_actual || 0),
-        precio_unitario: Number(mov.precio_unitario || 0),
-        factor_rendimiento: Number(ing.factor_rendimiento || 1),
-        notas: '',
-        movimiento_id: mov.id,           // 🆕 guardar id para revertir
-        cantidad_original: Number(mov.cantidad)  // 🆕 cuánto se sacó originalmente
+        ingrediente_id: ing.id, nombre: ing.nombre, categoria: ing.categoria,
+        unidad: mov.unidad || 'lb', cantidad_por_racion: 0,
+        cantidad_sugerida: Number(mov.cantidad), cantidad_real: Number(mov.cantidad),
+        stock_actual: Number(ing.stock_actual || 0), precio_unitario: Number(mov.precio_unitario || 0),
+        factor_rendimiento: Number(ing.factor_rendimiento || 1), notas: '',
+        movimiento_id: mov.id, cantidad_original: Number(mov.cantidad)
       }
     })
-
     setIngredientes(lista)
   }
 
@@ -211,245 +102,118 @@ export default function ModalPesajeCrudo({
       const ing = ri.ingredientes
       const sugerida = Number(ri.cantidad_crudo_por_racion) * raciones
       return {
-        ingrediente_id: ing.id,
-        nombre: ing.nombre,
-        categoria: ing.categoria,
-        unidad: ri.unidad || 'lb',
-        cantidad_por_racion: Number(ri.cantidad_crudo_por_racion),
-        cantidad_sugerida: sugerida,
-        cantidad_real: sugerida,
-        stock_actual: Number(ing.stock_actual || 0),
-        precio_unitario: Number(ing.precio_unitario || 0),
-        factor_rendimiento: Number(ing.factor_rendimiento || 1),
-        notas: ri.notas || ''
+        ingrediente_id: ing.id, nombre: ing.nombre, categoria: ing.categoria,
+        unidad: ri.unidad || 'lb', cantidad_por_racion: Number(ri.cantidad_crudo_por_racion),
+        cantidad_sugerida: sugerida, cantidad_real: sugerida,
+        stock_actual: Number(ing.stock_actual || 0), precio_unitario: Number(ing.precio_unitario || 0),
+        factor_rendimiento: Number(ing.factor_rendimiento || 1), notas: ri.notas || ''
       }
     })
     setIngredientes(lista)
   }
 
   function cambiarReceta(recetaId) {
-    if (modoEdicion) {
-      alert('No se puede cambiar la receta en modo edición. Si quieres cambiar la receta, debes empezar de nuevo.')
-      return
-    }
+    if (modoEdicion) { alert('No se puede cambiar la receta en modo edición.'); return }
     const nueva = recetasDisponibles.find(r => r.id === recetaId)
     if (nueva) setRecetaSeleccionada(nueva)
   }
 
   function editarCantidad(ingrediente_id, valorNuevo) {
     const valor = parseFloat(valorNuevo) || 0
-    setIngredientes(prev => prev.map(ing => 
-      ing.ingrediente_id === ingrediente_id
-        ? { ...ing, cantidad_real: valor }
-        : ing
-    ))
+    setIngredientes(prev => prev.map(ing => ing.ingrediente_id === ingrediente_id ? { ...ing, cantidad_real: valor } : ing))
   }
 
   function resetearAIndividual(ingrediente_id) {
-    setIngredientes(prev => prev.map(ing => 
-      ing.ingrediente_id === ingrediente_id
-        ? { ...ing, cantidad_real: ing.cantidad_sugerida }
-        : ing
-    ))
+    setIngredientes(prev => prev.map(ing => ing.ingrediente_id === ingrediente_id ? { ...ing, cantidad_real: ing.cantidad_sugerida } : ing))
   }
 
-  // ─── Verificar si hay cocido o sobrante para advertir antes de editar
   async function tieneCocidoOSobrante() {
     const fechaHoy = new Date().toISOString().split('T')[0]
-    
-    const { count: countCocido } = await supabase
-      .from('pesajes_cocido')
-      .select('id', { count: 'exact', head: true })
-      .eq('empresa_id', empresaId)
-      .eq('fecha', fechaHoy)
-
-    const { count: countSobrante } = await supabase
-      .from('pesajes_cocido')
-      .select('id', { count: 'exact', head: true })
-      .eq('empresa_id', empresaId)
-      .eq('fecha', fechaHoy)
-      .not('peso_sobrante_lb', 'is', null)
-
-    return {
-      hayCocido: (countCocido || 0) > 0,
-      haySobrante: (countSobrante || 0) > 0
-    }
+    const { count: countCocido } = await supabase.from('pesajes_cocido').select('id', { count: 'exact', head: true }).eq('empresa_id', empresaId).eq('fecha', fechaHoy)
+    const { count: countSobrante } = await supabase.from('pesajes_cocido').select('id', { count: 'exact', head: true }).eq('empresa_id', empresaId).eq('fecha', fechaHoy).not('peso_sobrante_lb', 'is', null)
+    return { hayCocido: (countCocido || 0) > 0, haySobrante: (countSobrante || 0) > 0 }
   }
 
   async function aprobarPesaje() {
-    if (!recetaSeleccionada) {
-      alert('Selecciona una receta antes de aprobar')
-      return
-    }
-    if (racionesEditables <= 0) {
-      alert('Las raciones totales deben ser mayor a 0')
-      return
-    }
-
+    if (!recetaSeleccionada) { alert('Selecciona una receta antes de aprobar'); return }
+    if (racionesEditables <= 0) { alert('Las raciones totales deben ser mayor a 0'); return }
     const ingredientesAGuardar = ingredientes.filter(ing => ing.cantidad_real > 0)
-    if (ingredientesAGuardar.length === 0) {
-      alert('Debes registrar al menos un ingrediente')
-      return
-    }
+    if (ingredientesAGuardar.length === 0) { alert('Debes registrar al menos un ingrediente'); return }
 
-    // 🆕 MODO EDICIÓN: advertir si hay cocido/sobrante
     if (modoEdicion) {
       const { hayCocido, haySobrante } = await tieneCocidoOSobrante()
-      
-      let mensajeAdvertencia = `⚠️ ESTÁS EDITANDO EL PESAJE CRUDO\n\n`
-      mensajeAdvertencia += `Esto va a:\n`
-      mensajeAdvertencia += `✅ Revertir el inventario actual (devolver las cantidades viejas)\n`
-      mensajeAdvertencia += `✅ Descontar las cantidades nuevas del inventario\n`
-      
+      let msg = `⚠️ ESTÁS EDITANDO EL PESAJE CRUDO\n\nEsto va a:\n✅ Revertir el inventario actual\n✅ Descontar las cantidades nuevas\n`
       if (hayCocido || haySobrante) {
-        mensajeAdvertencia += `\n🚨 ATENCIÓN:\n`
-        if (hayCocido) mensajeAdvertencia += `❌ Se borrará el pesaje COCIDO de hoy\n`
-        if (haySobrante) mensajeAdvertencia += `❌ Se borrará el pesaje SOBRANTE de hoy\n`
-        mensajeAdvertencia += `\nTendrás que volver a hacer esos pesajes después.\n`
+        msg += `\n🚨 ATENCIÓN:\n`
+        if (hayCocido) msg += `❌ Se borrará el pesaje COCIDO de hoy\n`
+        if (haySobrante) msg += `❌ Se borrará el pesaje SOBRANTE de hoy\n`
+        msg += `\nTendrás que volver a hacer esos pesajes después.\n`
       }
-      
-      mensajeAdvertencia += `\n¿Continuar?`
-      
-      const confirmar = window.confirm(mensajeAdvertencia)
-      if (!confirmar) return
+      msg += `\n¿Continuar?`
+      if (!window.confirm(msg)) return
     } else {
-      // Modo normal: confirmación simple
-      const confirmar = window.confirm(
-        `¿Confirmas el pesaje?\n\n` +
-        `🍽️ Receta: ${recetaSeleccionada.nombre}\n` +
-        `📊 ${racionesEditables.toLocaleString()} raciones\n` +
-        `🥘 ${ingredientesAGuardar.length} ingredientes a sacar del inventario\n\n` +
-        `Esta acción NO se puede deshacer fácilmente.`
-      )
-      if (!confirmar) return
+      if (!window.confirm(`¿Confirmas el pesaje?\n\n🍽️ Receta: ${recetaSeleccionada.nombre}\n📊 ${racionesEditables.toLocaleString()} raciones\n🥘 ${ingredientesAGuardar.length} ingredientes\n\nEsta acción NO se puede deshacer fácilmente.`)) return
     }
 
     setProcesando(true)
     setError(null)
-
     try {
       const fechaHoy = new Date().toISOString().split('T')[0]
-
-      // 🆕 MODO EDICIÓN: revertir movimientos viejos + ajustar stocks + borrar cocido/sobrante
-      if (modoEdicion) {
-        await revertirYBorrarDependencias()
-      }
-
-      // ─── INSERT de movimientos nuevos (en ambos modos) ──────
+      if (modoEdicion) await revertirYBorrarDependencias()
       const origenId = operacionesPreparando[0]?.id || null
-
       const movimientos = ingredientesAGuardar.map(ing => ({
-        empresa_id: empresaId,
-        ingrediente_id: ing.ingrediente_id,
-        tipo: 'salida',
-        origen: 'consumo_operacion',
-        origen_id: origenId,
-        cantidad: ing.cantidad_real,
-        unidad: ing.unidad,
-        precio_unitario: ing.precio_unitario,
-        stock_antes: ing.stock_actual,
-        stock_despues: ing.stock_actual - ing.cantidad_real,
+        empresa_id: empresaId, ingrediente_id: ing.ingrediente_id, tipo: 'salida',
+        origen: 'consumo_operacion', origen_id: origenId, cantidad: ing.cantidad_real,
+        unidad: ing.unidad, precio_unitario: ing.precio_unitario,
+        stock_antes: ing.stock_actual, stock_despues: ing.stock_actual - ing.cantidad_real,
         fecha: fechaHoy,
         notas: `Pesaje crudo · ${recetaSeleccionada.nombre} · ${racionesEditables} raciones${notas ? ' · ' + notas : ''}`,
         created_by: usuario.id
       }))
-
-      const { error: errInsert } = await supabase
-        .from('movimientos_inventario')
-        .insert(movimientos)
-
+      const { error: errInsert } = await supabase.from('movimientos_inventario').insert(movimientos)
       if (errInsert) throw errInsert
-
-      // ─── Actualizar stock_actual de cada ingrediente ────────
       for (const ing of ingredientesAGuardar) {
-        const nuevoStock = ing.stock_actual - ing.cantidad_real
-        await supabase
-          .from('ingredientes')
-          .update({ stock_actual: nuevoStock })
-          .eq('id', ing.ingrediente_id)
+        await supabase.from('ingredientes').update({ stock_actual: ing.stock_actual - ing.cantidad_real }).eq('id', ing.ingrediente_id)
       }
-
-      const titulo = modoEdicion ? '✅ Pesaje actualizado' : '✅ Pesaje aprobado'
-      alert(`${titulo}\n\n${ingredientesAGuardar.length} ingredientes registrados\n${racionesEditables} raciones`)
+      alert(`${modoEdicion ? '✅ Pesaje actualizado' : '✅ Pesaje aprobado'}\n\n${ingredientesAGuardar.length} ingredientes registrados\n${racionesEditables} raciones`)
       if (onAprobado) onAprobado()
     } catch (err) {
       console.error('Error guardando pesaje:', err)
       setError(err.message)
-    } finally {
-      setProcesando(false)
-    }
+    } finally { setProcesando(false) }
   }
 
-  // 🆕 Revierte movimientos viejos + ajusta stocks + borra cocido/sobrante
   async function revertirYBorrarDependencias() {
     const fechaHoy = new Date().toISOString().split('T')[0]
-
-    // 1. Cargar movimientos viejos del día
     const { data: movimientosViejos, error: errMov } = await supabase
-      .from('movimientos_inventario')
-      .select('id, ingrediente_id, cantidad')
-      .eq('empresa_id', empresaId)
-      .eq('fecha', fechaHoy)
-      .eq('origen', 'consumo_operacion')
-
+      .from('movimientos_inventario').select('id, ingrediente_id, cantidad')
+      .eq('empresa_id', empresaId).eq('fecha', fechaHoy).eq('origen', 'consumo_operacion')
     if (errMov) throw errMov
-
-    // 2. Devolver al stock cada cantidad vieja
     if (movimientosViejos && movimientosViejos.length > 0) {
       for (const mov of movimientosViejos) {
-        // Leer stock actual
-        const { data: ingActual } = await supabase
-          .from('ingredientes')
-          .select('stock_actual')
-          .eq('id', mov.ingrediente_id)
-          .single()
-
-        const stockActual = Number(ingActual?.stock_actual || 0)
-        const cantidadVieja = Number(mov.cantidad)
-        const stockRevertido = stockActual + cantidadVieja
-
-        // Devolver al stock
-        await supabase
-          .from('ingredientes')
-          .update({ stock_actual: stockRevertido })
-          .eq('id', mov.ingrediente_id)
+        const { data: ingActual } = await supabase.from('ingredientes').select('stock_actual').eq('id', mov.ingrediente_id).single()
+        const stockRevertido = Number(ingActual?.stock_actual || 0) + Number(mov.cantidad)
+        await supabase.from('ingredientes').update({ stock_actual: stockRevertido }).eq('id', mov.ingrediente_id)
       }
-
-      // 3. Borrar movimientos viejos
       const idsAEliminar = movimientosViejos.map(m => m.id)
-      const { error: errDelete } = await supabase
-        .from('movimientos_inventario')
-        .delete()
-        .in('id', idsAEliminar)
-
+      const { error: errDelete } = await supabase.from('movimientos_inventario').delete().in('id', idsAEliminar)
       if (errDelete) throw errDelete
     }
-
-    // 4. Borrar pesajes_cocido del día (esto incluye el sobrante porque está en la misma tabla)
-    await supabase
-      .from('pesajes_cocido')
-      .delete()
-      .eq('empresa_id', empresaId)
-      .eq('fecha', fechaHoy)
+    await supabase.from('pesajes_cocido').delete().eq('empresa_id', empresaId).eq('fecha', fechaHoy)
   }
 
   const costoTotal = ingredientes.reduce((sum, ing) => sum + (ing.cantidad_real * ing.precio_unitario), 0)
-  const hayStockInsuficiente = ingredientes.some(ing => 
-    ing.cantidad_real > ing.stock_actual && ing.stock_actual > 0
-  )
-
-  // ─── Detectar si es día sin receta auto ──────────────────────
+  const hayStockInsuficiente = ingredientes.some(ing => ing.cantidad_real > ing.stock_actual && ing.stock_actual > 0)
   const hoy = new Date()
   const diaSemanaHoy = DIAS_SEMANA[hoy.getDay()]
   const esDiaSinReceta = !recetasDisponibles.some(r => r.dia_semana === diaSemanaHoy)
 
-  // ─── Loading ─────────────────────────────────────────────────
   if (cargando) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl p-12 text-center">
-          <div className="text-6xl mb-4 animate-pulse">🥘</div>
-          <p className="text-gray-700 font-medium">
+      <div style={overlayStyle()}>
+        <div style={loadingBoxStyle()}>
+          <div style={{ fontSize: '48px', marginBottom: '12px', animation: 'pulse 2s infinite' }}>🥘</div>
+          <p style={{ color: 'var(--color-text-secondary)', fontWeight: 500, margin: 0 }}>
             {modoEdicion ? 'Cargando datos del pesaje crudo...' : 'Cargando recetas...'}
           </p>
         </div>
@@ -457,128 +221,120 @@ export default function ModalPesajeCrudo({
     )
   }
 
-  // ─── Error ───────────────────────────────────────────────────
   if (error && recetasDisponibles.length === 0) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl p-6 max-w-md w-full">
-          <h3 className="text-xl font-bold text-red-700 mb-2">❌ Error</h3>
-          <p className="text-gray-700 mb-4">{error}</p>
-          <button onClick={onCerrar} className="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold px-4 py-2 rounded-lg">
-            Cerrar
-          </button>
+      <div style={overlayStyle()}>
+        <div style={{ ...modalBoxStyle(), padding: '24px', maxWidth: '420px' }}>
+          <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#E24B4A', marginBottom: '8px' }}>❌ Error</h3>
+          <p style={{ color: 'var(--color-text-secondary)', fontSize: '14px', marginBottom: '16px' }}>{error}</p>
+          <button onClick={onCerrar} style={btnCancelar()}>Cerrar</button>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-start justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-4xl w-full my-8 shadow-2xl">
+    <div style={overlayStyle('start')}>
+      <div style={{ ...modalBoxStyle(), maxWidth: '880px', margin: '32px 0' }}>
         
-        {/* Header */}
-        <div className="bg-gradient-to-r from-amber-500 to-orange-600 rounded-t-2xl p-6 text-white">
-          <div className="flex items-start justify-between gap-4">
+        {/* HEADER */}
+        <div style={{
+          background: 'linear-gradient(135deg, #EF9F27 0%, #C97B0F 100%)',
+          borderRadius: '16px 16px 0 0', padding: '20px 24px', color: 'white',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
             <div>
-              <p className="text-amber-100 text-xs font-semibold tracking-wider">
+              <p style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '1px', opacity: 0.9, margin: 0 }}>
                 {modoEdicion ? '✏️ EDITANDO PESAJE CRUDO' : 'PESAJE CRUDO'}
               </p>
-              <h2 className="text-2xl font-bold mt-1 flex items-center gap-2">
-                <span className="text-3xl">{recetaSeleccionada?.emoji || '🥘'}</span>
+              <h2 style={{ fontSize: '22px', fontWeight: 700, margin: '4px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '28px' }}>{recetaSeleccionada?.emoji || '🥘'}</span>
                 {recetaSeleccionada?.nombre || 'Selecciona una receta'}
               </h2>
-              <p className="text-amber-50 text-sm mt-1">
-                {operacionesPreparando.length} escuela(s)
-                {modoEdicion ? ' · Modo edición' : ' · Pesa todo de un solo cocinazo'}
+              <p style={{ fontSize: '13px', opacity: 0.9, margin: 0 }}>
+                {operacionesPreparando.length} escuela(s){modoEdicion ? ' · Modo edición' : ' · Pesa todo de un solo cocinazo'}
               </p>
             </div>
-            <button
-              onClick={onCerrar}
-              disabled={procesando}
-              className="text-white/80 hover:text-white text-2xl leading-none"
-            >
-              ✕
-            </button>
+            <button onClick={onCerrar} disabled={procesando} style={btnCerrar()}>✕</button>
           </div>
         </div>
 
-        {/* 🆕 Advertencia grande en modo edición */}
+        {/* ADVERTENCIA MODO EDICIÓN */}
         {modoEdicion && (
-          <div className="bg-yellow-50 border-b-2 border-yellow-300 p-4">
-            <p className="text-xs font-bold text-yellow-900 uppercase mb-1">⚠️ Modo edición — Esto afecta TODO</p>
-            <p className="text-sm text-gray-800">
-              Al guardar:
-              <br />✅ Se devuelven al inventario las cantidades viejas
+          <div style={{
+            background: esTropical ? '#FFF8E6' : 'rgba(239, 159, 39, 0.12)',
+            borderBottom: '2px solid rgba(239, 159, 39, 0.4)', padding: '14px 20px',
+          }}>
+            <p style={{ fontSize: '11px', fontWeight: 700, color: esTropical ? '#7A5410' : '#FAC775', letterSpacing: '0.5px', marginBottom: '4px' }}>
+              ⚠️ MODO EDICIÓN — ESTO AFECTA TODO
+            </p>
+            <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', margin: 0 }}>
+              Al guardar:<br />✅ Se devuelven al inventario las cantidades viejas
               <br />✅ Se descuentan las cantidades nuevas
               <br />❌ <strong>Se borrarán los pesajes de Cocido y Sobrante (si existen)</strong>
-              <br />Tendrás que volver a hacerlos después.
             </p>
           </div>
         )}
 
-        {/* Selector de receta */}
-        <div className="bg-orange-50 border-b border-orange-200 p-4">
-          <label className="block text-xs font-bold text-orange-800 uppercase mb-2">
+        {/* SELECTOR DE RECETA */}
+        <div style={{
+          background: esTropical ? AMBAR.claro : `${AMBAR.c}15`,
+          borderBottom: `1px solid ${AMBAR.c}40`, padding: '14px 20px',
+        }}>
+          <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: esTropical ? AMBAR.dark : AMBAR.c, letterSpacing: '0.5px', marginBottom: '8px' }}>
             {esDiaSinReceta ? '⚠️ Hoy no hay receta automática — Elige una' : '🍽️ Receta a cocinar (puedes cambiarla)'}
           </label>
-          <select
-            value={recetaSeleccionada?.id || ''}
-            onChange={(e) => cambiarReceta(e.target.value)}
-            disabled={procesando || modoEdicion}
-            className="w-full px-3 py-2 border-2 border-orange-300 rounded-lg font-medium bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
-          >
+          <select value={recetaSeleccionada?.id || ''} onChange={(e) => cambiarReceta(e.target.value)} disabled={procesando || modoEdicion}
+            style={{
+              ...inputStyle(),
+              border: `2px solid ${AMBAR.c}50`, fontWeight: 500,
+              cursor: (procesando || modoEdicion) ? 'not-allowed' : 'pointer',
+              opacity: modoEdicion ? 0.6 : 1,
+            }}>
             <option value="">— Selecciona una receta —</option>
             {recetasDisponibles.map(r => (
-              <option key={r.id} value={r.id}>
-                {r.emoji} {DIAS_LABEL[r.dia_semana]}: {r.nombre}
-              </option>
+              <option key={r.id} value={r.id}>{r.emoji} {DIAS_LABEL[r.dia_semana]}: {r.nombre}</option>
             ))}
           </select>
           {modoEdicion && (
-            <p className="text-xs text-orange-700 mt-2 italic">
-              En modo edición no se puede cambiar la receta. Para cambiarla, cancela y empieza de nuevo.
+            <p style={{ fontSize: '11px', color: esTropical ? AMBAR.dark : AMBAR.c, marginTop: '8px', fontStyle: 'italic' }}>
+              En modo edición no se puede cambiar la receta.
             </p>
           )}
           {esDiaSinReceta && !modoEdicion && (
-            <p className="text-xs text-orange-700 mt-2 italic">
+            <p style={{ fontSize: '11px', color: esTropical ? AMBAR.dark : AMBAR.c, marginTop: '8px', fontStyle: 'italic' }}>
               Hoy es {DIAS_LABEL[diaSemanaHoy]}. No hay receta INABIE configurada — selecciona cualquier receta activa.
             </p>
           )}
         </div>
 
-        {/* Notas operativas */}
+        {/* NOTAS OPERATIVAS */}
         {recetaSeleccionada?.notas_operativas && (
-          <div className="bg-amber-50 border-b border-amber-200 p-4">
-            <p className="text-xs font-semibold text-amber-800 uppercase mb-1">⚙️ Notas operativas</p>
-            <p className="text-sm text-gray-700">{recetaSeleccionada.notas_operativas}</p>
+          <div style={{
+            background: esTropical ? '#FFF8E6' : 'rgba(239, 159, 39, 0.08)',
+            borderBottom: '1px solid var(--color-border-subtle)', padding: '14px 20px',
+          }}>
+            <p style={{ fontSize: '11px', fontWeight: 600, color: esTropical ? AMBAR.dark : AMBAR.c, letterSpacing: '0.5px', marginBottom: '4px' }}>
+              ⚙️ NOTAS OPERATIVAS
+            </p>
+            <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', margin: 0 }}>{recetaSeleccionada.notas_operativas}</p>
           </div>
         )}
 
-        {/* Editor de raciones */}
+        {/* EDITOR DE RACIONES */}
         {recetaSeleccionada && (
-          <div className="p-6 border-b border-gray-200 bg-gray-50">
-            <label className="block text-xs font-bold text-gray-700 uppercase mb-2">
-              Total de raciones a cocinar
-            </label>
-            <div className="flex items-center gap-3">
-              <input
-                type="number"
-                min="1"
-                value={racionesEditables}
-                onChange={(e) => setRacionesEditables(parseInt(e.target.value) || 0)}
-                disabled={procesando}
-                className="w-32 px-3 py-2 border-2 border-amber-400 rounded-lg text-2xl font-bold text-center"
-              />
-              <div className="text-sm text-gray-600">
-                <p>Sugerencia: <strong>{racionesTotales.toLocaleString()}</strong> raciones</p>
-                <p className="text-xs text-gray-500">(suma de escuelas iniciadas)</p>
+          <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--color-border-subtle)', background: 'var(--color-bg-card)' }}>
+            <label style={labelStyle()}>TOTAL DE RACIONES A COCINAR</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <input type="number" min="1" value={racionesEditables} onChange={(e) => setRacionesEditables(parseInt(e.target.value) || 0)} disabled={procesando}
+                style={{ ...inputStyle(), width: '120px', textAlign: 'center', fontWeight: 700, fontSize: '20px', border: `2px solid ${AMBAR.c}` }} />
+              <div style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>
+                <p style={{ margin: 0 }}>Sugerencia: <strong style={{ color: 'var(--color-text-primary)' }}>{racionesTotales.toLocaleString()}</strong> raciones</p>
+                <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', margin: 0 }}>(suma de escuelas iniciadas)</p>
               </div>
               {racionesEditables !== racionesTotales && (
-                <button
-                  onClick={() => setRacionesEditables(racionesTotales)}
-                  disabled={procesando}
-                  className="ml-auto text-xs text-amber-700 underline hover:text-amber-900"
-                >
+                <button onClick={() => setRacionesEditables(racionesTotales)} disabled={procesando}
+                  style={{ marginLeft: 'auto', background: 'none', border: 'none', color: esTropical ? AMBAR.dark : AMBAR.c, fontSize: '11px', cursor: 'pointer', textDecoration: 'underline', fontFamily: 'inherit' }}>
                   ↺ Restaurar sugerencia
                 </button>
               )}
@@ -586,76 +342,45 @@ export default function ModalPesajeCrudo({
           </div>
         )}
 
-        {/* Lista de ingredientes */}
+        {/* LISTA DE INGREDIENTES */}
         {recetaSeleccionada && ingredientes.length > 0 && (
-          <div className="p-6">
-            <p className="text-xs font-bold text-gray-700 uppercase mb-4">
-              🥘 Ingredientes ({ingredientes.length})
-            </p>
-            
-            <div className="space-y-2">
+          <div style={{ padding: '20px 24px' }}>
+            <p style={labelStyle()}>🥘 INGREDIENTES ({ingredientes.length})</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {ingredientes.map((ing) => {
                 const editada = Math.abs(ing.cantidad_real - ing.cantidad_sugerida) > 0.001
                 const sinStock = ing.cantidad_real > ing.stock_actual && ing.stock_actual > 0
                 const stockCero = ing.stock_actual === 0
+                const colorBorde = (sinStock || stockCero) ? '#E24B4A' : (editada ? AMBAR.c : 'var(--color-border-subtle)')
+                const colorBg = (sinStock || stockCero) ? (esTropical ? '#FCEBEB' : 'rgba(226, 75, 74, 0.08)') : (editada ? (esTropical ? AMBAR.claro : `${AMBAR.c}10`) : 'var(--color-bg-elevated)')
 
                 return (
-                  <div
-                    key={ing.ingrediente_id}
-                    className={`border-2 rounded-xl p-3 ${
-                      sinStock || stockCero
-                        ? 'border-red-300 bg-red-50'
-                        : editada
-                        ? 'border-amber-300 bg-amber-50'
-                        : 'border-gray-200 bg-white'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-bold text-gray-900 truncate">{ing.nombre}</p>
-                        <p className="text-xs text-gray-500">{ing.categoria}</p>
-                        {ing.notas && (
-                          <p className="text-xs text-amber-700 italic mt-0.5">💡 {ing.notas}</p>
-                        )}
+                  <div key={ing.ingrediente_id} style={{ border: `2px solid ${colorBorde}40`, borderLeft: `4px solid ${colorBorde}`, background: colorBg, borderRadius: '12px', padding: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                      <div style={{ flex: 1, minWidth: '160px' }}>
+                        <p style={{ fontWeight: 700, color: 'var(--color-text-primary)', fontSize: '14px', margin: 0 }}>{ing.nombre}</p>
+                        <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', margin: '2px 0 0' }}>{ing.categoria}</p>
+                        {ing.notas && <p style={{ fontSize: '11px', color: esTropical ? AMBAR.dark : AMBAR.c, fontStyle: 'italic', marginTop: '4px' }}>💡 {ing.notas}</p>}
                       </div>
-
-                      <div className="text-right text-xs">
-                        <p className="text-gray-500">Stock</p>
-                        <p className={`font-bold ${stockCero ? 'text-red-600' : 'text-gray-700'}`}>
+                      <div style={{ textAlign: 'right', fontSize: '11px' }}>
+                        <p style={{ color: 'var(--color-text-muted)', margin: 0 }}>Stock</p>
+                        <p style={{ fontWeight: 700, color: stockCero ? '#E24B4A' : 'var(--color-text-primary)', margin: 0 }}>
                           {ing.stock_actual.toFixed(2)} {ing.unidad}
                         </p>
                       </div>
-
-                      <div className="flex flex-col items-end">
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.001"
-                          value={ing.cantidad_real}
-                          onChange={(e) => editarCantidad(ing.ingrediente_id, e.target.value)}
-                          disabled={procesando}
-                          className={`w-24 px-2 py-1.5 border-2 rounded-lg text-right font-bold ${
-                            sinStock || stockCero
-                              ? 'border-red-400 text-red-700'
-                              : editada
-                              ? 'border-amber-400 text-amber-900'
-                              : 'border-gray-300'
-                          }`}
-                        />
-                        <span className="text-xs text-gray-500 mt-0.5">{ing.unidad}</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                        <input type="number" min="0" step="0.001" value={ing.cantidad_real} onChange={(e) => editarCantidad(ing.ingrediente_id, e.target.value)} disabled={procesando}
+                          style={{ ...inputStyle(), width: '110px', textAlign: 'right', fontWeight: 700, fontSize: '14px', border: `2px solid ${colorBorde}` }} />
+                        <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>{ing.unidad}</span>
                         {editada && (
-                          <button
-                            onClick={() => resetearAIndividual(ing.ingrediente_id)}
-                            className="text-xs text-amber-700 underline mt-1"
-                          >
+                          <button onClick={() => resetearAIndividual(ing.ingrediente_id)} style={{ background: 'none', border: 'none', color: esTropical ? AMBAR.dark : AMBAR.c, fontSize: '10px', cursor: 'pointer', textDecoration: 'underline', marginTop: '4px', fontFamily: 'inherit' }}>
                             ↺ {ing.cantidad_sugerida.toFixed(3)}
                           </button>
                         )}
                       </div>
                     </div>
-
                     {(sinStock || stockCero) && (
-                      <p className="text-xs text-red-700 font-semibold mt-2">
+                      <p style={{ fontSize: '11px', color: '#E24B4A', fontWeight: 600, marginTop: '8px' }}>
                         ⚠️ {stockCero ? 'Sin stock registrado' : 'Cantidad mayor al stock disponible'} — verifica antes de aprobar
                       </p>
                     )}
@@ -666,81 +391,126 @@ export default function ModalPesajeCrudo({
           </div>
         )}
 
-        {/* Notas */}
+        {/* NOTAS */}
         {recetaSeleccionada && (
-          <div className="px-6 pb-4">
-            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-              Notas del pesaje (opcional)
-            </label>
-            <input
-              type="text"
-              value={notas}
-              onChange={(e) => setNotas(e.target.value)}
-              placeholder="Ej: Habichuelas un poco viejas, faltó cebolla..."
-              disabled={procesando}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-            />
+          <div style={{ padding: '0 24px 16px' }}>
+            <label style={labelStyle()}>NOTAS DEL PESAJE (OPCIONAL)</label>
+            <input type="text" value={notas} onChange={(e) => setNotas(e.target.value)} placeholder="Ej: Habichuelas un poco viejas, faltó cebolla..." disabled={procesando} style={inputStyle()} />
           </div>
         )}
 
-        {/* Footer: resumen + botones */}
-        <div className="bg-gray-50 rounded-b-2xl p-6 border-t border-gray-200">
-          
+        {/* FOOTER */}
+        <div style={{
+          background: 'var(--color-bg-card)', borderTop: '1px solid var(--color-border-subtle)',
+          borderRadius: '0 0 16px 16px', padding: '20px 24px',
+        }}>
           {recetaSeleccionada && (
-            <div className="grid grid-cols-3 gap-3 mb-4 text-center">
-              <div className="bg-white rounded-lg p-3 border border-gray-200">
-                <p className="text-xs text-gray-500">Raciones</p>
-                <p className="text-xl font-bold text-amber-700">{racionesEditables.toLocaleString()}</p>
-              </div>
-              <div className="bg-white rounded-lg p-3 border border-gray-200">
-                <p className="text-xs text-gray-500">Ingredientes</p>
-                <p className="text-xl font-bold text-gray-800">{ingredientes.length}</p>
-              </div>
-              <div className="bg-white rounded-lg p-3 border border-gray-200">
-                <p className="text-xs text-gray-500">Costo estimado</p>
-                <p className="text-xl font-bold text-emerald-700">
-                  RD$ {costoTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </p>
-              </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+              <KpiMini label="Raciones" valor={racionesEditables.toLocaleString()} color={AMBAR.c} />
+              <KpiMini label="Ingredientes" valor={ingredientes.length} color="var(--color-text-primary)" />
+              <KpiMini label="Costo estimado" valor={`RD$ ${costoTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} color="#1D9E75" />
             </div>
           )}
 
           {hayStockInsuficiente && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-              <p className="text-sm text-red-800 font-semibold">
+            <div style={alertaStyle('#E24B4A', esTropical)}>
+              <p style={{ fontSize: '13px', fontWeight: 600, margin: 0 }}>
                 ⚠️ Algunos ingredientes tienen cantidad mayor al stock. Puedes continuar igual (el inventario se ajustará).
               </p>
             </div>
           )}
 
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-              <p className="text-sm text-red-800">❌ {error}</p>
+            <div style={alertaStyle('#E24B4A', esTropical)}>
+              <p style={{ fontSize: '13px', margin: 0 }}>❌ {error}</p>
             </div>
           )}
 
-          <div className="flex gap-3">
-            <button
-              onClick={onCerrar}
-              disabled={procesando}
-              className="px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-xl disabled:opacity-50"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={aprobarPesaje}
-              disabled={procesando || !recetaSeleccionada || racionesEditables <= 0}
-              className="flex-1 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg disabled:opacity-50"
-            >
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button onClick={onCerrar} disabled={procesando} style={btnCancelar()}>Cancelar</button>
+            <button onClick={aprobarPesaje} disabled={procesando || !recetaSeleccionada || racionesEditables <= 0}
+              style={{
+                flex: 1, padding: '14px 20px',
+                background: 'linear-gradient(135deg, #EF9F27 0%, #C97B0F 100%)',
+                border: 'none', borderRadius: '12px', color: 'white', fontSize: '13px', fontWeight: 700,
+                cursor: procesando ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+                opacity: (procesando || !recetaSeleccionada || racionesEditables <= 0) ? 0.6 : 1,
+              }}>
               {procesando 
                 ? (modoEdicion ? 'Actualizando pesaje...' : 'Guardando pesaje...') 
-                : (modoEdicion ? '✏️ Actualizar pesaje crudo' : '✅ Aprobar pesaje y sacar del inventario')
-              }
+                : (modoEdicion ? '✏️ Actualizar pesaje crudo' : '✅ Aprobar pesaje y sacar del inventario')}
             </button>
           </div>
         </div>
-
       </div>
     </div>
   )
+}
+
+function KpiMini({ label, valor, color }) {
+  return (
+    <div style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-subtle)', borderRadius: '10px', padding: '12px', textAlign: 'center' }}>
+      <p style={{ fontSize: '10px', color: 'var(--color-text-muted)', margin: 0, letterSpacing: '0.5px' }}>{label}</p>
+      <p style={{ fontSize: '18px', fontWeight: 700, color, margin: '4px 0 0' }}>{valor}</p>
+    </div>
+  )
+}
+
+function overlayStyle(align = 'center') {
+  return {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
+    zIndex: 50, display: 'flex', alignItems: align === 'start' ? 'flex-start' : 'center',
+    justifyContent: 'center', padding: '16px', overflowY: 'auto',
+  }
+}
+
+function modalBoxStyle() {
+  return {
+    background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-subtle)',
+    borderRadius: '16px', width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+  }
+}
+
+function loadingBoxStyle() {
+  return {
+    background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-subtle)',
+    borderRadius: '16px', padding: '48px', textAlign: 'center', maxWidth: '380px',
+  }
+}
+
+function btnCerrar() {
+  return {
+    background: 'none', border: 'none', color: 'rgba(255,255,255,0.8)',
+    fontSize: '22px', cursor: 'pointer', lineHeight: 1, padding: '4px 8px',
+  }
+}
+
+function btnCancelar() {
+  return {
+    padding: '14px 24px', background: 'var(--color-bg-card)', border: '1px solid var(--color-border-subtle)',
+    borderRadius: '12px', color: 'var(--color-text-secondary)', fontSize: '13px', fontWeight: 600,
+    cursor: 'pointer', fontFamily: 'inherit',
+  }
+}
+
+function labelStyle() {
+  return { display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--color-text-muted)', letterSpacing: '0.5px', marginBottom: '8px' }
+}
+
+function inputStyle() {
+  return {
+    width: '100%', boxSizing: 'border-box', padding: '10px 14px',
+    background: 'var(--color-bg-input)', border: '1px solid var(--color-border-subtle)',
+    borderRadius: '10px', color: 'var(--color-text-primary)', fontSize: '13px',
+    fontFamily: 'inherit', outline: 'none',
+  }
+}
+
+function alertaStyle(color, esTropical) {
+  return {
+    background: esTropical ? '#FCEBEB' : `${color}15`,
+    border: `1px solid ${color}40`, borderRadius: '8px',
+    padding: '10px 12px', marginBottom: '12px',
+    color: esTropical ? '#A32D2D' : '#F4C0D1',
+  }
 }

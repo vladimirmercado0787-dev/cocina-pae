@@ -56,7 +56,7 @@ const RAZONES_SALIDA = [
   },
 ]
 
-function CalculadoraLiquidacion({ empresaId, usuarioActual, onVolver }) {
+function CalculadoraLiquidacion({ empresaId, usuarioActual, onVolver, empleadoPreseleccionado = null }) {
   const [empresa, setEmpresa] = useState(null)
   const [empleados, setEmpleados] = useState([])
   const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState(null)
@@ -77,6 +77,18 @@ function CalculadoraLiquidacion({ empresaId, usuarioActual, onVolver }) {
   useEffect(() => {
     if (empresaId) cargarDatos()
   }, [empresaId])
+
+  // INT-005: Si viene empleado preseleccionado desde VistaEmpleados,
+  // lo activamos automáticamente después de cargar los datos
+  useEffect(() => {
+    if (empleadoPreseleccionado && empleados.length > 0) {
+      const emp = empleados.find(e => e.id === empleadoPreseleccionado.id)
+      if (emp) {
+        onEmpleadoChange(empleadoPreseleccionado.id)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empleadoPreseleccionado, empleados])
 
   async function cargarDatos() {
     setCargando(true)
@@ -620,6 +632,24 @@ ${new Date().toLocaleString('es-DO')}
           </button>
         </div>
       </div>
+
+      {/* 🔗 AVISO si viene desde "Dar de baja" en Empleados (INT-005) */}
+      {empleadoPreseleccionado && (
+        <div className="bg-blue-50 border-2 border-blue-300 rounded-2xl p-4 mb-6">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">🔗</span>
+            <div>
+              <p className="font-bold text-blue-900 text-sm">
+                Vienes desde "Dar de baja" en Empleados
+              </p>
+              <p className="text-xs text-blue-800 mt-1">
+                <strong>{empleadoPreseleccionado.nombre}</strong> fue preseleccionado automáticamente. 
+                Completa el resto de los pasos para procesar su liquidación según ley dominicana.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AVISO LEGAL */}
       <div className="bg-yellow-50 border-2 border-yellow-300 rounded-2xl p-4 mb-6">
