@@ -1,42 +1,41 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
+
+const NARANJA = { c: '#D85A30', claro: '#FCE9DA', dark: '#7A2F12' }
+const VERDE = { c: '#1D9E75', claro: '#D7F0DD', dark: '#04342C' }
+const AZUL = { c: '#378ADD', claro: '#E6F1FB', dark: '#0C447C' }
 
 function Paso1MiCocina({ onCompletado }) {
   const [datos, setDatos] = useState({
-    nombre: '',
-    rnc: '',
-    direccion: '',
-    telefono: '',
-    email: '',
-    banco: '',
-    cuenta_bancaria: '',
-    modo_operacion: 'aprendizaje'
+    nombre: '', rnc: '', direccion: '', telefono: '', email: '',
+    banco: '', cuenta_bancaria: '', modo_operacion: 'aprendizaje'
   })
-
   const [guardando, setGuardando] = useState(false)
   const [mensaje, setMensaje] = useState(null)
 
-  function actualizarCampo(campo, valor) {
-    setDatos({ ...datos, [campo]: valor })
-  }
+  const [esTropical, setEsTropical] = useState(
+    typeof document !== 'undefined' && document.documentElement.getAttribute('data-tema') === 'tropical'
+  )
+  useEffect(() => {
+    const obs = new MutationObserver(() => {
+      setEsTropical(document.documentElement.getAttribute('data-tema') === 'tropical')
+    })
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-tema'] })
+    return () => obs.disconnect()
+  }, [])
+
+  function actualizarCampo(campo, valor) { setDatos({ ...datos, [campo]: valor }) }
 
   async function guardar(e) {
     e.preventDefault()
-    
     if (!datos.nombre || !datos.rnc) {
       setMensaje({ tipo: 'error', texto: 'Nombre y RNC son obligatorios' })
       return
     }
-
     setGuardando(true)
     setMensaje(null)
-
     try {
-      const { data, error } = await supabase
-        .from('empresas')
-        .insert([datos])
-        .select()
-
+      const { data, error } = await supabase.from('empresas').insert([datos]).select()
       if (error) {
         setMensaje({ tipo: 'error', texto: 'Error: ' + error.message })
       } else {
@@ -45,174 +44,161 @@ function Paso1MiCocina({ onCompletado }) {
       }
     } catch (err) {
       setMensaje({ tipo: 'error', texto: 'Error: ' + err.message })
-    } finally {
-      setGuardando(false)
-    }
+    } finally { setGuardando(false) }
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-xl p-8 max-w-3xl w-full">
-      
-      <div className="mb-6">
-        <p className="text-xs text-orange-600 font-semibold tracking-wider mb-1">
+    <div style={tarjetaStyle()}>
+      <div style={{ marginBottom: '24px' }}>
+        <p style={{ fontSize: '11px', color: NARANJA.c, fontWeight: 700, letterSpacing: '1px', marginBottom: '4px' }}>
           PASO 1 DE 6 · ESTIMADO 2 MIN
         </p>
-        <h2 className="text-3xl font-bold text-gray-900 mb-2">
+        <h2 style={{ fontSize: '28px', fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: '8px' }}>
           🏢 Mi cocina
         </h2>
-        <p className="text-gray-600">
+        <p style={{ color: 'var(--color-text-secondary)', margin: 0 }}>
           Datos legales y de contacto de tu cocina
         </p>
       </div>
 
-      <form onSubmit={guardar} className="space-y-4">
+      <form onSubmit={guardar} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1">
-            Nombre de la cocina <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            value={datos.nombre}
-            onChange={(e) => actualizarCampo('nombre', e.target.value)}
-            placeholder="Ej: Hacienda Mercado Rodríguez"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+        <Campo label="Nombre de la cocina" requerido>
+          <input type="text" value={datos.nombre} onChange={(e) => actualizarCampo('nombre', e.target.value)}
+            placeholder="Ej: Hacienda Mercado Rodríguez" style={inputStyle()} />
+        </Campo>
+
+        <Campo label="RNC" requerido>
+          <input type="text" value={datos.rnc} onChange={(e) => actualizarCampo('rnc', e.target.value)}
+            placeholder="Ej: 1-31-44XXX-X" style={inputStyle()} />
+        </Campo>
+
+        <Campo label="Dirección">
+          <input type="text" value={datos.direccion} onChange={(e) => actualizarCampo('direccion', e.target.value)}
+            placeholder="Ej: Calle Principal #15, Jícome, Valverde" style={inputStyle()} />
+        </Campo>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <Campo label="Teléfono">
+            <input type="tel" value={datos.telefono} onChange={(e) => actualizarCampo('telefono', e.target.value)}
+              placeholder="809-555-1234" style={inputStyle()} />
+          </Campo>
+          <Campo label="Email">
+            <input type="email" value={datos.email} onChange={(e) => actualizarCampo('email', e.target.value)}
+              placeholder="contacto@cocina.com" style={inputStyle()} />
+          </Campo>
         </div>
 
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1">
-            RNC <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            value={datos.rnc}
-            onChange={(e) => actualizarCampo('rnc', e.target.value)}
-            placeholder="Ej: 1-31-44XXX-X"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <Campo label="Banco">
+            <input type="text" value={datos.banco} onChange={(e) => actualizarCampo('banco', e.target.value)}
+              placeholder="Ej: Banco BHD" style={inputStyle()} />
+          </Campo>
+          <Campo label="Cuenta bancaria">
+            <input type="text" value={datos.cuenta_bancaria} onChange={(e) => actualizarCampo('cuenta_bancaria', e.target.value)}
+              placeholder="1234567890" style={inputStyle()} />
+          </Campo>
         </div>
 
+        {/* MODO DE OPERACIÓN */}
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1">
-            Dirección
-          </label>
-          <input
-            type="text"
-            value={datos.direccion}
-            onChange={(e) => actualizarCampo('direccion', e.target.value)}
-            placeholder="Ej: Calle Principal #15, Jícome, Valverde"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">
-              Teléfono
-            </label>
-            <input
-              type="tel"
-              value={datos.telefono}
-              onChange={(e) => actualizarCampo('telefono', e.target.value)}
-              placeholder="809-555-1234"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          <label style={labelStyle()}>MODO DE OPERACIÓN</label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <OpcionRadio 
+              activa={datos.modo_operacion === 'aprendizaje'}
+              onClick={() => actualizarCampo('modo_operacion', 'aprendizaje')}
+              color={VERDE} esTropical={esTropical}
+              titulo="🌱 Aprendizaje" descripcion="App aprende de ti (3-4 semanas)"
             />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">
-              Email
-            </label>
-            <input
-              type="email"
-              value={datos.email}
-              onChange={(e) => actualizarCampo('email', e.target.value)}
-              placeholder="contacto@cocina.com"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            <OpcionRadio 
+              activa={datos.modo_operacion === 'detallado'}
+              onClick={() => actualizarCampo('modo_operacion', 'detallado')}
+              color={AZUL} esTropical={esTropical}
+              titulo="📊 Detallado" descripcion="Cargas cantidades exactas"
             />
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">
-              Banco
-            </label>
-            <input
-              type="text"
-              value={datos.banco}
-              onChange={(e) => actualizarCampo('banco', e.target.value)}
-              placeholder="Ej: Banco BHD"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">
-              Cuenta bancaria
-            </label>
-            <input
-              type="text"
-              value={datos.cuenta_bancaria}
-              onChange={(e) => actualizarCampo('cuenta_bancaria', e.target.value)}
-              placeholder="1234567890"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-        </div>
+        {mensaje && <Mensaje mensaje={mensaje} esTropical={esTropical} />}
 
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Modo de operación
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-all ${datos.modo_operacion === 'aprendizaje' ? 'border-green-600 bg-green-50' : 'border-gray-300 bg-white'}`}>
-              <input
-                type="radio"
-                name="modo"
-                value="aprendizaje"
-                checked={datos.modo_operacion === 'aprendizaje'}
-                onChange={(e) => actualizarCampo('modo_operacion', e.target.value)}
-                className="mt-1"
-              />
-              <div className="ml-3">
-                <p className="font-semibold text-gray-900">🌱 Aprendizaje</p>
-                <p className="text-xs text-gray-600">App aprende de ti (3-4 semanas)</p>
-              </div>
-            </label>
-            <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-all ${datos.modo_operacion === 'detallado' ? 'border-blue-600 bg-blue-50' : 'border-gray-300 bg-white'}`}>
-              <input
-                type="radio"
-                name="modo"
-                value="detallado"
-                checked={datos.modo_operacion === 'detallado'}
-                onChange={(e) => actualizarCampo('modo_operacion', e.target.value)}
-                className="mt-1"
-              />
-              <div className="ml-3">
-                <p className="font-semibold text-gray-900">📊 Detallado</p>
-                <p className="text-xs text-gray-600">Cargas cantidades exactas</p>
-              </div>
-            </label>
-          </div>
-        </div>
-
-        {mensaje && (
-          <div className={`p-4 rounded-lg ${mensaje.tipo === 'exito' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-            {mensaje.texto}
-          </div>
-        )}
-
-        <button
-          type="submit"
-          disabled={guardando}
-          className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white font-bold py-3 px-6 rounded-lg transition-colors"
-        >
+        <button type="submit" disabled={guardando} style={botonPrincipalStyle(guardando)}>
           {guardando ? 'Guardando...' : 'Guardar y continuar →'}
         </button>
-
       </form>
     </div>
   )
+}
+
+function Campo({ label, requerido, children }) {
+  return (
+    <div>
+      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+        {label} {requerido && <span style={{ color: '#E24B4A' }}>*</span>}
+      </label>
+      {children}
+    </div>
+  )
+}
+
+function OpcionRadio({ activa, onClick, color, esTropical, titulo, descripcion }) {
+  return (
+    <div onClick={onClick} style={{
+      cursor: 'pointer',
+      border: `2px solid ${activa ? color.c : 'var(--color-border-subtle)'}`,
+      background: activa ? (esTropical ? color.claro : `${color.c}15`) : 'var(--color-bg-elevated)',
+      padding: '14px', borderRadius: '10px', transition: 'all 0.15s',
+    }}>
+      <p style={{ fontWeight: 700, color: 'var(--color-text-primary)', margin: 0, fontSize: '14px' }}>{titulo}</p>
+      <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', margin: '4px 0 0' }}>{descripcion}</p>
+    </div>
+  )
+}
+
+function Mensaje({ mensaje, esTropical }) {
+  const colorBase = mensaje.tipo === 'exito' ? '#1D9E75' : '#E24B4A'
+  return (
+    <div style={{
+      background: esTropical 
+        ? (mensaje.tipo === 'exito' ? '#D7F0DD' : '#FCEBEB') 
+        : `${colorBase}15`,
+      border: `1px solid ${colorBase}40`, borderRadius: '8px', padding: '12px',
+      color: esTropical ? (mensaje.tipo === 'exito' ? '#04342C' : '#A32D2D') : (mensaje.tipo === 'exito' ? '#A8E0BD' : '#F4C0D1'),
+      fontSize: '13px',
+    }}>
+      {mensaje.texto}
+    </div>
+  )
+}
+
+function tarjetaStyle() {
+  return {
+    background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-subtle)',
+    borderRadius: '16px', padding: '32px', maxWidth: '760px', width: '100%',
+    boxShadow: '0 10px 40px rgba(0,0,0,0.3)',
+  }
+}
+
+function labelStyle() {
+  return { display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '8px' }
+}
+
+function inputStyle() {
+  return {
+    width: '100%', boxSizing: 'border-box', padding: '10px 14px',
+    background: 'var(--color-bg-input)', border: '1px solid var(--color-border-subtle)',
+    borderRadius: '10px', color: 'var(--color-text-primary)', fontSize: '14px',
+    fontFamily: 'inherit', outline: 'none',
+  }
+}
+
+function botonPrincipalStyle(disabled) {
+  return {
+    width: '100%', padding: '14px 24px',
+    background: 'linear-gradient(135deg, #D85A30 0%, #B53D1A 100%)',
+    border: 'none', borderRadius: '12px', color: 'white', fontSize: '15px', fontWeight: 700,
+    cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+    opacity: disabled ? 0.6 : 1, transition: 'all 0.15s',
+  }
 }
 
 export default Paso1MiCocina

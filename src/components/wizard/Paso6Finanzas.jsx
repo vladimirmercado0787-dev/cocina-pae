@@ -1,38 +1,42 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 
+const NARANJA = { c: '#D85A30', claro: '#FCE9DA', dark: '#7A2F12' }
+const VERDE = { c: '#1D9E75', claro: '#D7F0DD', dark: '#04342C' }
+const AZUL = { c: '#378ADD', claro: '#E6F1FB', dark: '#0C447C' }
+const AMBAR = { c: '#EF9F27', claro: '#FAEEDA', dark: '#633806' }
+const MORADO = { c: '#7F77DD', claro: '#EEEDFE', dark: '#3C3489' }
+const ROJO = { c: '#E24B4A', claro: '#FCEBEB', dark: '#7A1F1E' }
+
 function Paso6Finanzas({ empresaId }) {
   const [finanzasId, setFinanzasId] = useState(null)
   const [guardando, setGuardando] = useState(false)
   const [mensaje, setMensaje] = useState(null)
 
   const [datos, setDatos] = useState({
-    anticipo_porcentaje: '20.00',
-    dias_pago_promedio: '78',
-    costo_objetivo_racion: '35.00',
-    margen_minimo_porcentaje: '25.00',
-    frecuencia_pago_empleados: 'quincenal',
-    usa_ecf: false,
-    rnc_certificado_ecf: '',
-    boton_emergencia_activo: true,
-    telefono_emergencia_1: '',
-    telefono_emergencia_2: '',
-    contador_externo: false,
-    contador_nombre: '',
-    contador_iguala_mensual: ''
+    anticipo_porcentaje: '20.00', dias_pago_promedio: '78',
+    costo_objetivo_racion: '35.00', margen_minimo_porcentaje: '25.00',
+    frecuencia_pago_empleados: 'quincenal', usa_ecf: false,
+    rnc_certificado_ecf: '', boton_emergencia_activo: true,
+    telefono_emergencia_1: '', telefono_emergencia_2: '',
+    contador_externo: false, contador_nombre: '', contador_iguala_mensual: ''
   })
 
+  const [esTropical, setEsTropical] = useState(
+    typeof document !== 'undefined' && document.documentElement.getAttribute('data-tema') === 'tropical'
+  )
   useEffect(() => {
-    if (empresaId) cargarFinanzas()
-  }, [empresaId])
+    const obs = new MutationObserver(() => {
+      setEsTropical(document.documentElement.getAttribute('data-tema') === 'tropical')
+    })
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-tema'] })
+    return () => obs.disconnect()
+  }, [])
+
+  useEffect(() => { if (empresaId) cargarFinanzas() }, [empresaId])
 
   async function cargarFinanzas() {
-    const { data, error } = await supabase
-      .from('finanzas')
-      .select('*')
-      .eq('empresa_id', empresaId)
-      .single()
-
+    const { data, error } = await supabase.from('finanzas').select('*').eq('empresa_id', empresaId).single()
     if (data && !error) {
       setFinanzasId(data.id)
       setDatos({
@@ -53,15 +57,12 @@ function Paso6Finanzas({ empresaId }) {
     }
   }
 
-  function actualizarCampo(campo, valor) {
-    setDatos({ ...datos, [campo]: valor })
-  }
+  function actualizarCampo(campo, valor) { setDatos({ ...datos, [campo]: valor }) }
 
   async function guardar(e) {
     e.preventDefault()
     setGuardando(true)
     setMensaje(null)
-
     try {
       const datosParaGuardar = {
         empresa_id: empresaId,
@@ -70,8 +71,7 @@ function Paso6Finanzas({ empresaId }) {
         costo_objetivo_racion: parseFloat(datos.costo_objetivo_racion) || 35.00,
         margen_minimo_porcentaje: parseFloat(datos.margen_minimo_porcentaje) || 25.00,
         frecuencia_pago_empleados: datos.frecuencia_pago_empleados,
-        usa_ecf: datos.usa_ecf,
-        rnc_certificado_ecf: datos.rnc_certificado_ecf || null,
+        usa_ecf: datos.usa_ecf, rnc_certificado_ecf: datos.rnc_certificado_ecf || null,
         boton_emergencia_activo: datos.boton_emergencia_activo,
         telefono_emergencia_1: datos.telefono_emergencia_1 || null,
         telefono_emergencia_2: datos.telefono_emergencia_2 || null,
@@ -80,23 +80,15 @@ function Paso6Finanzas({ empresaId }) {
         contador_iguala_mensual: datos.contador_iguala_mensual ? parseFloat(datos.contador_iguala_mensual) : null,
         updated_at: new Date().toISOString()
       }
-
       let error
       if (finanzasId) {
-        const result = await supabase
-          .from('finanzas')
-          .update(datosParaGuardar)
-          .eq('id', finanzasId)
+        const result = await supabase.from('finanzas').update(datosParaGuardar).eq('id', finanzasId)
         error = result.error
       } else {
-        const result = await supabase
-          .from('finanzas')
-          .insert([datosParaGuardar])
-          .select()
+        const result = await supabase.from('finanzas').insert([datosParaGuardar]).select()
         error = result.error
         if (result.data && result.data[0]) setFinanzasId(result.data[0].id)
       }
-
       if (error) {
         setMensaje({ tipo: 'error', texto: 'Error: ' + error.message })
       } else {
@@ -104,295 +96,270 @@ function Paso6Finanzas({ empresaId }) {
       }
     } catch (err) {
       setMensaje({ tipo: 'error', texto: 'Error: ' + err.message })
-    } finally {
-      setGuardando(false)
-    }
+    } finally { setGuardando(false) }
   }
 
   if (!empresaId) {
     return (
-      <div className="bg-yellow-50 border border-yellow-300 rounded-2xl p-8 max-w-3xl w-full">
-        <p className="text-yellow-800">Primero registra tu cocina en el Paso 1</p>
+      <div style={alertaTopStyle(AMBAR, esTropical)}>
+        <p style={{ color: esTropical ? AMBAR.dark : '#FAC775', margin: 0 }}>Primero registra tu cocina en el Paso 1</p>
       </div>
     )
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-xl p-8 max-w-3xl w-full">
+    <div style={tarjetaStyle()}>
 
-      <div className="mb-6">
-        <p className="text-xs text-orange-600 font-semibold tracking-wider mb-1">
-          PASO 6 DE 6 · ESTIMADO 5 MIN · ULTIMO PASO
+      <div style={{ marginBottom: '24px' }}>
+        <p style={{ fontSize: '11px', color: NARANJA.c, fontWeight: 700, letterSpacing: '1px', marginBottom: '4px' }}>
+          PASO 6 DE 6 · ESTIMADO 5 MIN · ÚLTIMO PASO
         </p>
-        <h2 className="text-3xl font-bold text-gray-900 mb-2">
+        <h2 style={{ fontSize: '28px', fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: '8px' }}>
           💰 Finanzas
         </h2>
-        <p className="text-gray-600">
+        <p style={{ color: 'var(--color-text-secondary)', margin: 0 }}>
           Configuración financiera y de pagos
         </p>
       </div>
 
-      <form onSubmit={guardar} className="space-y-6">
+      <form onSubmit={guardar} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-5">
-          <h3 className="font-bold text-blue-900 mb-3">
-            🏛️ Pagos de INABIE
-          </h3>
-          <p className="text-xs text-blue-700 mb-4">
+        {/* PAGOS INABIE */}
+        <div style={bloqueColorStyle(AZUL, esTropical)}>
+          <h3 style={tituloBloqueStyle(AZUL, esTropical)}>🏛️ PAGOS DE INABIE</h3>
+          <p style={{ fontSize: '11px', color: esTropical ? AZUL.dark : '#A9CFF2', margin: '0 0 14px' }}>
             INABIE paga un anticipo y luego salda en bloques cada 2-3 facturas
           </p>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">
-                Anticipo INABIE (%)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                value={datos.anticipo_porcentaje}
-                onChange={(e) => actualizarCampo('anticipo_porcentaje', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white"
-              />
-              <p className="text-xs text-gray-500 mt-1">Tipico: 20%</p>
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">
-                Dias promedio de pago
-              </label>
-              <input
-                type="number"
-                value={datos.dias_pago_promedio}
-                onChange={(e) => actualizarCampo('dias_pago_promedio', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white"
-              />
-              <p className="text-xs text-gray-500 mt-1">Tipico: 78 dias</p>
-            </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <Campo label="Anticipo INABIE (%)">
+              <input type="number" step="0.01" value={datos.anticipo_porcentaje}
+                onChange={(e) => actualizarCampo('anticipo_porcentaje', e.target.value)} style={inputStyle()} />
+              <p style={textoAyudaStyle()}>Típico: 20%</p>
+            </Campo>
+            <Campo label="Días promedio de pago">
+              <input type="number" value={datos.dias_pago_promedio}
+                onChange={(e) => actualizarCampo('dias_pago_promedio', e.target.value)} style={inputStyle()} />
+              <p style={textoAyudaStyle()}>Típico: 78 días</p>
+            </Campo>
           </div>
         </div>
 
-        <div className="bg-green-50 border border-green-200 rounded-lg p-5">
-          <h3 className="font-bold text-green-900 mb-3">
-            📊 Costos y margenes
-          </h3>
-          <p className="text-xs text-green-700 mb-4">
-            La app te alertara si el margen baja del minimo
+        {/* COSTOS */}
+        <div style={bloqueColorStyle(VERDE, esTropical)}>
+          <h3 style={tituloBloqueStyle(VERDE, esTropical)}>📊 COSTOS Y MÁRGENES</h3>
+          <p style={{ fontSize: '11px', color: esTropical ? VERDE.dark : '#A8E0BD', margin: '0 0 14px' }}>
+            La app te alertará si el margen baja del mínimo
           </p>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">
-                Costo objetivo por racion (RD$)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                value={datos.costo_objetivo_racion}
-                onChange={(e) => actualizarCampo('costo_objetivo_racion', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white"
-              />
-              <p className="text-xs text-gray-500 mt-1">Lo que debe costar producir</p>
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">
-                Margen minimo (%)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                value={datos.margen_minimo_porcentaje}
-                onChange={(e) => actualizarCampo('margen_minimo_porcentaje', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white"
-              />
-              <p className="text-xs text-gray-500 mt-1">Alerta si baja de aqui</p>
-            </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <Campo label="Costo objetivo por ración (RD$)">
+              <input type="number" step="0.01" value={datos.costo_objetivo_racion}
+                onChange={(e) => actualizarCampo('costo_objetivo_racion', e.target.value)} style={inputStyle()} />
+              <p style={textoAyudaStyle()}>Lo que debe costar producir</p>
+            </Campo>
+            <Campo label="Margen mínimo (%)">
+              <input type="number" step="0.01" value={datos.margen_minimo_porcentaje}
+                onChange={(e) => actualizarCampo('margen_minimo_porcentaje', e.target.value)} style={inputStyle()} />
+              <p style={textoAyudaStyle()}>Alerta si baja de aquí</p>
+            </Campo>
           </div>
         </div>
 
+        {/* PAGO EMPLEADOS */}
         <div>
-          <h3 className="font-bold text-gray-900 mb-3">
+          <h3 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 12px' }}>
             👥 Pago de empleados
           </h3>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Frecuencia de pago
-          </label>
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              type="button"
-              onClick={() => actualizarCampo('frecuencia_pago_empleados', 'semanal')}
-              className={`p-3 rounded-lg text-center border-2 ${
-                datos.frecuencia_pago_empleados === 'semanal'
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-200 bg-white'
-              }`}
-            >
-              <p className="font-semibold text-sm text-gray-900">Semanal</p>
-              <p className="text-xs text-gray-500">Cada viernes</p>
-            </button>
-            <button
-              type="button"
-              onClick={() => actualizarCampo('frecuencia_pago_empleados', 'quincenal')}
-              className={`p-3 rounded-lg text-center border-2 ${
-                datos.frecuencia_pago_empleados === 'quincenal'
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-200 bg-white'
-              }`}
-            >
-              <p className="font-semibold text-sm text-gray-900">Quincenal</p>
-              <p className="text-xs text-gray-500">Cada 15 dias</p>
-            </button>
-            <button
-              type="button"
-              onClick={() => actualizarCampo('frecuencia_pago_empleados', 'mensual')}
-              className={`p-3 rounded-lg text-center border-2 ${
-                datos.frecuencia_pago_empleados === 'mensual'
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-200 bg-white'
-              }`}
-            >
-              <p className="font-semibold text-sm text-gray-900">Mensual</p>
-              <p className="text-xs text-gray-500">Fin de mes</p>
-            </button>
+          <label style={labelStyle()}>FRECUENCIA DE PAGO</label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+            <BotonFrecuencia activa={datos.frecuencia_pago_empleados === 'semanal'} onClick={() => actualizarCampo('frecuencia_pago_empleados', 'semanal')} color={AZUL} esTropical={esTropical} titulo="Semanal" sub="Cada viernes" />
+            <BotonFrecuencia activa={datos.frecuencia_pago_empleados === 'quincenal'} onClick={() => actualizarCampo('frecuencia_pago_empleados', 'quincenal')} color={AZUL} esTropical={esTropical} titulo="Quincenal" sub="Cada 15 días" />
+            <BotonFrecuencia activa={datos.frecuencia_pago_empleados === 'mensual'} onClick={() => actualizarCampo('frecuencia_pago_empleados', 'mensual')} color={AZUL} esTropical={esTropical} titulo="Mensual" sub="Fin de mes" />
           </div>
         </div>
 
-        <div className="bg-purple-50 border border-purple-200 rounded-lg p-5">
-          <label className="flex items-start gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={datos.usa_ecf}
+        {/* E-CF */}
+        <div style={bloqueColorStyle(MORADO, esTropical)}>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', cursor: 'pointer' }}>
+            <input type="checkbox" checked={datos.usa_ecf}
               onChange={(e) => actualizarCampo('usa_ecf', e.target.checked)}
-              className="mt-1 w-5 h-5"
-            />
-            <div className="flex-1">
-              <p className="font-bold text-purple-900">🧾 Tengo factura electronica e-CF activa</p>
-              <p className="text-xs text-purple-700 mt-1">
-                Si tienes certificacion de DGII para emitir e-CF
+              style={{ marginTop: '2px', width: '18px', height: '18px', accentColor: MORADO.c }} />
+            <div style={{ flex: 1 }}>
+              <p style={{ fontWeight: 700, color: esTropical ? MORADO.dark : '#AFA9EC', margin: 0 }}>🧾 Tengo factura electrónica e-CF activa</p>
+              <p style={{ fontSize: '11px', color: esTropical ? MORADO.dark : '#AFA9EC', opacity: 0.85, margin: '4px 0 0' }}>
+                Si tienes certificación de DGII para emitir e-CF
               </p>
             </div>
           </label>
           {datos.usa_ecf && (
-            <div className="mt-3">
-              <label className="block text-sm font-semibold text-gray-700 mb-1">
-                Numero de certificado e-CF
-              </label>
-              <input
-                type="text"
-                value={datos.rnc_certificado_ecf}
-                onChange={(e) => actualizarCampo('rnc_certificado_ecf', e.target.value)}
-                placeholder="Ej: E310000001"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white"
-              />
+            <div style={{ marginTop: '14px' }}>
+              <Campo label="Número de certificado e-CF">
+                <input type="text" value={datos.rnc_certificado_ecf}
+                  onChange={(e) => actualizarCampo('rnc_certificado_ecf', e.target.value)}
+                  placeholder="Ej: E310000001" style={inputStyle()} />
+              </Campo>
             </div>
           )}
         </div>
 
-        <div className="bg-red-50 border border-red-200 rounded-lg p-5">
-          <label className="flex items-start gap-3 cursor-pointer mb-3">
-            <input
-              type="checkbox"
-              checked={datos.boton_emergencia_activo}
+        {/* EMERGENCIA */}
+        <div style={bloqueColorStyle(ROJO, esTropical)}>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', cursor: 'pointer', marginBottom: '0' }}>
+            <input type="checkbox" checked={datos.boton_emergencia_activo}
               onChange={(e) => actualizarCampo('boton_emergencia_activo', e.target.checked)}
-              className="mt-1 w-5 h-5"
-            />
-            <div className="flex-1">
-              <p className="font-bold text-red-900">🚨 Boton de emergencia activo</p>
-              <p className="text-xs text-red-700 mt-1">
+              style={{ marginTop: '2px', width: '18px', height: '18px', accentColor: ROJO.c }} />
+            <div style={{ flex: 1 }}>
+              <p style={{ fontWeight: 700, color: esTropical ? ROJO.dark : '#F4C0D1', margin: 0 }}>🚨 Botón de emergencia activo</p>
+              <p style={{ fontSize: '11px', color: esTropical ? ROJO.dark : '#F4C0D1', opacity: 0.85, margin: '4px 0 0' }}>
                 Mantener presionado 3 segundos para llamar a los contactos
               </p>
             </div>
           </label>
           {datos.boton_emergencia_activo && (
-            <div className="grid grid-cols-2 gap-3 mt-3">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Telefono 1
-                </label>
-                <input
-                  type="tel"
-                  value={datos.telefono_emergencia_1}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '14px' }}>
+              <Campo label="Teléfono 1">
+                <input type="tel" value={datos.telefono_emergencia_1}
                   onChange={(e) => actualizarCampo('telefono_emergencia_1', e.target.value)}
-                  placeholder="809-555-0000"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Telefono 2
-                </label>
-                <input
-                  type="tel"
-                  value={datos.telefono_emergencia_2}
+                  placeholder="809-555-0000" style={inputStyle()} />
+              </Campo>
+              <Campo label="Teléfono 2">
+                <input type="tel" value={datos.telefono_emergencia_2}
                   onChange={(e) => actualizarCampo('telefono_emergencia_2', e.target.value)}
-                  placeholder="809-555-0000"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white"
-                />
-              </div>
+                  placeholder="809-555-0000" style={inputStyle()} />
+              </Campo>
             </div>
           )}
         </div>
 
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-5">
-          <label className="flex items-start gap-3 cursor-pointer mb-3">
-            <input
-              type="checkbox"
-              checked={datos.contador_externo}
+        {/* CONTADOR */}
+        <div style={bloqueColorStyle(AMBAR, esTropical)}>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', cursor: 'pointer' }}>
+            <input type="checkbox" checked={datos.contador_externo}
               onChange={(e) => actualizarCampo('contador_externo', e.target.checked)}
-              className="mt-1 w-5 h-5"
-            />
-            <div className="flex-1">
-              <p className="font-bold text-yellow-900">🧮 Tengo contador externo</p>
-              <p className="text-xs text-yellow-700 mt-1">
+              style={{ marginTop: '2px', width: '18px', height: '18px', accentColor: AMBAR.c }} />
+            <div style={{ flex: 1 }}>
+              <p style={{ fontWeight: 700, color: esTropical ? AMBAR.dark : '#FAC775', margin: 0 }}>🧮 Tengo contador externo</p>
+              <p style={{ fontSize: '11px', color: esTropical ? AMBAR.dark : '#FAC775', opacity: 0.85, margin: '4px 0 0' }}>
                 Lic. que maneja TSS, ITBIS y declaraciones DGII
               </p>
             </div>
           </label>
           {datos.contador_externo && (
-            <div className="grid grid-cols-2 gap-3 mt-3">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Nombre del contador
-                </label>
-                <input
-                  type="text"
-                  value={datos.contador_nombre}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '14px' }}>
+              <Campo label="Nombre del contador">
+                <input type="text" value={datos.contador_nombre}
                   onChange={(e) => actualizarCampo('contador_nombre', e.target.value)}
-                  placeholder="Lic. Perez"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Iguala mensual (RD$)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={datos.contador_iguala_mensual}
+                  placeholder="Lic. Pérez" style={inputStyle()} />
+              </Campo>
+              <Campo label="Iguala mensual (RD$)">
+                <input type="number" step="0.01" value={datos.contador_iguala_mensual}
                   onChange={(e) => actualizarCampo('contador_iguala_mensual', e.target.value)}
-                  placeholder="5000"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white"
-                />
-              </div>
+                  placeholder="5000" style={inputStyle()} />
+              </Campo>
             </div>
           )}
         </div>
 
-        {mensaje && (
-          <div className={`p-4 rounded-lg ${mensaje.tipo === 'exito' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-            {mensaje.texto}
-          </div>
-        )}
+        {mensaje && <Mensaje mensaje={mensaje} esTropical={esTropical} />}
 
-        <button
-          type="submit"
-          disabled={guardando}
-          className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white font-bold py-3 px-6 rounded-lg transition-colors text-lg"
-        >
-          {guardando ? 'Guardando...' : '💾 Guardar configuracion'}
+        <button type="submit" disabled={guardando}
+          style={{
+            width: '100%', padding: '16px 24px',
+            background: 'linear-gradient(135deg, #D85A30 0%, #B53D1A 100%)',
+            border: 'none', borderRadius: '12px', color: 'white', fontSize: '16px', fontWeight: 700,
+            cursor: guardando ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+            opacity: guardando ? 0.6 : 1,
+          }}>
+          {guardando ? 'Guardando...' : '💾 Guardar configuración'}
         </button>
-
       </form>
     </div>
   )
+}
+
+function Campo({ label, children }) {
+  return (
+    <div>
+      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+        {label}
+      </label>
+      {children}
+    </div>
+  )
+}
+
+function BotonFrecuencia({ activa, onClick, color, esTropical, titulo, sub }) {
+  return (
+    <button type="button" onClick={onClick}
+      style={{
+        padding: '12px', textAlign: 'center', borderRadius: '10px',
+        border: `2px solid ${activa ? color.c : 'var(--color-border-subtle)'}`,
+        background: activa ? (esTropical ? color.claro : `${color.c}15`) : 'var(--color-bg-elevated)',
+        cursor: 'pointer', fontFamily: 'inherit',
+      }}>
+      <p style={{ fontWeight: 700, fontSize: '13px', color: 'var(--color-text-primary)', margin: 0 }}>{titulo}</p>
+      <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', margin: '4px 0 0' }}>{sub}</p>
+    </button>
+  )
+}
+
+function Mensaje({ mensaje, esTropical }) {
+  const colorBase = mensaje.tipo === 'exito' ? '#1D9E75' : '#E24B4A'
+  return (
+    <div style={{
+      background: esTropical 
+        ? (mensaje.tipo === 'exito' ? '#D7F0DD' : '#FCEBEB') 
+        : `${colorBase}15`,
+      border: `1px solid ${colorBase}40`, borderRadius: '8px', padding: '12px',
+      color: esTropical ? (mensaje.tipo === 'exito' ? '#04342C' : '#A32D2D') : (mensaje.tipo === 'exito' ? '#A8E0BD' : '#F4C0D1'),
+      fontSize: '13px',
+    }}>
+      {mensaje.texto}
+    </div>
+  )
+}
+
+function tarjetaStyle() {
+  return {
+    background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-subtle)',
+    borderRadius: '16px', padding: '32px', maxWidth: '760px', width: '100%',
+    boxShadow: '0 10px 40px rgba(0,0,0,0.3)',
+  }
+}
+
+function alertaTopStyle(color, esTropical) {
+  return {
+    background: esTropical ? color.claro : `${color.c}15`,
+    border: `1px solid ${color.c}40`, borderRadius: '16px',
+    padding: '32px', maxWidth: '760px', width: '100%',
+  }
+}
+
+function bloqueColorStyle(color, esTropical) {
+  return {
+    background: esTropical ? color.claro : `${color.c}12`,
+    border: `1px solid ${color.c}40`, borderRadius: '12px', padding: '18px',
+  }
+}
+
+function tituloBloqueStyle(color, esTropical) {
+  return { fontSize: '13px', fontWeight: 700, color: esTropical ? color.dark : color.c, margin: '0 0 8px' }
+}
+
+function labelStyle() {
+  return { display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--color-text-muted)', letterSpacing: '0.5px', marginBottom: '8px' }
+}
+
+function textoAyudaStyle() {
+  return { fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '4px' }
+}
+
+function inputStyle() {
+  return {
+    width: '100%', boxSizing: 'border-box', padding: '10px 14px',
+    background: 'var(--color-bg-input)', border: '1px solid var(--color-border-subtle)',
+    borderRadius: '10px', color: 'var(--color-text-primary)', fontSize: '14px',
+    fontFamily: 'inherit', outline: 'none',
+  }
 }
 
 export default Paso6Finanzas

@@ -29,8 +29,6 @@ function ModalEntregarYFirmar({ operacion, escuela, recetaHoy, empresa, usuario,
   const horaFormateada = fechaHoy.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' })
   const numeroConduce = `${fechaHoy.getFullYear()}${String(fechaHoy.getMonth() + 1).padStart(2, '0')}${String(fechaHoy.getDate()).padStart(2, '0')}-${String(operacion?.id || '0000').slice(0, 4)}`
   const raciones = operacion?.raciones_planificadas || escuela?.raciones_contractuales || 0
-  const precioRacion = parseFloat(escuela?.precio_racion) || 0
-  const subtotal = raciones * precioRacion
 
   function borrarFirma() {
     if (sigCanvasRef.current) {
@@ -86,7 +84,7 @@ function ModalEntregarYFirmar({ operacion, escuela, recetaHoy, empresa, usuario,
         {/* CONTENIDO SCROLLABLE */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
           
-          {/* MINI CONDUCE */}
+          {/* MINI CONDUCE — SIN PRECIO NI SUBTOTAL */}
           <div style={{
             background: esTropical ? AZUL.claro : `${AZUL.c}12`,
             border: `2px solid ${AZUL.c}40`, borderRadius: '14px', padding: '18px',
@@ -131,21 +129,22 @@ function ModalEntregarYFirmar({ operacion, escuela, recetaHoy, empresa, usuario,
               </div>
             )}
 
-            {subtotal > 0 && (
-              <div style={{
-                borderTop: `2px solid ${AZUL.c}40`, marginTop: '12px',
-                background: 'var(--color-bg-elevated)',
-                marginLeft: '-18px', marginRight: '-18px', marginBottom: '-18px',
-                padding: '12px 18px', borderRadius: '0 0 14px 14px',
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-secondary)', margin: 0 }}>SUBTOTAL:</p>
-                  <p style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>
-                    RD$ {subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                  </p>
-                </div>
+            {/* 🎯 BLOQUE DE RACIONES TOTAL (sin precio) */}
+            <div style={{
+              borderTop: `2px solid ${AZUL.c}40`, marginTop: '12px',
+              background: 'var(--color-bg-elevated)',
+              marginLeft: '-18px', marginRight: '-18px', marginBottom: '-18px',
+              padding: '14px 18px', borderRadius: '0 0 14px 14px',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-secondary)', margin: 0 }}>
+                  TOTAL RACIONES ENTREGADAS:
+                </p>
+                <p style={{ fontSize: '24px', fontWeight: 700, color: VERDE.c, margin: 0 }}>
+                  {raciones.toLocaleString('es-DO')}
+                </p>
               </div>
-            )}
+            </div>
           </div>
 
           {/* INSTRUCCIONES */}
