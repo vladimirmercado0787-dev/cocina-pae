@@ -70,6 +70,34 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
         flexDirection: 'column',
       }}
     >
+      {/* ═══════════════════════════════════════════════════
+          KEYFRAMES DE ANIMACIÓN
+          ═══════════════════════════════════════════════════ */}
+      <style>{`
+        @keyframes selOpSlideFromTop {
+          0% { opacity: 0; transform: translateY(-20px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes selOpFadeInUp {
+          0% { opacity: 0; transform: translateY(15px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes selOpBounceIn {
+          0% { opacity: 0; transform: translateY(30px) scale(0.85); }
+          60% { opacity: 1; transform: translateY(-4px) scale(1.02); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes selOpFadeIn {
+          0% { opacity: 0; }
+          100% { opacity: 1; }
+        }
+        @keyframes selOpAvatarPop {
+          0% { transform: scale(0); }
+          70% { transform: scale(1.15); }
+          100% { transform: scale(1); }
+        }
+      `}</style>
+
       {/* Resplandores radiales del fondo */}
       <div
         style={{
@@ -77,10 +105,12 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
           inset: 0,
           backgroundImage: 'var(--glow-verde), var(--glow-ambar)',
           pointerEvents: 'none',
+          opacity: 0,
+          animation: 'selOpFadeIn 1.2s ease 0.1s forwards',
         }}
       />
 
-      {/* ─── HEADER ─── */}
+      {/* ─── HEADER (entra desde arriba) ─── */}
       <div
         style={{
           position: 'relative',
@@ -90,6 +120,8 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
           marginBottom: '32px',
           flexWrap: 'wrap',
           gap: '12px',
+          opacity: 0,
+          animation: 'selOpSlideFromTop 0.6s ease 0.1s forwards',
         }}
       >
         {/* Logo Andamio izquierda */}
@@ -231,7 +263,7 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
           paddingTop: '20px',
         }}
       >
-        {/* Título */}
+        {/* Título (fade in + sube) */}
         <div style={{ textAlign: 'center', marginBottom: '40px', maxWidth: '600px' }}>
           <h1
             style={{
@@ -240,6 +272,8 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
               fontWeight: 500,
               margin: '0 0 10px',
               letterSpacing: '-0.5px',
+              opacity: 0,
+              animation: 'selOpFadeInUp 0.7s ease 0.4s forwards',
             }}
           >
             ¿Quién está usando la app?
@@ -250,6 +284,8 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
               fontSize: '14px',
               margin: 0,
               fontWeight: 500,
+              opacity: 0,
+              animation: 'selOpFadeInUp 0.6s ease 0.6s forwards',
             }}
           >
             Selecciona tu nombre y luego ingresa tu PIN
@@ -276,6 +312,8 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
               padding: '32px',
               maxWidth: '500px',
               textAlign: 'center',
+              opacity: 0,
+              animation: 'selOpFadeInUp 0.6s ease 0.7s forwards',
             }}
           >
             <p
@@ -291,7 +329,7 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
           </div>
         )}
 
-        {/* ─── GRID DE TARJETAS ─── */}
+        {/* ─── GRID DE TARJETAS (cascada) ─── */}
         {!cargando && usuarios.length > 0 && (
           <div
             style={{
@@ -303,9 +341,11 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
               padding: '0 12px',
             }}
           >
-            {usuarios.map((usuario) => {
+            {usuarios.map((usuario, index) => {
               const info = getInfo(usuario.rol)
               const esPropietario = usuario.rol === 'propietario'
+              // Cada tarjeta entra 120ms después de la anterior, empezando a los 0.8s
+              const delayCascada = 0.8 + (index * 0.12)
               return (
                 <button
                   key={usuario.id}
@@ -337,6 +377,8 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
                     boxShadow: esTropical 
                       ? `0 2px 8px ${info.color}10` 
                       : 'none',
+                    opacity: 0,
+                    animation: `selOpBounceIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) ${delayCascada}s forwards`,
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.transform = 'translateY(-3px)'
@@ -376,7 +418,7 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
                     </div>
                   )}
 
-                  {/* Avatar circular con color del rol */}
+                  {/* Avatar circular con color del rol (mini pop) */}
                   <div
                     style={{
                       width: '64px',
@@ -391,6 +433,7 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
                       justifyContent: 'center',
                       fontSize: '32px',
                       lineHeight: 1,
+                      animation: `selOpAvatarPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${delayCascada + 0.2}s backwards`,
                     }}
                   >
                     {info.emoji}
@@ -430,7 +473,7 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
               )
             })}
 
-            {/* Tarjeta "+ Agregar empleado" */}
+            {/* Tarjeta "+ Agregar empleado" (entra al final) */}
             <button
               onClick={manejarAgregarEmpleado}
               style={{
@@ -447,6 +490,8 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
                 minHeight: '160px',
                 transition: 'all 0.25s ease',
                 fontFamily: 'inherit',
+                opacity: 0,
+                animation: `selOpBounceIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) ${0.8 + (usuarios.length * 0.12)}s forwards`,
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.borderColor = 'var(--color-text-accent)'
@@ -505,7 +550,7 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
         )}
       </div>
 
-      {/* ─── FOOTER ─── */}
+      {/* ─── FOOTER (fade-in al final) ─── */}
       <div
         style={{
           position: 'relative',
@@ -514,6 +559,8 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
           flexDirection: 'column',
           alignItems: 'center',
           gap: '6px',
+          opacity: 0,
+          animation: `selOpFadeInUp 0.7s ease ${1.2 + (usuarios.length * 0.12)}s forwards`,
         }}
       >
         {!cargando && usuarios.length > 0 && (

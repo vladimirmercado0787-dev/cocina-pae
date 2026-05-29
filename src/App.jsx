@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
+import IntroAndamio from './components/intro/IntroAndamio'
 import Paso1MiCocina from './components/wizard/Paso1MiCocina'
 import Paso2Escuelas from './components/wizard/Paso2Escuelas'
 import Paso3MenuInabie from './components/wizard/Paso3MenuInabie'
@@ -32,6 +33,9 @@ import VistaNomina from './components/nomina/VistaNomina'
 import MisRecibos from './components/nomina/MisRecibos'
 
 function App() {
+  // 🟡 DEBUG: Forzando intro siempre. Restaurar lógica de localStorage cuando funcione.
+  const [mostrarIntro, setMostrarIntro] = useState(true)
+
   const [pasoActual, setPasoActual] = useState(7)
   const [empresaActual, setEmpresaActual] = useState(null)
   const [empresaLogueada, setEmpresaLogueada] = useState(null)
@@ -71,6 +75,12 @@ function App() {
     }
 
     setCargando(false)
+  }
+
+  function terminarIntro() {
+    const hoy = new Date().toISOString().split('T')[0]
+    localStorage.setItem('andamio_intro_fecha', hoy)
+    setMostrarIntro(false)
   }
 
   function avanzarPaso() { setPasoActual(pasoActual + 1) }
@@ -266,6 +276,13 @@ function App() {
     )
   }
 
+  // ═══════════════════════════════════════════════════
+  // INTRO ANDAMIO - Se muestra primero
+  // ═══════════════════════════════════════════════════
+  if (mostrarIntro) {
+    return <IntroAndamio onTerminada={terminarIntro} />
+  }
+
   if (cargando) {
     return (
       <div style={{
@@ -282,19 +299,12 @@ function App() {
 
   return (
     <>
-      {/* ═══════════════════════════════════════════════════
-          WIZARD (Paso 1-6) - aún NO refactorizado el wrapper
-          (los pasos por dentro YA tienen tema dual)
-          ═══════════════════════════════════════════════════ */}
       {pasoActual < 7 && (
         <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
           {renderPasoWizard()}
         </div>
       )}
       
-      {/* ═══════════════════════════════════════════════════
-          AUTH - REFACTORIZADAS
-          ═══════════════════════════════════════════════════ */}
       {pasoActual === 7 && vistaActual === 'login_empresa' && (
         <LoginEmpresa onLoginExitoso={loginEmpresaExitoso} />
       )}
@@ -315,14 +325,10 @@ function App() {
         />
       )}
       
-      {/* ═══════════════════════════════════════════════════
-          DASHBOARD según rol - REFACTORIZADAS
-          ═══════════════════════════════════════════════════ */}
       {pasoActual === 7 && vistaActual === 'dashboard' && usuarioLogueado && (
         renderVistaSegunRol()
       )}
       
-      {/* VISTA SECRETARIA en modo admin - REFACTORIZADA */}
       {pasoActual === 7 && vistaActual === 'vista_secretaria_admin' && usuarioLogueado && (
         <VistaSecretaria 
           usuario={usuarioLogueado}
@@ -346,11 +352,6 @@ function App() {
         />
       )}
       
-      {/* ═══════════════════════════════════════════════════
-          OPERACIÓN DIARIA - REFACTORIZADAS
-          ═══════════════════════════════════════════════════ */}
-      
-      {/* DESPACHADOR */}
       {pasoActual === 7 && vistaActual === 'despacho' && usuarioLogueado && puedeDespachar && (
         <VistaDespachador 
           usuario={usuarioLogueado}
@@ -361,7 +362,6 @@ function App() {
         />
       )}
       
-      {/* CIERRE DEL DÍA */}
       {pasoActual === 7 && vistaActual === 'cierre' && usuarioLogueado && (
         <CierreDelDia 
           usuario={usuarioLogueado}
@@ -370,7 +370,6 @@ function App() {
         />
       )}
       
-      {/* FACTURA INABIE */}
       {pasoActual === 7 && vistaActual === 'factura' && usuarioLogueado && (
         <FacturaInabie 
           usuario={usuarioLogueado}
@@ -380,7 +379,6 @@ function App() {
         />
       )}
       
-      {/* CALCULADORA */}
       {pasoActual === 7 && vistaActual === 'calculadora' && usuarioLogueado && (
         <CalculadoraProduccion 
           usuario={usuarioLogueado}
@@ -389,11 +387,6 @@ function App() {
         />
       )}
       
-      {/* ═══════════════════════════════════════════════════
-          INVENTARIO - REFACTORIZADAS
-          ═══════════════════════════════════════════════════ */}
-      
-      {/* COMPRAS */}
       {pasoActual === 7 && vistaActual === 'compras' && usuarioLogueado && puedeGestionarCompras && (
         <VistaCompras 
           usuario={usuarioLogueado}
@@ -402,7 +395,6 @@ function App() {
         />
       )}
       
-      {/* INGREDIENTES */}
       {pasoActual === 7 && vistaActual === 'ingredientes' && usuarioLogueado && puedeGestionarIngredientes && (
         <VistaIngredientes 
           usuario={usuarioLogueado}
@@ -411,7 +403,6 @@ function App() {
         />
       )}
       
-      {/* PROVEEDORES */}
       {pasoActual === 7 && vistaActual === 'proveedores' && usuarioLogueado && puedeGestionarProveedores && (
         <VistaProveedores 
           usuario={usuarioLogueado}
@@ -420,7 +411,6 @@ function App() {
         />
       )}
       
-      {/* GASTOS */}
       {pasoActual === 7 && vistaActual === 'gastos' && usuarioLogueado && puedeGestionarGastos && (
         <VistaGastos 
           usuario={usuarioLogueado}
@@ -429,11 +419,6 @@ function App() {
         />
       )}
       
-      {/* ═══════════════════════════════════════════════════
-          PERSONAL - REFACTORIZADAS
-          ═══════════════════════════════════════════════════ */}
-      
-      {/* EMPLEADOS */}
       {pasoActual === 7 && vistaActual === 'empleados' && usuarioLogueado && puedeGestionarEmpleados && (
         <VistaEmpleados 
           usuario={usuarioLogueado}
@@ -442,7 +427,6 @@ function App() {
         />
       )}
       
-      {/* NÓMINA */}
       {pasoActual === 7 && vistaActual === 'nomina' && usuarioLogueado && puedeGestionarNomina && (
         <VistaNomina 
           usuario={usuarioLogueado}
@@ -451,11 +435,6 @@ function App() {
         />
       )}
       
-      {/* ═══════════════════════════════════════════════════
-          CONSULTA - REFACTORIZADAS ⭐
-          ═══════════════════════════════════════════════════ */}
-      
-      {/* CONFIGURACIÓN */}
       {pasoActual === 7 && vistaActual === 'configuracion' && usuarioLogueado && puedeConfigurar && (
         <Configuracion 
           usuario={usuarioLogueado}
@@ -464,7 +443,6 @@ function App() {
         />
       )}
       
-      {/* INTELIGENCIA */}
       {pasoActual === 7 && vistaActual === 'inteligencia' && usuarioLogueado && puedeVerInteligencia && (
         <InteligenciaOperativa 
           usuario={usuarioLogueado}
@@ -473,7 +451,6 @@ function App() {
         />
       )}
       
-      {/* CATÁLOGO RECETAS */}
       {pasoActual === 7 && vistaActual === 'catalogo_recetas' && usuarioLogueado && puedeVerCatalogo && (
         <VistaCatalogoRecetas 
           empresa_id={empresaActual?.id}
@@ -481,7 +458,6 @@ function App() {
         />
       )}
       
-      {/* HISTORIAL */}
       {pasoActual === 7 && vistaActual === 'historial' && usuarioLogueado && puedeVerHistorial && (
         <VistaHistorial 
           usuario={usuarioLogueado}
@@ -490,11 +466,6 @@ function App() {
         />
       )}
       
-      {/* ═══════════════════════════════════════════════════
-          LOTE 3 - REFACTORIZADAS ⭐ (sin wrapper viejo)
-          ═══════════════════════════════════════════════════ */}
-      
-      {/* CONTRATOS */}
       {pasoActual === 7 && vistaActual === 'contratos' && usuarioLogueado && puedeGestionarContratos && (
         <VistaContratos 
           usuario={usuarioLogueado}
@@ -503,7 +474,6 @@ function App() {
         />
       )}
       
-      {/* MI CONTRATO */}
       {pasoActual === 7 && vistaActual === 'mi_contrato' && usuarioLogueado && puedeVerMiContrato && (
         <VistaMiContrato 
           usuario={usuarioLogueado}
@@ -512,7 +482,6 @@ function App() {
         />
       )}
       
-      {/* MIS RECIBOS */}
       {pasoActual === 7 && vistaActual === 'mis_recibos' && usuarioLogueado && puedeVerMisRecibos && (
         <MisRecibos 
           usuario={usuarioLogueado}

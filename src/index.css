@@ -119,3 +119,182 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-border-strong);
 }
+/* ════════════════════════════════════════
+   SISTEMA DE ANIMACIONES GLOBALES — Andamio
+   ════════════════════════════════════════ */
+
+/* TRANSICIONES AUTOMÁTICAS EN TODOS LOS ELEMENTOS */
+button, a, input, select, textarea {
+  transition: background-color 0.2s ease, 
+              border-color 0.2s ease, 
+              color 0.2s ease,
+              transform 0.15s ease,
+              box-shadow 0.2s ease,
+              opacity 0.2s ease;
+}
+
+/* HOVER GLOBAL EN BOTONES */
+button:not(:disabled):hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+
+button:not(:disabled):active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* INPUTS CON FOCUS SUAVE */
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(29, 158, 117, 0.15);
+}
+
+/* ════════════════════════════════════════
+   KEYFRAMES REUTILIZABLES
+   ════════════════════════════════════════ */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeInUp {
+  from { 
+    opacity: 0; 
+    transform: translateY(20px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+@keyframes fadeInDown {
+  from { 
+    opacity: 0; 
+    transform: translateY(-20px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+@keyframes scaleIn {
+  from { 
+    opacity: 0; 
+    transform: scale(0.9); 
+  }
+  to { 
+    opacity: 1; 
+    transform: scale(1); 
+  }
+}
+
+@keyframes bounceIn {
+  0% { 
+    opacity: 0; 
+    transform: scale(0.3); 
+  }
+  60% { 
+    opacity: 1; 
+    transform: scale(1.05); 
+  }
+  100% { 
+    transform: scale(1); 
+  }
+}
+
+@keyframes slideFromTop {
+  from { 
+    opacity: 0; 
+    transform: translateY(-80px) scale(0.9); 
+  }
+  60% { 
+    transform: translateY(8px) scale(1.02); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0) scale(1); 
+  }
+}
+
+@keyframes slideFromBottom {
+  from { 
+    opacity: 0; 
+    transform: translateY(80px) scale(0.9); 
+  }
+  60% { 
+    transform: translateY(-8px) scale(1.02); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0) scale(1); 
+  }
+}
+
+@keyframes spinSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes glow {
+  0%, 100% { 
+    filter: drop-shadow(0 0 20px rgba(250, 199, 117, 0.3)); 
+  }
+  50% { 
+    filter: drop-shadow(0 0 40px rgba(250, 199, 117, 0.8)); 
+  }
+}
+
+@keyframes floaty {
+  0%, 100% { transform: translateY(0) translateX(0); }
+  50% { transform: translateY(-15px) translateX(5px); }
+}
+
+@keyframes expandWidth {
+  from { width: 0; }
+  to { width: var(--expand-to, 120px); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes checkmark {
+  0% { transform: scale(0) rotate(-45deg); opacity: 0; }
+  50% { transform: scale(1.2) rotate(-45deg); }
+  100% { transform: scale(1) rotate(-45deg); opacity: 1; }
+}
+
+/* ════════════════════════════════════════
+   CLASES UTILITARIAS (opcionales)
+   ════════════════════════════════════════ */
+
+.animate-fade-in { animation: fadeIn 0.5s ease backwards; }
+.animate-fade-in-up { animation: fadeInUp 0.5s ease backwards; }
+.animate-fade-in-down { animation: fadeInDown 0.5s ease backwards; }
+.animate-scale-in { animation: scaleIn 0.4s ease backwards; }
+.animate-bounce-in { animation: bounceIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) backwards; }
+.animate-slide-from-top { animation: slideFromTop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) backwards; }
+.animate-slide-from-bottom { animation: slideFromBottom 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) backwards; }
+
+/* ════════════════════════════════════════
+   ELEMENTOS QUE ANIMAN AUTOMÁTICAMENTE
+   ════════════════════════════════════════ */
+
+/* Modales aparecen con fade + scale */
+[role="dialog"], .modal {
+  animation: scaleIn 0.3s ease backwards;
+}
+
+/* Body completo transiciona suave al cambiar tema */
+body {
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
