@@ -283,7 +283,8 @@ function App() {
   return (
     <>
       {/* ═══════════════════════════════════════════════════
-          WIZARD (Paso 1-6) - aún NO refactorizado
+          WIZARD (Paso 1-6) - aún NO refactorizado el wrapper
+          (los pasos por dentro YA tienen tema dual)
           ═══════════════════════════════════════════════════ */}
       {pasoActual < 7 && (
         <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
@@ -451,10 +452,10 @@ function App() {
       )}
       
       {/* ═══════════════════════════════════════════════════
-          CONSULTA - REFACTORIZADAS ⭐ (LOTE 3)
+          CONSULTA - REFACTORIZADAS ⭐
           ═══════════════════════════════════════════════════ */}
       
-      {/* CONFIGURACIÓN - REFACTORIZADO ⭐ */}
+      {/* CONFIGURACIÓN */}
       {pasoActual === 7 && vistaActual === 'configuracion' && usuarioLogueado && puedeConfigurar && (
         <Configuracion 
           usuario={usuarioLogueado}
@@ -463,7 +464,7 @@ function App() {
         />
       )}
       
-      {/* INTELIGENCIA - REFACTORIZADO ⭐ */}
+      {/* INTELIGENCIA */}
       {pasoActual === 7 && vistaActual === 'inteligencia' && usuarioLogueado && puedeVerInteligencia && (
         <InteligenciaOperativa 
           usuario={usuarioLogueado}
@@ -472,7 +473,7 @@ function App() {
         />
       )}
       
-      {/* CATÁLOGO RECETAS - REFACTORIZADO ⭐ */}
+      {/* CATÁLOGO RECETAS */}
       {pasoActual === 7 && vistaActual === 'catalogo_recetas' && usuarioLogueado && puedeVerCatalogo && (
         <VistaCatalogoRecetas 
           empresa_id={empresaActual?.id}
@@ -480,7 +481,7 @@ function App() {
         />
       )}
       
-      {/* HISTORIAL - REFACTORIZADO ⭐ */}
+      {/* HISTORIAL */}
       {pasoActual === 7 && vistaActual === 'historial' && usuarioLogueado && puedeVerHistorial && (
         <VistaHistorial 
           usuario={usuarioLogueado}
@@ -490,40 +491,34 @@ function App() {
       )}
       
       {/* ═══════════════════════════════════════════════════
-          AÚN NO REFACTORIZADAS (mantienen wrapper viejo)
+          LOTE 3 - REFACTORIZADAS ⭐ (sin wrapper viejo)
           ═══════════════════════════════════════════════════ */}
       
       {/* CONTRATOS */}
       {pasoActual === 7 && vistaActual === 'contratos' && usuarioLogueado && puedeGestionarContratos && (
-        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
-          <VistaContratos 
-            usuario={usuarioLogueado}
-            empresaId={empresaActual?.id}
-            onVolver={() => setVistaActual('dashboard')}
-          />
-        </div>
+        <VistaContratos 
+          usuario={usuarioLogueado}
+          empresaId={empresaActual?.id}
+          onVolver={() => setVistaActual('dashboard')}
+        />
       )}
       
       {/* MI CONTRATO */}
       {pasoActual === 7 && vistaActual === 'mi_contrato' && usuarioLogueado && puedeVerMiContrato && (
-        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
-          <VistaMiContrato 
-            usuario={usuarioLogueado}
-            empresaId={empresaActual?.id}
-            onVolver={() => setVistaActual('dashboard')}
-          />
-        </div>
+        <VistaMiContrato 
+          usuario={usuarioLogueado}
+          empresaId={empresaActual?.id}
+          onVolver={() => setVistaActual('dashboard')}
+        />
       )}
       
       {/* MIS RECIBOS */}
       {pasoActual === 7 && vistaActual === 'mis_recibos' && usuarioLogueado && puedeVerMisRecibos && (
-        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
-          <MisRecibos 
-            usuario={usuarioLogueado}
-            empresaId={empresaActual?.id}
-            onVolver={() => setVistaActual('dashboard')}
-          />
-        </div>
+        <MisRecibos 
+          usuario={usuarioLogueado}
+          empresaId={empresaActual?.id}
+          onVolver={() => setVistaActual('dashboard')}
+        />
       )}
     </>
   )
