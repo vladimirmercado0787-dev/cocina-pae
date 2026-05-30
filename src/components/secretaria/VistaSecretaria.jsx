@@ -132,6 +132,21 @@ function VistaSecretaria({ usuario, empresaId, onCerrarSesion, onCambiarUsuario,
         color: 'var(--color-text-primary)',
       }}
     >
+      <style>{`
+        @keyframes secrSlideTop {
+          0% { opacity: 0; transform: translateY(-18px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes secrFadeUp {
+          0% { opacity: 0; transform: translateY(22px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes secrFadeIn {
+          0% { opacity: 0; }
+          100% { opacity: 1; }
+        }
+      `}</style>
+
       <div
         style={{
           position: 'fixed',
@@ -147,6 +162,7 @@ function VistaSecretaria({ usuario, empresaId, onCerrarSesion, onCambiarUsuario,
         position: 'relative', zIndex: 1,
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         marginBottom: '20px', flexWrap: 'wrap', gap: '12px',
+        opacity: 0, animation: 'secrSlideTop 0.5s ease forwards',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
           <div style={{
@@ -235,6 +251,7 @@ function VistaSecretaria({ usuario, empresaId, onCerrarSesion, onCambiarUsuario,
           gap: '12px',
           flexWrap: 'wrap',
           boxShadow: esTropical ? '0 2px 8px rgba(24, 95, 165, 0.08)' : 'none',
+          opacity: 0, animation: 'secrFadeUp 0.5s ease 0.1s forwards',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span style={{ fontSize: '24px' }}>👁️</span>
@@ -279,6 +296,7 @@ function VistaSecretaria({ usuario, empresaId, onCerrarSesion, onCambiarUsuario,
         alignItems: 'center',
         gap: '16px',
         boxShadow: esTropical ? `0 2px 12px ${COLOR_SECRETARIA}15` : 'none',
+        opacity: 0, animation: 'secrFadeUp 0.5s ease 0.18s forwards',
       }}>
         <div style={{
           width: '52px',
@@ -311,6 +329,7 @@ function VistaSecretaria({ usuario, empresaId, onCerrarSesion, onCambiarUsuario,
         marginBottom: '20px',
         boxShadow: 'var(--modulo-sombra)',
         overflowX: 'auto',
+        opacity: 0, animation: 'secrFadeUp 0.5s ease 0.28s forwards',
       }}>
         <div style={{ display: 'flex', gap: '4px', minWidth: 'fit-content' }}>
           {TABS.map(tab => {
@@ -350,7 +369,7 @@ function VistaSecretaria({ usuario, empresaId, onCerrarSesion, onCambiarUsuario,
       </div>
 
       {/* CONTENIDO DE TABS */}
-      <div style={{ position: 'relative', zIndex: 1, marginBottom: '24px' }}>
+      <div style={{ position: 'relative', zIndex: 1, marginBottom: '24px', opacity: 0, animation: 'secrFadeUp 0.5s ease 0.38s forwards' }}>
 
         {/* TAB: RESUMEN */}
         {tabActivo === 'resumen' && (
@@ -645,7 +664,7 @@ function VistaSecretaria({ usuario, empresaId, onCerrarSesion, onCambiarUsuario,
       </div>
 
       {/* ACCESOS RÁPIDOS (siempre visibles) */}
-      <div style={{ position: 'relative', zIndex: 1, marginBottom: '24px' }}>
+      <div style={{ position: 'relative', zIndex: 1, marginBottom: '24px', opacity: 0, animation: 'secrFadeUp 0.5s ease 0.48s forwards' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
           <span style={{ fontSize: '14px' }}>⚡</span>
           <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', letterSpacing: '1.5px', fontWeight: 600 }}>
@@ -671,6 +690,7 @@ function VistaSecretaria({ usuario, empresaId, onCerrarSesion, onCambiarUsuario,
           borderTop: '1px solid var(--color-border-subtle)',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           gap: '12px', flexWrap: 'wrap',
+          opacity: 0, animation: 'secrFadeIn 0.6s ease 0.6s forwards',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '14px' }}>🇩🇴</span>

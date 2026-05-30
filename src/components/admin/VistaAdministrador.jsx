@@ -173,6 +173,21 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuar
         color: 'var(--color-text-primary)',
       }}
     >
+      <style>{`
+        @keyframes adminSlideTop {
+          0% { opacity: 0; transform: translateY(-18px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes adminFadeUp {
+          0% { opacity: 0; transform: translateY(22px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes adminFadeIn {
+          0% { opacity: 0; }
+          100% { opacity: 1; }
+        }
+      `}</style>
+
       <div
         style={{
           position: 'fixed',
@@ -231,6 +246,7 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuar
         position: 'relative', zIndex: 1,
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         marginBottom: '24px', flexWrap: 'wrap', gap: '12px',
+        opacity: 0, animation: 'adminSlideTop 0.5s ease forwards',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
           <div style={{
@@ -306,7 +322,7 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuar
       </div>
 
       {/* PROYECCIÓN MENSUAL */}
-      <div style={{ position: 'relative', zIndex: 1, marginBottom: '16px' }}>
+      <div style={{ position: 'relative', zIndex: 1, marginBottom: '16px', opacity: 0, animation: 'adminFadeUp 0.5s ease 0.08s forwards' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
           <span style={{ fontSize: '14px' }}>📊</span>
           <span style={{ fontSize: '11px', color: 'var(--color-text-accent)', opacity: 0.85, letterSpacing: '1.5px', fontWeight: 600 }}>
@@ -347,7 +363,7 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuar
       </div>
 
       {/* OPERACIÓN DE HOY */}
-      <div style={{ position: 'relative', zIndex: 1, marginBottom: '16px', marginTop: '20px' }}>
+      <div style={{ position: 'relative', zIndex: 1, marginBottom: '16px', marginTop: '20px', opacity: 0, animation: 'adminFadeUp 0.5s ease 0.16s forwards' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
           <span style={{ fontSize: '14px' }}>🔥</span>
           <span style={{ fontSize: '11px', color: 'var(--color-text-accent)', opacity: 0.85, letterSpacing: '1.5px', fontWeight: 600 }}>
@@ -367,7 +383,7 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuar
       </div>
 
       {/* MES EN CURSO - Datos reales */}
-      <div style={{ position: 'relative', zIndex: 1, marginBottom: '24px', marginTop: '20px' }}>
+      <div style={{ position: 'relative', zIndex: 1, marginBottom: '24px', marginTop: '20px', opacity: 0, animation: 'adminFadeUp 0.5s ease 0.24s forwards' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
           <span style={{ fontSize: '14px' }}>📈</span>
           <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', letterSpacing: '1.5px', fontWeight: 600 }}>
@@ -383,7 +399,7 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuar
 
       {/* EQUIPO ACTIVO */}
       {usuarios.length > 0 && (
-        <div style={{ position: 'relative', zIndex: 1, marginBottom: '24px' }}>
+        <div style={{ position: 'relative', zIndex: 1, marginBottom: '24px', opacity: 0, animation: 'adminFadeUp 0.5s ease 0.32s forwards' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
             <span style={{ fontSize: '14px' }}>👥</span>
             <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', letterSpacing: '1.5px', fontWeight: 600 }}>
@@ -427,6 +443,7 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuar
           borderRadius: '14px',
           padding: '18px 20px',
           boxShadow: 'var(--modulo-sombra)',
+          opacity: 0, animation: 'adminFadeUp 0.5s ease 0.38s forwards',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
             <span style={{ fontSize: '14px' }}>🚨</span>
@@ -459,7 +476,7 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuar
 
       {/* BOTÓN VER COMO SECRETARIA (si aplica) */}
       {onVerComoSecretaria && (
-        <div style={{ position: 'relative', zIndex: 1, marginBottom: '24px' }}>
+        <div style={{ position: 'relative', zIndex: 1, marginBottom: '24px', opacity: 0, animation: 'adminFadeUp 0.5s ease 0.42s forwards' }}>
           <button
             onClick={onVerComoSecretaria}
             style={{
@@ -489,35 +506,35 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuar
 
       {/* MÓDULOS - 4 CATEGORÍAS */}
       <div style={{ position: 'relative', zIndex: 1, marginBottom: '24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '18px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '18px', opacity: 0, animation: 'adminFadeUp 0.5s ease 0.46s forwards' }}>
           <span style={{ fontSize: '14px' }}>📂</span>
           <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', letterSpacing: '1.5px', fontWeight: 600 }}>
             MÓDULOS
           </span>
         </div>
 
-        <CategoriaBanner cat={CATEGORIAS.finanzas} icon="💰" count={4} tema={tema}>
+        <CategoriaBanner cat={CATEGORIAS.finanzas} icon="💰" count={4} tema={tema} delay={0.5}>
           <Modulo emoji="🧾" label="Factura INABIE"   sublabel="Facturas mensuales" cat={CATEGORIAS.finanzas} tema={tema} onClick={onIrFactura ? onIrFactura : () => mostrarProximamente('Factura INABIE')} />
           <Modulo emoji="🚚" label="Conduces"         sublabel="Mes en curso"       cat={CATEGORIAS.finanzas} tema={tema} onClick={onIrConduces ? onIrConduces : () => mostrarProximamente('Conduces')} />
           <Modulo emoji="💸" label="Gastos"           sublabel="Categorías + RNC"   cat={CATEGORIAS.finanzas} tema={tema} onClick={onIrGastos ? onIrGastos : () => mostrarProximamente('Gastos')} />
           <Modulo emoji="📊" label="Reportes DGII"    sublabel="606 · 607"          cat={CATEGORIAS.finanzas} tema={tema} proximamente onClick={() => mostrarProximamente('Reportes DGII 606/607')} />
         </CategoriaBanner>
 
-        <CategoriaBanner cat={CATEGORIAS.inventario} icon="📦" count={4} tema={tema}>
+        <CategoriaBanner cat={CATEGORIAS.inventario} icon="📦" count={4} tema={tema} delay={0.65}>
           <Modulo emoji="🥕" label="Ingredientes" sublabel="Catálogo"    cat={CATEGORIAS.inventario} tema={tema} onClick={onIrIngredientes ? onIrIngredientes : () => mostrarProximamente('Ingredientes')} />
           <Modulo emoji="🛒" label="Compras"       sublabel="Esta semana" cat={CATEGORIAS.inventario} tema={tema} onClick={onIrCompras ? onIrCompras : () => mostrarProximamente('Compras')} />
           <Modulo emoji="🏪" label="Proveedores"   sublabel="Con RNC"     cat={CATEGORIAS.inventario} tema={tema} onClick={onIrProveedores ? onIrProveedores : () => mostrarProximamente('Proveedores')} />
           <Modulo emoji="👨‍🍳" label="Recetas"      sublabel="Catálogo"    cat={CATEGORIAS.inventario} tema={tema} onClick={onIrCatalogo ? onIrCatalogo : () => mostrarProximamente('Recetas')} />
         </CategoriaBanner>
 
-        <CategoriaBanner cat={CATEGORIAS.personal} icon="👥" count={4} tema={tema}>
+        <CategoriaBanner cat={CATEGORIAS.personal} icon="👥" count={4} tema={tema} delay={0.8}>
           <Modulo emoji="👤" label="Empleados"   sublabel="Equipo"       cat={CATEGORIAS.personal} tema={tema} onClick={onIrEmpleados ? onIrEmpleados : () => mostrarProximamente('Empleados')} />
           <Modulo emoji="💵" label="Nómina"      sublabel="Pagos"        cat={CATEGORIAS.personal} tema={tema} onClick={onIrNomina ? onIrNomina : () => mostrarProximamente('Nómina')} />
           <Modulo emoji="📄" label="Contratos"   sublabel="Por empleado" cat={CATEGORIAS.personal} tema={tema} onClick={onIrContratos ? onIrContratos : () => mostrarProximamente('Contratos')} />
           <Modulo emoji="🧮" label="Calculadora" sublabel="Liquidación"  cat={CATEGORIAS.personal} tema={tema} onClick={onIrCalculadora ? onIrCalculadora : () => mostrarProximamente('Calculadora')} />
         </CategoriaBanner>
 
-        <CategoriaBanner cat={CATEGORIAS.operacion} icon="🧠" count={4} tema={tema}>
+        <CategoriaBanner cat={CATEGORIAS.operacion} icon="🧠" count={4} tema={tema} delay={0.95}>
           <Modulo emoji="🚚" label="Modo Despacho"   sublabel="Operación"   cat={CATEGORIAS.operacion} tema={tema} onClick={onIrDespacho ? onIrDespacho : () => mostrarProximamente('Modo Despacho')} />
           <Modulo emoji="💡" label="Inteligencia"    sublabel="Análisis"    cat={CATEGORIAS.operacion} tema={tema} onClick={onIrInteligencia ? onIrInteligencia : () => mostrarProximamente('Inteligencia')} />
           <Modulo emoji="📜" label="Historial"       sublabel="Todas ops"   cat={CATEGORIAS.operacion} tema={tema} onClick={onIrHistorial ? onIrHistorial : () => mostrarProximamente('Historial')} />
@@ -527,7 +544,7 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuar
 
       {/* MIS COSAS (si aplica) */}
       {(onIrMiContrato || onIrMisRecibos) && (
-        <div style={{ position: 'relative', zIndex: 1, marginBottom: '24px' }}>
+        <div style={{ position: 'relative', zIndex: 1, marginBottom: '24px', opacity: 0, animation: 'adminFadeUp 0.5s ease 1.05s forwards' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
             <span style={{ fontSize: '14px' }}>📌</span>
             <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', letterSpacing: '1.5px', fontWeight: 600 }}>
@@ -586,6 +603,7 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuar
         borderTop: '1px solid var(--color-border-subtle)',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         gap: '12px', flexWrap: 'wrap',
+        opacity: 0, animation: 'adminFadeIn 0.6s ease 1.15s forwards',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '14px' }}>🇩🇴</span>
@@ -655,7 +673,7 @@ function KpiCard({ label, valor, sublabel, children, colorBorde, colorTexto }) {
   )
 }
 
-function CategoriaBanner({ cat, icon, count, children, tema }) {
+function CategoriaBanner({ cat, icon, count, children, tema, delay = 0 }) {
   const esTropical = tema === 'tropical'
 
   return (
@@ -668,6 +686,8 @@ function CategoriaBanner({ cat, icon, count, children, tema }) {
       padding: '26px 28px',
       marginBottom: '16px',
       boxShadow: esTropical ? `0 2px 12px ${cat.color}15` : 'none',
+      opacity: 0,
+      animation: `adminFadeUp 0.6s ease ${delay}s forwards`,
     }}>
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
