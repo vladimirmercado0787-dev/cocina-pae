@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import IntroAndamio from './components/intro/IntroAndamio'
+import IntroCocinaPAE from './components/intro/IntroCocinaPAE'
 import Paso1MiCocina from './components/wizard/Paso1MiCocina'
 import Paso2Escuelas from './components/wizard/Paso2Escuelas'
 import Paso3MenuInabie from './components/wizard/Paso3MenuInabie'
@@ -33,8 +34,9 @@ import VistaNomina from './components/nomina/VistaNomina'
 import MisRecibos from './components/nomina/MisRecibos'
 
 function App() {
-  // 🟡 DEBUG: Forzando intro siempre. Restaurar lógica de localStorage cuando funcione.
+  // 🟡 DEBUG: Intro Andamio forzada siempre. Restaurar lógica de localStorage cuando quieras.
   const [mostrarIntro, setMostrarIntro] = useState(true)
+  const [mostrarIntroCocina, setMostrarIntroCocina] = useState(false)
 
   const [pasoActual, setPasoActual] = useState(7)
   const [empresaActual, setEmpresaActual] = useState(null)
@@ -99,6 +101,11 @@ function App() {
 
   function loginExitoso(usuario) {
     setUsuarioLogueado(usuario)
+    setMostrarIntroCocina(true)
+  }
+
+  function terminarIntroCocina() {
+    setMostrarIntroCocina(false)
     setVistaActual('dashboard')
   }
 
@@ -277,10 +284,17 @@ function App() {
   }
 
   // ═══════════════════════════════════════════════════
-  // INTRO ANDAMIO - Se muestra primero
+  // INTRO ANDAMIO - Se muestra primero (al abrir la app)
   // ═══════════════════════════════════════════════════
   if (mostrarIntro) {
     return <IntroAndamio onTerminada={terminarIntro} />
+  }
+
+  // ═══════════════════════════════════════════════════
+  // INTRO COCINA PAE - Tras poner el PIN, antes del dashboard
+  // ═══════════════════════════════════════════════════
+  if (mostrarIntroCocina && usuarioLogueado) {
+    return <IntroCocinaPAE onTerminada={terminarIntroCocina} />
   }
 
   if (cargando) {

@@ -419,6 +419,21 @@ function DashboardDelDia({
         color: 'var(--color-text-primary)',
       }}
     >
+      <style>{`
+        @keyframes dashSlideTop {
+          0% { opacity: 0; transform: translateY(-18px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes dashFadeUp {
+          0% { opacity: 0; transform: translateY(22px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes dashFadeIn {
+          0% { opacity: 0; }
+          100% { opacity: 1; }
+        }
+      `}</style>
+
       <div
         style={{
           position: 'fixed',
@@ -570,6 +585,7 @@ function DashboardDelDia({
         position: 'relative', zIndex: 1,
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         marginBottom: '24px', flexWrap: 'wrap', gap: '12px',
+        opacity: 0, animation: 'dashSlideTop 0.5s ease forwards',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
           <div style={{
@@ -645,7 +661,7 @@ function DashboardDelDia({
       </div>
 
       {/* OPERACIÓN DE HOY */}
-      <div style={{ position: 'relative', zIndex: 1, marginBottom: '16px' }}>
+      <div style={{ position: 'relative', zIndex: 1, marginBottom: '16px', opacity: 0, animation: 'dashFadeUp 0.5s ease 0.1s forwards' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
           <span style={{ fontSize: '14px' }}>🔥</span>
           <span style={{ fontSize: '11px', color: 'var(--color-text-accent)', opacity: 0.85, letterSpacing: '1.5px', fontWeight: 600 }}>
@@ -678,7 +694,7 @@ function DashboardDelDia({
       </div>
 
       {/* BLOQUE OPERATIVO */}
-      <div style={{ position: 'relative', zIndex: 1, marginBottom: '24px' }}>
+      <div style={{ position: 'relative', zIndex: 1, marginBottom: '24px', opacity: 0, animation: 'dashFadeUp 0.5s ease 0.2s forwards' }}>
         {escuelasPendientesCount > 0 && (
           <div style={{
             background: 'linear-gradient(135deg, rgba(29, 158, 117, 0.18) 0%, rgba(15, 110, 86, 0.08) 100%)',
@@ -854,7 +870,7 @@ function DashboardDelDia({
 
       {/* ESCUELAS DEL DÍA */}
       {escuelas.length > 0 && (
-        <div style={{ position: 'relative', zIndex: 1, marginBottom: '24px' }}>
+        <div style={{ position: 'relative', zIndex: 1, marginBottom: '24px', opacity: 0, animation: 'dashFadeUp 0.5s ease 0.3s forwards' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
             <span style={{ fontSize: '14px' }}>🏫</span>
             <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', letterSpacing: '1.5px', fontWeight: 600 }}>
@@ -974,35 +990,35 @@ function DashboardDelDia({
 
       {/* MÓDULOS - 4 CATEGORÍAS */}
       <div style={{ position: 'relative', zIndex: 1, marginBottom: '24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '18px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '18px', opacity: 0, animation: 'dashFadeUp 0.5s ease 0.4s forwards' }}>
           <span style={{ fontSize: '14px' }}>📂</span>
           <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', letterSpacing: '1.5px', fontWeight: 600 }}>
             MÓDULOS
           </span>
         </div>
 
-        <CategoriaBanner cat={CATEGORIAS.finanzas} icon="💰" count={4} tema={tema}>
+        <CategoriaBanner cat={CATEGORIAS.finanzas} icon="💰" count={4} tema={tema} delay={0.5}>
           <Modulo emoji="🧾" label="Factura INABIE"   sublabel="Facturas mensuales" cat={CATEGORIAS.finanzas} tema={tema} onClick={onIrFactura ? () => onIrFactura() : () => mostrarProximamente('Factura INABIE')} />
           <Modulo emoji="🚚" label="Conduces"         sublabel="Mes en curso"       cat={CATEGORIAS.finanzas} tema={tema} onClick={onIrConduces ? () => onIrConduces() : () => mostrarProximamente('Conduces')} />
           <Modulo emoji="💸" label="Gastos"           sublabel="Categorías + RNC"   cat={CATEGORIAS.finanzas} tema={tema} onClick={onIrGastos ? onIrGastos : () => mostrarProximamente('Gastos')} />
           <Modulo emoji="📊" label="Reportes DGII"    sublabel="606 · 607"          cat={CATEGORIAS.finanzas} tema={tema} proximamente onClick={() => mostrarProximamente('Reportes DGII 606/607')} />
         </CategoriaBanner>
 
-        <CategoriaBanner cat={CATEGORIAS.inventario} icon="📦" count={4} tema={tema}>
+        <CategoriaBanner cat={CATEGORIAS.inventario} icon="📦" count={4} tema={tema} delay={0.65}>
           <Modulo emoji="🥕" label="Ingredientes" sublabel="Catálogo"    cat={CATEGORIAS.inventario} tema={tema} onClick={onIrIngredientes ? onIrIngredientes : () => mostrarProximamente('Ingredientes')} />
           <Modulo emoji="🛒" label="Compras"       sublabel="Esta semana" cat={CATEGORIAS.inventario} tema={tema} onClick={onIrCompras ? onIrCompras : () => mostrarProximamente('Compras')} />
           <Modulo emoji="🏪" label="Proveedores"   sublabel="Con RNC"     cat={CATEGORIAS.inventario} tema={tema} onClick={onIrProveedores ? onIrProveedores : () => mostrarProximamente('Proveedores')} />
           <Modulo emoji="👨‍🍳" label="Recetas"      sublabel="Catálogo"    cat={CATEGORIAS.inventario} tema={tema} onClick={onIrCatalogo ? onIrCatalogo : () => mostrarProximamente('Recetas')} />
         </CategoriaBanner>
 
-        <CategoriaBanner cat={CATEGORIAS.personal} icon="👥" count={4} tema={tema}>
+        <CategoriaBanner cat={CATEGORIAS.personal} icon="👥" count={4} tema={tema} delay={0.8}>
           <Modulo emoji="👤" label="Empleados"   sublabel="Equipo"       cat={CATEGORIAS.personal} tema={tema} onClick={onIrEmpleados ? onIrEmpleados : () => mostrarProximamente('Empleados')} />
           <Modulo emoji="💵" label="Nómina"      sublabel="Pagos"        cat={CATEGORIAS.personal} tema={tema} onClick={onIrNomina ? onIrNomina : () => mostrarProximamente('Nómina')} />
           <Modulo emoji="📄" label="Contratos"   sublabel="Por empleado" cat={CATEGORIAS.personal} tema={tema} onClick={onIrContratos ? onIrContratos : () => mostrarProximamente('Contratos')} />
           <Modulo emoji="🧮" label="Calculadora" sublabel="Liquidación"  cat={CATEGORIAS.personal} tema={tema} onClick={onIrCalculadora ? onIrCalculadora : () => mostrarProximamente('Calculadora')} />
         </CategoriaBanner>
 
-        <CategoriaBanner cat={CATEGORIAS.operacion} icon="🧠" count={4} tema={tema}>
+        <CategoriaBanner cat={CATEGORIAS.operacion} icon="🧠" count={4} tema={tema} delay={0.95}>
           <Modulo emoji="💡" label="Inteligencia"    sublabel="Análisis"  cat={CATEGORIAS.operacion} tema={tema} onClick={onIrInteligencia ? onIrInteligencia : () => mostrarProximamente('Inteligencia')} />
           <Modulo emoji="📜" label="Historial"       sublabel="Todas ops" cat={CATEGORIAS.operacion} tema={tema} onClick={onIrHistorial ? onIrHistorial : () => mostrarProximamente('Historial')} />
           <Modulo emoji="🏫" label="Centros INABIE"  sublabel={`${escuelas.length} escuelas`} cat={CATEGORIAS.operacion} tema={tema} proximamente onClick={() => mostrarProximamente('Centros INABIE')} />
@@ -1017,6 +1033,7 @@ function DashboardDelDia({
         borderTop: '1px solid var(--color-border-subtle)',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         gap: '12px', flexWrap: 'wrap',
+        opacity: 0, animation: 'dashFadeIn 0.6s ease 1.1s forwards',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '14px' }}>🇩🇴</span>
@@ -1081,7 +1098,7 @@ function KpiCard({ label, valor, children, colorBorde, colorTexto }) {
   )
 }
 
-function CategoriaBanner({ cat, icon, count, children, tema }) {
+function CategoriaBanner({ cat, icon, count, children, tema, delay = 0 }) {
   const esTropical = tema === 'tropical'
 
   return (
@@ -1094,6 +1111,8 @@ function CategoriaBanner({ cat, icon, count, children, tema }) {
       padding: '26px 28px',
       marginBottom: '16px',
       boxShadow: esTropical ? `0 2px 12px ${cat.color}15` : 'none',
+      opacity: 0,
+      animation: `dashFadeUp 0.6s ease ${delay}s forwards`,
     }}>
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
