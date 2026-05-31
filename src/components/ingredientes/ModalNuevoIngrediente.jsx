@@ -26,10 +26,16 @@ function ModalNuevoIngrediente({ empresaId, ingredienteEditando, onCerrar, onGua
   const [stockMinimo, setStockMinimo] = useState('')
   const [ultimoCosto, setUltimoCosto] = useState('')
   const [todosIngredientes, setTodosIngredientes] = useState([])
-
   const [guardando, setGuardando] = useState(false)
   const [eliminando, setEliminando] = useState(false)
   const [error, setError] = useState('')
+
+  // Tema dual (mismo patrón del Dashboard)
+  const [tema, setTema] = useState(() => localStorage.getItem('cocina_pae_tema') || 'oscuro')
+  useEffect(() => {
+    document.documentElement.setAttribute('data-tema', tema)
+    localStorage.setItem('cocina_pae_tema', tema)
+  }, [tema])
 
   useEffect(() => {
     if (esEdicion) {
@@ -44,284 +50,314 @@ function ModalNuevoIngrediente({ empresaId, ingredienteEditando, onCerrar, onGua
 
   async function cargarTodosIngredientes() {
     const { data } = await supabase
-      .from('ingredientes')
-      .select('id, nombre')
-      .eq('empresa_id', empresaId)
+      .from('ingredientes').select('id, nombre').eq('empresa_id', empresaId)
     setTodosIngredientes(data || [])
   }
 
-  // Preview del nombre normalizado
   const nombreNormalizado = normalizarNombre(nombre)
 
-  // Detección en vivo de duplicado
   const duplicadoDetectado = nombre.trim() && todosIngredientes.find(i => {
-    // Si estamos editando, ignorar el propio ingrediente
     if (esEdicion && i.id === ingredienteEditando.id) return false
     return sonIguales(i.nombre, nombre)
   })
 
   async function guardar() {
     setError('')
-
-    if (!nombreNormalizado) {
-      setError('El nombre es obligatorio')
-      return
-    }
-
-    // ✨ Validación de duplicados con normalización
+    if (!nombreNormalizado) { setError('El nombre es obligatorio'); return }
     if (duplicadoDetectado) {
       setError(`Ya existe el ingrediente "${duplicadoDetectado.nombre}". Edítalo en vez de crear duplicado.`)
       return
     }
 
     setGuardando(true)
-
     const datos = {
-      nombre: nombreNormalizado,  // ✨ Siempre guardar normalizado
+      nombre: nombreNormalizado,
       unidad_stock: unidad,
       stock_actual: parseFloat(stockActual) || 0,
       stock_minimo: parseFloat(stockMinimo) || 0,
       ultimo_costo: parseFloat(ultimoCosto) || null,
     }
 
-    let resultado
-    if (esEdicion) {
-      resultado = await supabase
-        .from('ingredientes')
-        .update(datos)
-        .eq('id', ingredienteEditando.id)
-    } else {
-      resultado = await supabase
-        .from('ingredientes')
-        .insert([{ ...datos, empresa_id: empresaId }])
-    }
+    const resultado = esEdicion
+      ? await supabase.from('ingredientes').update(datos).eq('id', ingredienteEditando.id)
+      : await supabase.from('ingredientes').insert([{ ...datos, empresa_id: empresaId }])
 
     setGuardando(false)
-
-    if (resultado.error) {
-      setError('Error: ' + resultado.error.message)
-      return
-    }
-
+    if (resultado.error) { setError('Error: ' + resultado.error.message); return }
     onGuardado()
   }
 
   async function eliminar() {
     if (!esEdicion) return
-    
     const confirmar = window.confirm(
       `¿Eliminar el ingrediente "${ingredienteEditando.nombre}"? Esta acción no se puede deshacer.`
     )
     if (!confirmar) return
 
     setEliminando(true)
-    
-    const { error: errDel } = await supabase
-      .from('ingredientes')
-      .delete()
-      .eq('id', ingredienteEditando.id)
-
+    const { error: errDel } = await supabase.from('ingredientes').delete().eq('id', ingredienteEditando.id)
     setEliminando(false)
-
-    if (errDel) {
-      setError('Error al eliminar: ' + errDel.message)
-      return
-    }
-
+    if (errDel) { setError('Error al eliminar: ' + errDel.message); return }
     onGuardado()
   }
 
-  // ¿El nombre va a cambiar al normalizar?
   const cambiarAlNormalizar = nombre.trim() && nombre !== nombreNormalizado
 
+  // ─── ESTILOS ───
+  const inputStyle = {
+    width: '100%', boxSizing: 'border-box',
+    background: 'var(--color-bg-input)',
+    border: '1px solid var(--color-border-subtle)',
+    borderRadius: '10px', padding: '10px 12px',
+    color: 'var(--color-text-primary)',
+    fontSize: '13px', fontFamily: 'inherit', outline: 'none',
+  }
+  const labelStyle = {
+    display: 'block', fontSize: '10px', fontWeight: 500,
+    color: 'var(--color-text-muted)', marginBottom: '6px',
+    letterSpacing: '0.5px', textTransform: 'uppercase',
+  }
+
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[95vh] overflow-hidden flex flex-col">
-        
-        {/* HEADER */}
-        <div className="bg-gradient-to-r from-green-600 to-emerald-700 text-white px-6 py-4">
-          <div className="flex justify-between items-start">
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 90,
+      background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
+      display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+      padding: '20px', overflowY: 'auto',
+    }}>
+      <div style={{
+        background: 'var(--color-bg-primary)',
+        border: '1px solid var(--color-border-accent)',
+        borderRadius: '16px',
+        maxWidth: '500px', width: '100%',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+        display: 'flex', flexDirection: 'column',
+        maxHeight: '95vh', overflow: 'hidden',
+      }}>
+
+        {/* HEADER del modal */}
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '20px 24px',
+          borderBottom: '1px solid var(--color-border-subtle)',
+          flexWrap: 'wrap', gap: '12px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{
+              width: '44px', height: '44px', borderRadius: '12px',
+              background: 'rgba(29, 158, 117, 0.18)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '22px',
+            }}>🥕</div>
             <div>
-              <p className="text-xs opacity-80 tracking-wider">
+              <div style={{ fontSize: '10px', color: '#1D9E75', letterSpacing: '1.5px', fontWeight: 600 }}>
                 {esEdicion ? 'EDITAR INGREDIENTE' : 'NUEVO INGREDIENTE'}
-              </p>
-              <h2 className="text-xl font-bold mt-1">
-                {esEdicion ? '✏️ Editar' : '🥕 Crear ingrediente'}
-              </h2>
+              </div>
+              <div style={{ fontSize: '18px', fontWeight: 500, color: 'var(--color-text-primary)', marginTop: '2px' }}>
+                {esEdicion ? '✏️ Editar' : 'Crear ingrediente'}
+              </div>
             </div>
-            <button
-              onClick={onCerrar}
-              disabled={guardando || eliminando}
-              className="text-2xl opacity-70 hover:opacity-100"
-            >
-              ✕
-            </button>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center',
+              background: 'var(--color-bg-elevated)',
+              border: '1px solid var(--color-border-subtle)',
+              borderRadius: '20px', padding: '3px', gap: '2px',
+            }}>
+              <button type="button" onClick={() => setTema('oscuro')} style={{
+                background: tema === 'oscuro' ? 'var(--gradient-toggle-active)' : 'transparent',
+                border: 'none', borderRadius: '16px', padding: '6px 10px',
+                display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer',
+              }}>
+                <span style={{ fontSize: '11px' }}>🌙</span>
+                <span style={{ fontSize: '10px', fontWeight: 500, color: tema === 'oscuro' ? 'white' : 'var(--color-text-muted)' }}>Oscuro</span>
+              </button>
+              <button type="button" onClick={() => setTema('tropical')} style={{
+                background: tema === 'tropical' ? 'var(--gradient-toggle-active)' : 'transparent',
+                border: 'none', borderRadius: '16px', padding: '6px 10px',
+                display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer',
+              }}>
+                <span style={{ fontSize: '11px' }}>☀️</span>
+                <span style={{ fontSize: '10px', fontWeight: 500, color: tema === 'tropical' ? 'white' : 'var(--color-text-muted)' }}>Claro</span>
+              </button>
+            </div>
+            <button onClick={onCerrar} disabled={guardando || eliminando} style={{
+              background: 'var(--color-bg-elevated)',
+              border: '1px solid var(--color-border-subtle)',
+              borderRadius: '20px', padding: '7px 14px',
+              color: 'var(--color-text-secondary)', fontSize: '12px',
+              cursor: (guardando || eliminando) ? 'not-allowed' : 'pointer',
+              opacity: (guardando || eliminando) ? 0.6 : 1, fontFamily: 'inherit',
+            }}>✖ Cerrar</button>
           </div>
         </div>
 
-        {/* CONTENIDO */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          
+        {/* BODY */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+
+          {/* NOMBRE */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Nombre del ingrediente <span className="text-red-500">*</span>
+            <label style={labelStyle}>
+              Nombre del ingrediente <span style={{ color: '#E24B4A' }}>*</span>
             </label>
-            <input
-              type="text"
-              value={nombre}
+            <input type="text" value={nombre}
               onChange={(e) => setNombre(e.target.value)}
               onBlur={(e) => setNombre(normalizarNombre(e.target.value))}
               placeholder="Ej: Pollo, Arroz, Cebolla..."
               autoFocus={!esEdicion}
               disabled={guardando || eliminando}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-            />
-            
-            {/* Preview de normalización */}
+              style={inputStyle} />
+
             {cambiarAlNormalizar && (
-              <p className="text-xs text-blue-700 mt-1 bg-blue-50 px-2 py-1 rounded">
+              <div style={{
+                fontSize: '11px', marginTop: '6px', padding: '6px 10px',
+                background: 'rgba(55, 138, 221, 0.12)',
+                border: '1px solid rgba(55, 138, 221, 0.3)',
+                borderRadius: '8px',
+                color: '#378ADD',
+              }}>
                 💡 Se guardará como: <strong>{nombreNormalizado}</strong>
-              </p>
+              </div>
             )}
 
-            {/* Alerta de duplicado */}
             {duplicadoDetectado && (
-              <p className="text-xs text-orange-700 mt-1 bg-orange-50 border border-orange-200 px-2 py-1 rounded">
+              <div style={{
+                fontSize: '11px', marginTop: '6px', padding: '6px 10px',
+                background: 'rgba(239, 159, 39, 0.12)',
+                border: '1px solid rgba(239, 159, 39, 0.35)',
+                borderRadius: '8px',
+                color: '#EF9F27',
+              }}>
                 ⚠️ Ya existe: <strong>{duplicadoDetectado.nombre}</strong>. Edita el existente en vez de crear duplicado.
-              </p>
+              </div>
             )}
           </div>
 
+          {/* UNIDAD */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Unidad de medida <span className="text-red-500">*</span>
+            <label style={labelStyle}>
+              Unidad de medida <span style={{ color: '#E24B4A' }}>*</span>
             </label>
-            <select
-              value={unidad}
-              onChange={(e) => setUnidad(e.target.value)}
-              disabled={guardando || eliminando}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-            >
-              {UNIDADES_COMUNES.map(u => (
-                <option key={u.id} value={u.id}>{u.label}</option>
-              ))}
+            <select value={unidad} onChange={(e) => setUnidad(e.target.value)}
+              disabled={guardando || eliminando} style={inputStyle}>
+              {UNIDADES_COMUNES.map(u => <option key={u.id} value={u.id}>{u.label}</option>)}
             </select>
-            <p className="text-xs text-gray-500 mt-1">
+            <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '6px' }}>
               💡 Si cambias la unidad, el stock anterior podría no tener sentido
-            </p>
+            </div>
           </div>
 
-          {/* STOCK */}
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
-            <p className="text-xs text-blue-700 font-semibold tracking-wider">📦 INVENTARIO</p>
-            
-            <div className="grid grid-cols-2 gap-3">
+          {/* INVENTARIO */}
+          <div style={{
+            background: 'rgba(55, 138, 221, 0.12)',
+            border: '1px solid rgba(55, 138, 221, 0.35)',
+            borderLeft: '4px solid #378ADD',
+            borderRadius: '12px', padding: '14px',
+            display: 'flex', flexDirection: 'column', gap: '10px',
+          }}>
+            <div style={{ fontSize: '11px', color: '#378ADD', letterSpacing: '1.5px', fontWeight: 600 }}>
+              📦 INVENTARIO
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px' }}>
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Stock actual
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  value={stockActual}
-                  onChange={(e) => setStockActual(e.target.value)}
-                  placeholder="0"
+                <label style={labelStyle}>Stock actual</label>
+                <input type="number" step="0.1" min="0" value={stockActual}
+                  onChange={(e) => setStockActual(e.target.value)} placeholder="0"
                   disabled={guardando || eliminando}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono"
-                />
+                  style={{ ...inputStyle, fontFamily: 'monospace' }} />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Stock mínimo (alerta)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  value={stockMinimo}
-                  onChange={(e) => setStockMinimo(e.target.value)}
-                  placeholder="0"
+                <label style={labelStyle}>Stock mínimo (alerta)</label>
+                <input type="number" step="0.1" min="0" value={stockMinimo}
+                  onChange={(e) => setStockMinimo(e.target.value)} placeholder="0"
                   disabled={guardando || eliminando}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono"
-                />
+                  style={{ ...inputStyle, fontFamily: 'monospace' }} />
               </div>
             </div>
 
-            <p className="text-xs text-blue-700">
+            <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
               ℹ️ El stock se actualiza automáticamente cuando registras compras detalladas
-            </p>
+            </div>
           </div>
 
           {/* COSTO */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Último costo unitario (opcional)
-            </label>
-            <div className="flex items-center gap-2">
-              <span className="text-gray-700 font-bold">RD$</span>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={ultimoCosto}
-                onChange={(e) => setUltimoCosto(e.target.value)}
-                placeholder="0.00"
+            <label style={labelStyle}>Último costo unitario (opcional)</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ color: 'var(--color-text-primary)', fontWeight: 600, fontSize: '13px' }}>RD$</span>
+              <input type="number" step="0.01" min="0" value={ultimoCosto}
+                onChange={(e) => setUltimoCosto(e.target.value)} placeholder="0.00"
                 disabled={guardando || eliminando}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm font-mono"
-              />
-              <span className="text-gray-500 text-sm">/ {unidad}</span>
+                style={{ ...inputStyle, flex: 1, fontFamily: 'monospace' }} />
+              <span style={{ color: 'var(--color-text-muted)', fontSize: '12px' }}>/ {unidad}</span>
             </div>
-            <p className="text-xs text-gray-500 mt-1">
+            <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '6px' }}>
               Se actualiza automáticamente con cada compra
-            </p>
+            </div>
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
-              ⚠️ {error}
-            </div>
+            <div style={{
+              background: 'rgba(244, 67, 54, 0.12)',
+              border: '1px solid rgba(244, 67, 54, 0.35)',
+              borderRadius: '10px', padding: '12px',
+              fontSize: '12px', color: '#F4C0D1',
+            }}>⚠️ {error}</div>
           )}
-
         </div>
 
         {/* FOOTER */}
-        <div className="bg-gray-50 border-t border-gray-200 px-6 py-4">
-          
+        <div style={{
+          padding: '16px 24px',
+          borderTop: '1px solid var(--color-border-subtle)',
+          background: 'var(--color-bg-elevated)',
+        }}>
           {esEdicion && (
-            <button
-              onClick={eliminar}
-              disabled={guardando || eliminando}
-              className="w-full px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg text-sm font-semibold mb-3 transition disabled:opacity-50"
-            >
+            <button onClick={eliminar} disabled={guardando || eliminando} style={{
+              width: '100%', padding: '10px',
+              background: 'transparent',
+              border: '1px solid rgba(244, 67, 54, 0.35)',
+              borderRadius: '10px',
+              color: '#F4C0D1',
+              fontSize: '12px', fontWeight: 500,
+              cursor: (guardando || eliminando) ? 'not-allowed' : 'pointer',
+              opacity: (guardando || eliminando) ? 0.6 : 1,
+              fontFamily: 'inherit', marginBottom: '10px',
+            }}>
               {eliminando ? '⏳ Eliminando...' : '🗑️ Eliminar ingrediente'}
             </button>
           )}
 
-          <div className="flex gap-3">
-            <button
-              onClick={onCerrar}
-              disabled={guardando || eliminando}
-              className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-100"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={guardar}
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <button onClick={onCerrar} disabled={guardando || eliminando} style={{
+              flex: 1, minWidth: '120px', padding: '14px',
+              background: 'var(--color-bg-input)',
+              border: '1px solid var(--color-border-subtle)',
+              borderRadius: '10px',
+              color: 'var(--color-text-secondary)',
+              fontSize: '13px', fontWeight: 500,
+              cursor: (guardando || eliminando) ? 'not-allowed' : 'pointer',
+              opacity: (guardando || eliminando) ? 0.6 : 1, fontFamily: 'inherit',
+            }}>Cancelar</button>
+
+            <button onClick={guardar}
               disabled={guardando || eliminando || !nombre.trim() || duplicadoDetectado}
-              className="flex-1 px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold transition disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {guardando ? (
-                <>
-                  <span className="animate-spin">⏳</span> Guardando...
-                </>
-              ) : (
-                <>💾 {esEdicion ? 'Guardar cambios' : 'Crear ingrediente'}</>
-              )}
+              style={{
+                flex: 2, minWidth: '180px', padding: '14px',
+                background: 'linear-gradient(135deg, #1D9E75 0%, #0F6E56 100%)',
+                border: 'none', borderRadius: '10px',
+                color: 'white', fontSize: '13px', fontWeight: 600,
+                cursor: (guardando || eliminando || !nombre.trim() || duplicadoDetectado) ? 'not-allowed' : 'pointer',
+                opacity: (guardando || eliminando || !nombre.trim() || duplicadoDetectado) ? 0.6 : 1,
+                fontFamily: 'inherit',
+              }}>
+              {guardando ? '⏳ Guardando...' : (esEdicion ? '💾 Guardar cambios' : '💾 Crear ingrediente')}
             </button>
           </div>
         </div>
-
       </div>
     </div>
   )

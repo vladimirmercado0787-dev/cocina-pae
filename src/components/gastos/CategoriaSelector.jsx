@@ -3,37 +3,35 @@ import { supabase } from '../../supabaseClient'
 import { normalizarNombre, sonIguales } from '../../utils/normalizarTexto'
 
 const ICONOS_DISPONIBLES = [
-  '💸', '⛽', '🔥', '⚡', '🚗', '🏢', '📦', '🧑‍💼', 
+  '💸', '⛽', '🔥', '⚡', '🚗', '🏢', '📦', '🧑‍💼',
   '💼', '🏛️', '📋', '🍽️', '🎁', '📞', '🌐', '🛒',
   '🧹', '🔧', '💊', '📚', '🎓', '🏥', '✈️', '🏨'
 ]
 
 const COLORES_DISPONIBLES = [
-  { id: 'amber', label: 'Ámbar', class: 'bg-amber-500' },
-  { id: 'red', label: 'Rojo', class: 'bg-red-500' },
-  { id: 'yellow', label: 'Amarillo', class: 'bg-yellow-500' },
-  { id: 'blue', label: 'Azul', class: 'bg-blue-500' },
-  { id: 'purple', label: 'Morado', class: 'bg-purple-500' },
-  { id: 'pink', label: 'Rosa', class: 'bg-pink-500' },
-  { id: 'indigo', label: 'Índigo', class: 'bg-indigo-500' },
-  { id: 'slate', label: 'Pizarra', class: 'bg-slate-500' },
-  { id: 'green', label: 'Verde', class: 'bg-green-500' },
-  { id: 'gray', label: 'Gris', class: 'bg-gray-500' },
+  { id: 'amber',  label: 'Ámbar',    hex: '#EF9F27' },
+  { id: 'red',    label: 'Rojo',     hex: '#E24B4A' },
+  { id: 'yellow', label: 'Amarillo', hex: '#FAC775' },
+  { id: 'blue',   label: 'Azul',     hex: '#378ADD' },
+  { id: 'purple', label: 'Morado',   hex: '#7F77DD' },
+  { id: 'pink',   label: 'Rosa',     hex: '#D4537E' },
+  { id: 'indigo', label: 'Índigo',   hex: '#534AB7' },
+  { id: 'slate',  label: 'Pizarra',  hex: '#64748B' },
+  { id: 'green',  label: 'Verde',    hex: '#1D9E75' },
+  { id: 'gray',   label: 'Gris',     hex: '#9CA3AF' },
 ]
 
-function CategoriaSelector({ 
-  empresaId, 
-  categorias, 
+function CategoriaSelector({
+  empresaId,
+  categorias,
   categoriaSeleccionada,
   onSeleccionar,
   onCategoriaCreada,
-  disabled = false 
+  disabled = false
 }) {
   const [busqueda, setBusqueda] = useState('')
   const [mostrarDropdown, setMostrarDropdown] = useState(false)
   const [modoCrear, setModoCrear] = useState(false)
-
-  // Form nueva categoría
   const [nuevoNombre, setNuevoNombre] = useState('')
   const [nuevoIcono, setNuevoIcono] = useState('💸')
   const [nuevoColor, setNuevoColor] = useState('gray')
@@ -46,24 +44,18 @@ function CategoriaSelector({
   useEffect(() => {
     function handleClickOutside(e) {
       if (containerRef.current && !containerRef.current.contains(e.target)) {
-        if (!modoCrear) {
-          setMostrarDropdown(false)
-        }
+        if (!modoCrear) setMostrarDropdown(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [modoCrear])
 
-  // Filtrado
   const categoriasActivas = categorias.filter(c => c.activa)
   const categoriasFiltradas = busqueda.trim()
-    ? categoriasActivas.filter(c => 
-        c.nombre.toLowerCase().includes(busqueda.toLowerCase())
-      )
+    ? categoriasActivas.filter(c => c.nombre.toLowerCase().includes(busqueda.toLowerCase()))
     : categoriasActivas
 
-  // Detectar similar
   const categoriaSimilar = busqueda.trim()
     ? categoriasActivas.find(c => sonIguales(c.nombre, busqueda))
     : null
@@ -82,10 +74,7 @@ function CategoriaSelector({
   }
 
   function iniciarCreacion() {
-    if (categoriaSimilar) {
-      seleccionar(categoriaSimilar)
-      return
-    }
+    if (categoriaSimilar) { seleccionar(categoriaSimilar); return }
     setNuevoNombre(normalizarNombre(busqueda.trim()))
     setNuevoIcono('💸')
     setNuevoColor('gray')
@@ -102,11 +91,7 @@ function CategoriaSelector({
   async function guardarNuevaCategoria() {
     setErrorCrear('')
     const nombreNormalizado = normalizarNombre(nuevoNombre)
-
-    if (!nombreNormalizado) {
-      setErrorCrear('El nombre es obligatorio')
-      return
-    }
+    if (!nombreNormalizado) { setErrorCrear('El nombre es obligatorio'); return }
 
     const existeIgual = categoriasActivas.find(c => sonIguales(c.nombre, nombreNormalizado))
     if (existeIgual) {
@@ -116,10 +101,7 @@ function CategoriaSelector({
     }
 
     setCreando(true)
-
-    // Calcular siguiente orden
     const maxOrden = Math.max(0, ...categorias.map(c => c.orden || 0))
-
     const nueva = {
       empresa_id: empresaId,
       nombre: nombreNormalizado,
@@ -130,47 +112,54 @@ function CategoriaSelector({
       orden: maxOrden + 1
     }
 
-    const { data, error } = await supabase
-      .from('categorias_gasto')
-      .insert([nueva])
-      .select()
-      .single()
-
+    const { data, error } = await supabase.from('categorias_gasto').insert([nueva]).select().single()
     setCreando(false)
-
-    if (error) {
-      setErrorCrear('Error: ' + error.message)
-      return
-    }
+    if (error) { setErrorCrear('Error: ' + error.message); return }
 
     if (onCategoriaCreada) onCategoriaCreada(data)
     onSeleccionar(data)
-    
     setBusqueda('')
     setMostrarDropdown(false)
     setModoCrear(false)
   }
 
-  // MODO CREAR
+  // ─── ESTILOS BASE ───
+  const inputStyle = {
+    width: '100%', boxSizing: 'border-box',
+    background: 'var(--color-bg-input)',
+    border: '1px solid var(--color-border-subtle)',
+    borderRadius: '10px', padding: '10px 12px',
+    color: 'var(--color-text-primary)',
+    fontSize: '13px', fontFamily: 'inherit', outline: 'none',
+  }
+  const labelStyle = {
+    display: 'block', fontSize: '10px', fontWeight: 500,
+    color: 'var(--color-text-muted)', marginBottom: '6px',
+    letterSpacing: '0.5px', textTransform: 'uppercase',
+  }
+
+  // ═══ MODO CREAR ═══
   if (modoCrear) {
     return (
-      <div ref={containerRef} className="relative">
-        <div className="bg-green-50 border-2 border-green-300 rounded-xl p-3 space-y-3">
-          <div className="flex justify-between items-center">
-            <p className="text-xs text-green-700 font-bold tracking-wider">
+      <div ref={containerRef} style={{ position: 'relative' }}>
+        <div style={{
+          background: 'rgba(29, 158, 117, 0.12)',
+          border: '1px solid rgba(29, 158, 117, 0.4)',
+          borderLeft: '4px solid #1D9E75',
+          borderRadius: '12px', padding: '14px',
+          display: 'flex', flexDirection: 'column', gap: '12px',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontSize: '11px', color: '#1D9E75', letterSpacing: '1.5px', fontWeight: 600 }}>
               ➕ NUEVA CATEGORÍA
-            </p>
-            <button
-              type="button"
-              onClick={cancelarCreacion}
-              disabled={creando}
-              className="text-xs text-gray-500 hover:text-gray-700 underline"
-            >
-              Cancelar
-            </button>
+            </div>
+            <button type="button" onClick={cancelarCreacion} disabled={creando} style={{
+              background: 'transparent', border: 'none',
+              color: 'var(--color-text-muted)', fontSize: '11px',
+              cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline',
+            }}>Cancelar</button>
           </div>
 
-          {/* Nombre */}
           <div>
             <input
               type="text"
@@ -178,62 +167,65 @@ function CategoriaSelector({
               onChange={(e) => setNuevoNombre(e.target.value)}
               onBlur={(e) => setNuevoNombre(normalizarNombre(e.target.value))}
               placeholder="Nombre de la categoría"
-              autoFocus
-              disabled={creando}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              autoFocus disabled={creando}
+              style={inputStyle}
             />
-            <p className="text-xs text-gray-500 mt-1">
-              💡 Se guardará como: <strong>{normalizarNombre(nuevoNombre) || '(escribe el nombre)'}</strong>
-            </p>
+            <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+              💡 Se guardará como: <strong style={{ color: 'var(--color-text-primary)' }}>{normalizarNombre(nuevoNombre) || '(escribe el nombre)'}</strong>
+            </div>
           </div>
 
           {/* Selector de ícono */}
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Ícono</label>
-            <div className="grid grid-cols-8 gap-1 max-h-20 overflow-y-auto p-2 bg-white rounded border">
+            <label style={labelStyle}>Ícono</label>
+            <div style={{
+              display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: '4px',
+              padding: '8px', maxHeight: '92px', overflowY: 'auto',
+              background: 'var(--color-bg-input)',
+              border: '1px solid var(--color-border-subtle)',
+              borderRadius: '8px',
+            }}>
               {ICONOS_DISPONIBLES.map(icono => (
-                <button
-                  key={icono}
-                  type="button"
-                  onClick={() => setNuevoIcono(icono)}
-                  className={`text-lg p-1 rounded hover:bg-amber-100 ${
-                    nuevoIcono === icono ? 'bg-amber-200 ring-2 ring-amber-500' : ''
-                  }`}
-                >
-                  {icono}
-                </button>
+                <button key={icono} type="button" onClick={() => setNuevoIcono(icono)} style={{
+                  fontSize: '18px', padding: '4px',
+                  background: nuevoIcono === icono ? 'rgba(239, 159, 39, 0.25)' : 'transparent',
+                  border: nuevoIcono === icono ? '1px solid #EF9F27' : '1px solid transparent',
+                  borderRadius: '6px', cursor: 'pointer', fontFamily: 'inherit',
+                }}>{icono}</button>
               ))}
             </div>
           </div>
 
           {/* Selector de color */}
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Color</label>
-            <div className="flex flex-wrap gap-1">
+            <label style={labelStyle}>Color</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
               {COLORES_DISPONIBLES.map(c => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => setNuevoColor(c.id)}
-                  className={`w-6 h-6 rounded-full ${c.class} ${
-                    nuevoColor === c.id ? 'ring-2 ring-offset-2 ring-gray-700' : ''
-                  }`}
-                  title={c.label}
+                <button key={c.id} type="button" onClick={() => setNuevoColor(c.id)} title={c.label}
+                  style={{
+                    width: '26px', height: '26px', borderRadius: '50%',
+                    background: c.hex,
+                    border: nuevoColor === c.id ? '2px solid var(--color-text-primary)' : '2px solid transparent',
+                    boxShadow: nuevoColor === c.id ? '0 0 0 2px var(--color-bg-input)' : 'none',
+                    cursor: 'pointer',
+                  }}
                 />
               ))}
             </div>
           </div>
 
           {errorCrear && (
-            <p className="text-xs text-orange-700">⚠️ {errorCrear}</p>
+            <div style={{ fontSize: '11px', color: '#EF9F27' }}>⚠️ {errorCrear}</div>
           )}
 
-          <button
-            type="button"
-            onClick={guardarNuevaCategoria}
-            disabled={creando}
-            className="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-bold text-sm disabled:opacity-50"
-          >
+          <button type="button" onClick={guardarNuevaCategoria} disabled={creando} style={{
+            width: '100%', padding: '12px',
+            background: 'linear-gradient(135deg, #1D9E75 0%, #0F6E56 100%)',
+            border: 'none', borderRadius: '10px',
+            color: 'white', fontSize: '13px', fontWeight: 600,
+            cursor: creando ? 'not-allowed' : 'pointer',
+            opacity: creando ? 0.6 : 1, fontFamily: 'inherit',
+          }}>
             {creando ? '⏳ Creando...' : `✅ Crear "${nuevoIcono} ${normalizarNombre(nuevoNombre)}"`}
           </button>
         </div>
@@ -241,66 +233,86 @@ function CategoriaSelector({
     )
   }
 
-  // MODO SELECCIONADO
+  // ═══ MODO SELECCIONADO ═══
   if (categoriaSeleccionada) {
     return (
-      <div ref={containerRef} className="relative">
-        <div className="flex items-center gap-2 bg-blue-50 border-2 border-blue-300 rounded-lg p-2">
-          <span className="text-2xl">{categoriaSeleccionada.icono}</span>
-          <div className="flex-1">
-            <p className="font-bold text-blue-900 text-sm">{categoriaSeleccionada.nombre}</p>
+      <div ref={containerRef} style={{ position: 'relative' }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '10px',
+          background: 'rgba(55, 138, 221, 0.12)',
+          border: '1px solid rgba(55, 138, 221, 0.4)',
+          borderLeft: '4px solid #378ADD',
+          borderRadius: '10px', padding: '10px 12px',
+        }}>
+          <span style={{ fontSize: '22px' }}>{categoriaSeleccionada.icono}</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+              {categoriaSeleccionada.nombre}
+            </div>
             {categoriaSeleccionada.es_default && (
-              <p className="text-xs text-blue-600">Categoría por defecto</p>
+              <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Categoría por defecto</div>
             )}
           </div>
           {!disabled && (
-            <button
-              type="button"
-              onClick={quitar}
-              className="text-blue-700 hover:text-red-600 text-xs font-semibold px-2 py-1 rounded"
-            >
-              ✕
-            </button>
+            <button type="button" onClick={quitar} style={{
+              background: 'transparent', border: 'none',
+              color: 'var(--color-text-secondary)', fontSize: '13px',
+              cursor: 'pointer', padding: '4px 8px', borderRadius: '6px',
+              fontFamily: 'inherit',
+            }}>✕</button>
           )}
         </div>
       </div>
     )
   }
 
-  // MODO BÚSQUEDA
+  // ═══ MODO BÚSQUEDA ═══
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} style={{ position: 'relative' }}>
       <input
         type="text"
         value={busqueda}
-        onChange={(e) => {
-          setBusqueda(e.target.value)
-          setMostrarDropdown(true)
-        }}
+        onChange={(e) => { setBusqueda(e.target.value); setMostrarDropdown(true) }}
         onFocus={() => setMostrarDropdown(true)}
         placeholder="🔍 Buscar o crear categoría..."
         disabled={disabled}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
+        style={inputStyle}
       />
 
       {mostrarDropdown && (
-        <div className="absolute z-50 left-0 right-0 mt-1 bg-white border-2 border-gray-200 rounded-lg shadow-2xl max-h-72 overflow-y-auto">
-          
+        <div style={{
+          position: 'absolute', zIndex: 50, left: 0, right: 0,
+          marginTop: '4px',
+          background: 'var(--color-bg-elevated)',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid var(--color-border-accent)',
+          borderRadius: '12px',
+          maxHeight: '300px', overflowY: 'auto',
+          boxShadow: '0 12px 32px rgba(0,0,0,0.3)',
+        }}>
+
           {/* Banner si hay similar */}
           {categoriaSimilar && (
-            <div className="bg-yellow-50 border-b-2 border-yellow-300 p-2">
-              <p className="text-xs text-yellow-900 font-bold mb-1">
-                ⚠️ Ya existe una categoría similar:
-              </p>
-              <button
-                type="button"
-                onClick={() => seleccionar(categoriaSimilar)}
-                className="w-full text-left bg-yellow-100 hover:bg-yellow-200 p-2 rounded text-sm flex items-center gap-2"
-              >
-                <span className="text-xl">{categoriaSimilar.icono}</span>
+            <div style={{
+              background: 'rgba(239, 159, 39, 0.15)',
+              borderBottom: '1px solid rgba(239, 159, 39, 0.3)',
+              padding: '10px 12px',
+            }}>
+              <div style={{ fontSize: '10px', color: '#EF9F27', fontWeight: 600, marginBottom: '6px', letterSpacing: '0.5px' }}>
+                ⚠️ YA EXISTE UNA CATEGORÍA SIMILAR
+              </div>
+              <button type="button" onClick={() => seleccionar(categoriaSimilar)} style={{
+                width: '100%', textAlign: 'left',
+                background: 'rgba(239, 159, 39, 0.12)',
+                border: '1px solid rgba(239, 159, 39, 0.3)',
+                borderRadius: '8px', padding: '8px 10px',
+                display: 'flex', alignItems: 'center', gap: '10px',
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}>
+                <span style={{ fontSize: '20px' }}>{categoriaSimilar.icono}</span>
                 <div>
-                  <p className="font-bold text-yellow-900">{categoriaSimilar.nombre}</p>
-                  <p className="text-xs text-yellow-700">→ Usar esta (recomendado)</p>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>{categoriaSimilar.nombre}</div>
+                  <div style={{ fontSize: '10px', color: '#EF9F27' }}>→ Usar esta (recomendado)</div>
                 </div>
               </button>
             </div>
@@ -308,19 +320,26 @@ function CategoriaSelector({
 
           {/* Lista de categorías */}
           {categoriasFiltradas.length > 0 && (
-            <div className="py-1">
+            <div style={{ padding: '4px 0' }}>
               {categoriasFiltradas.map(cat => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => seleccionar(cat)}
-                  className="w-full text-left px-3 py-2 hover:bg-amber-50 border-b border-gray-100 flex items-center gap-2"
+                <button key={cat.id} type="button" onClick={() => seleccionar(cat)} style={{
+                  width: '100%', textAlign: 'left',
+                  padding: '10px 12px',
+                  background: 'transparent',
+                  border: 'none',
+                  borderBottom: '1px solid var(--color-border-subtle)',
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  cursor: 'pointer', fontFamily: 'inherit',
+                  transition: 'background 0.15s ease',
+                }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-bg-input)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
                 >
-                  <span className="text-xl">{cat.icono}</span>
+                  <span style={{ fontSize: '20px' }}>{cat.icono}</span>
                   <div>
-                    <p className="font-semibold text-gray-900 text-sm">{cat.nombre}</p>
+                    <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-primary)' }}>{cat.nombre}</div>
                     {cat.es_default && (
-                      <p className="text-xs text-gray-500">Por defecto</p>
+                      <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Por defecto</div>
                     )}
                   </div>
                 </button>
@@ -329,35 +348,39 @@ function CategoriaSelector({
           )}
 
           {categoriasFiltradas.length === 0 && busqueda.trim() && !categoriaSimilar && (
-            <div className="p-2 text-center">
-              <p className="text-xs text-gray-600">
-                No se encontró "<strong>{busqueda}</strong>"
-              </p>
+            <div style={{ padding: '12px', textAlign: 'center' }}>
+              <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+                No se encontró "<strong style={{ color: 'var(--color-text-primary)' }}>{busqueda}</strong>"
+              </div>
             </div>
           )}
 
           {/* Botón crear nueva */}
           {!categoriaSimilar && (
-            <button
-              type="button"
-              onClick={iniciarCreacion}
-              className="w-full text-left px-3 py-2 bg-green-50 hover:bg-green-100 border-t-2 border-green-200 flex items-center gap-2"
-            >
-              <span className="text-lg">➕</span>
+            <button type="button" onClick={iniciarCreacion} style={{
+              width: '100%', textAlign: 'left',
+              padding: '10px 12px',
+              background: 'rgba(29, 158, 117, 0.10)',
+              border: 'none',
+              borderTop: '1px solid rgba(29, 158, 117, 0.3)',
+              display: 'flex', alignItems: 'center', gap: '10px',
+              cursor: 'pointer', fontFamily: 'inherit',
+            }}>
+              <span style={{ fontSize: '18px' }}>➕</span>
               <div>
-                <p className="font-bold text-green-900 text-xs">
+                <div style={{ fontSize: '12px', fontWeight: 600, color: '#1D9E75' }}>
                   Crear nueva categoría
                   {busqueda.trim() && (
-                    <span className="text-green-700"> "{normalizarNombre(busqueda.trim())}"</span>
+                    <span> "{normalizarNombre(busqueda.trim())}"</span>
                   )}
-                </p>
-                <p className="text-xs text-green-700">Personaliza ícono y color</p>
+                </div>
+                <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Personaliza ícono y color</div>
               </div>
             </button>
           )}
 
           {categoriasFiltradas.length === 0 && !busqueda.trim() && (
-            <div className="p-3 text-center text-xs text-gray-500">
+            <div style={{ padding: '14px', textAlign: 'center', fontSize: '11px', color: 'var(--color-text-muted)' }}>
               Empieza a escribir o selecciona una categoría
             </div>
           )}
