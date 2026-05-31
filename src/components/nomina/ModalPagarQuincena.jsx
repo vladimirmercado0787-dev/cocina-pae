@@ -2,607 +2,545 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import { crearGastosDesdeNomina } from '../../utils/gastosAutomaticos'
 
-function ModalPagarQuincena({ 
-  empresa, 
-  empleados, 
-  periodo, 
-  usuarioActual,
-  onCerrar, 
-  onPagoExitoso 
-}) {
-  const [detallesPago, setDetallesPago] = useState([])
-  const [notasGenerales, setNotasGenerales] = useState('')
+function ModalPagarQuincena({ empresaId, usuarioActual, periodoPagar, onCerrar, onPagado }) {
+  const [empleados, setEmpleados] = useState([])
+  const [detallePagos, setDetallePagos] = useState([])
+  const [ajustes, setAjustes] = useState({})
+  const [bonosExtra, setBonosExtra] = useState({})
+  const [notas, setNotas] = useState('')
+  const [cargando, setCargando] = useState(true)
   const [procesando, setProcesando] = useState(false)
   const [error, setError] = useState('')
-  const [paso, setPaso] = useState('revision') // 'revision' | 'confirmacion'
+  const [confirmar, setConfirmar] = useState(false)
 
-  const descuentoPct = parseFloat(empresa?.nomina_descuento_porcentaje || 5.74)
-
-  // Inicializar detalles con todos los empleados
+  // Tema dual (mismo patrón del Dashboard)
+  const [tema, setTema] = useState(() => localStorage.getItem('cocina_pae_tema') || 'oscuro')
   useEffect(() => {
-    if (empleados && empleados.length > 0) {
-      const inicial = empleados.map(emp => {
-        const netoBase = salarioNetoDelPeriodo(emp)
-        const brutoBase = calcularBruto(netoBase, descuentoPct)
-        return {
-          usuario_id: emp.id,
-          empleado_nombre: emp.nombre,
-          empleado_rol: emp.rol,
-          incluido: true,
-          salario_neto_base: netoBase,
-          salario_bruto_base: brutoBase,
-          aporte_tss_afp: brutoBase - netoBase,
-          bono_extra: 0,
-          bono_descripcion: '',
-          ajuste_positivo: 0,
-          ajuste_negativo: 0,
-          ajuste_razon: '',
-        }
-      })
-      setDetallesPago(inicial)
-    }
-  }, [empleados])
+    document.documentElement.setAttribute('data-tema', tema)
+    localStorage.setItem('cocina_pae_tema', tema)
+  }, [tema])
 
-  // ═══════════════════════════════════════════════════
-  // 🧮 HELPERS
-  // ═══════════════════════════════════════════════════
+  useEffect(() => {
+    if (empresaId) cargarDatos()
+  }, [empresaId])
 
-  function salarioNetoDelPeriodo(empleado) {
-    const sueldo = parseFloat(empleado.sueldo || 0)
-    const freq = empleado.frecuencia_pago
-    const freqEmpresa = empresa?.nomina_frecuencia || 'quincenal'
+  async function cargarDatos() {
+    setCargando(true)
+    const { data } = await supabase
+      .from('usuarios')
+      .select('*')
+      .eq('empresa_id', empresaId)
+      .eq('activo', true)
+      .neq('rol', 'propietario')
+      .not('sueldo', 'is', null)
+      .order('nombre')
 
-    // Convertir sueldo del empleado a lo que paga la empresa
-    if (freqEmpresa === 'quincenal') {
+    const emps = data || []
+    setEmpleados(emps)
+
+    const detalles = emps.map(emp => {
+      const salarioNeto = calcularSalarioNetoPeriodo(emp)
+      const salarioBruto = salarioNeto / 0.9426
+      const aporteTSS = salarioBruto - salarioNeto
+      return {
+        usuario_id: emp.id,
+        nombre: emp.nombre,
+        rol: emp.rol,
+        frecuencia: emp.frecuencia_pago,
+        salario_neto: salarioNeto,
+        salario_bruto: salarioBruto,
+        aporte_tss_afp: aporteTSS,
+      }
+    })
+    setDetallePagos(detalles)
+    setCargando(false)
+  }
+
+  function calcularSalarioNetoPeriodo(emp) {
+    const sueldo = parseFloat(emp.sueldo || 0)
+    const freq = emp.frecuencia_pago
+    if (!periodoPagar) return sueldo
+
+    if (periodoPagar.tipo === 'quincenal_1' || periodoPagar.tipo === 'quincenal_2') {
       if (freq === 'mes') return sueldo / 2
       if (freq === 'quincena') return sueldo
-      if (freq === 'semana') return sueldo * 2.165
+      if (freq === 'semana') return sueldo * 2
       if (freq === 'dia') return sueldo * 11
-      return sueldo
+      return sueldo / 2
     }
-    if (freqEmpresa === 'mensual') {
+    if (periodoPagar.tipo === 'mensual') {
       if (freq === 'mes') return sueldo
       if (freq === 'quincena') return sueldo * 2
       if (freq === 'semana') return sueldo * 4.33
       if (freq === 'dia') return sueldo * 22
       return sueldo
     }
-    if (freqEmpresa === 'semanal') {
-      if (freq === 'mes') return sueldo / 4.33
-      if (freq === 'quincena') return sueldo / 2.165
-      if (freq === 'semana') return sueldo
-      if (freq === 'dia') return sueldo * 5
-      return sueldo
-    }
     return sueldo
   }
 
-  function calcularBruto(neto, porcentaje) {
-    const factor = 1 - (parseFloat(porcentaje || 5.74) / 100)
-    if (factor <= 0) return neto
-    return Math.round((neto / factor) * 100) / 100
+  function ajusteEmpleado(id) {
+    const a = ajustes[id] || {}
+    return {
+      positivo: parseFloat(a.positivo || 0),
+      negativo: parseFloat(a.negativo || 0),
+      razon: a.razon || '',
+    }
   }
 
-  function formatearMoneda(monto) {
-    return Number(monto || 0).toLocaleString('es-DO', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    })
+  function bonoEmpleado(id) {
+    const b = bonosExtra[id] || {}
+    return {
+      monto: parseFloat(b.monto || 0),
+      descripcion: b.descripcion || '',
+    }
   }
 
-  function actualizarDetalle(usuarioId, campo, valor) {
-    setDetallesPago(prev => prev.map(d => 
-      d.usuario_id === usuarioId ? { ...d, [campo]: valor } : d
-    ))
+  function totalEmpleado(d) {
+    const aj = ajusteEmpleado(d.usuario_id)
+    const bono = bonoEmpleado(d.usuario_id)
+    return d.salario_neto + aj.positivo - aj.negativo + bono.monto
   }
 
-  function calcularTotalEmpleado(d) {
-    return (
-      parseFloat(d.salario_neto_base || 0) +
-      parseFloat(d.bono_extra || 0) +
-      parseFloat(d.ajuste_positivo || 0) -
-      parseFloat(d.ajuste_negativo || 0)
-    )
-  }
-
-  // ═══════════════════════════════════════════════════
-  // 💰 TOTALES
-  // ═══════════════════════════════════════════════════
-
-  const detallesIncluidos = detallesPago.filter(d => d.incluido)
-  
-  const totalNeto = detallesIncluidos.reduce((sum, d) => 
-    sum + calcularTotalEmpleado(d), 0)
-  
-  const totalBruto = detallesIncluidos.reduce((sum, d) => 
-    sum + parseFloat(d.salario_bruto_base || 0) + parseFloat(d.bono_extra || 0), 0)
-  
-  const totalAportes = detallesIncluidos.reduce((sum, d) => 
-    sum + parseFloat(d.aporte_tss_afp || 0), 0)
-  
-  const totalBonos = detallesIncluidos.reduce((sum, d) => 
-    sum + parseFloat(d.bono_extra || 0), 0)
-
-  // ═══════════════════════════════════════════════════
-  // 💾 GUARDAR PAGO EN BD
-  // ═══════════════════════════════════════════════════
+  const totales = detallePagos.reduce((acc, d) => {
+    const aj = ajusteEmpleado(d.usuario_id)
+    const bono = bonoEmpleado(d.usuario_id)
+    acc.neto += d.salario_neto + aj.positivo - aj.negativo + bono.monto
+    acc.bruto += d.salario_bruto + aj.positivo - aj.negativo + bono.monto
+    acc.aportes += d.aporte_tss_afp
+    acc.bonos += bono.monto
+    return acc
+  }, { neto: 0, bruto: 0, aportes: 0, bonos: 0 })
 
   async function procesarPago() {
     setError('')
-    
-    if (detallesIncluidos.length === 0) {
-      setError('Debes incluir al menos un empleado en el pago')
-      return
-    }
-
     setProcesando(true)
-
     try {
-      // 1) Crear cabecera del pago
-      const cabecera = {
-        empresa_id: empresa.id,
-        tipo_periodo: periodo.tipo_periodo,
-        año: periodo.año,
-        mes: periodo.mes,
-        fecha_inicio: periodo.fecha_inicio.toISOString().split('T')[0],
-        fecha_fin: periodo.fecha_fin.toISOString().split('T')[0],
-        fecha_pago: periodo.fecha_pago.toISOString().split('T')[0],
-        fecha_procesado: new Date().toISOString(),
+      const nuevoPago = {
+        empresa_id: empresaId,
+        año: periodoPagar.año,
+        mes: periodoPagar.mes,
+        semana: periodoPagar.semana || null,
+        tipo_periodo: periodoPagar.tipo,
+        fecha_inicio: periodoPagar.fechaInicio,
+        fecha_fin: periodoPagar.fechaFin,
+        fecha_pago: new Date().toISOString().split('T')[0],
+        cantidad_empleados: detallePagos.length,
+        total_neto: totales.neto,
+        total_bruto: totales.bruto,
+        total_aportes: totales.aportes,
+        total_bonos: totales.bonos,
         estado: 'pagado',
-        total_neto: totalNeto,
-        total_bruto: totalBruto,
-        total_aportes: totalAportes,
-        total_bonos: totalBonos,
-        cantidad_empleados: detallesIncluidos.length,
-        procesado_por_usuario_id: usuarioActual.id,
-        notas: notasGenerales.trim() || null,
+        notas: notas.trim() || null,
+        creado_por_usuario_id: usuarioActual?.id || null,
       }
 
-      const { data: pagoCreado, error: errorPago } = await supabase
-        .from('pagos_nomina')
-        .insert([cabecera])
-        .select()
-        .single()
+      const { data: pagoCreado, error: errPago } = await supabase
+        .from('pagos_nomina').insert([nuevoPago]).select().single()
+      if (errPago) throw new Error(errPago.message)
 
-      if (errorPago) {
-        // Detectar si ya existe el período
-        if (errorPago.code === '23505') {
-          throw new Error('Este período ya fue procesado anteriormente. Verifica en el historial.')
+      const detallesInsert = detallePagos.map(d => {
+        const aj = ajusteEmpleado(d.usuario_id)
+        const bono = bonoEmpleado(d.usuario_id)
+        return {
+          pago_nomina_id: pagoCreado.id,
+          usuario_id: d.usuario_id,
+          empleado_nombre: d.nombre,
+          empleado_rol: d.rol,
+          salario_neto: d.salario_neto,
+          salario_bruto: d.salario_bruto,
+          aporte_tss_afp: d.aporte_tss_afp,
+          ajuste_positivo: aj.positivo,
+          ajuste_negativo: aj.negativo,
+          ajuste_razon: aj.razon || null,
+          bono_extra: bono.monto,
+          bono_descripcion: bono.descripcion || null,
+          total_pagado: totalEmpleado(d),
         }
-        throw new Error(errorPago.message)
-      }
+      })
 
-      // 2) Crear detalles por empleado
-      const detallesParaBD = detallesIncluidos.map(d => ({
-        pago_nomina_id: pagoCreado.id,
-        empresa_id: empresa.id,
-        usuario_id: d.usuario_id,
-        empleado_nombre: d.empleado_nombre,
-        empleado_rol: d.empleado_rol,
-        salario_neto: d.salario_neto_base,
-        salario_bruto: d.salario_bruto_base,
-        aporte_tss_afp: d.aporte_tss_afp,
-        bono_extra: parseFloat(d.bono_extra) || 0,
-        bono_descripcion: d.bono_descripcion?.trim() || null,
-        ajuste_positivo: parseFloat(d.ajuste_positivo) || 0,
-        ajuste_negativo: parseFloat(d.ajuste_negativo) || 0,
-        ajuste_razon: d.ajuste_razon?.trim() || null,
-        total_pagado: calcularTotalEmpleado(d),
-        estado: 'pagado',
-        fecha_pagado: new Date().toISOString(),
-      }))
+      const { error: errDet } = await supabase
+        .from('pagos_nomina_detalle').insert(detallesInsert)
+      if (errDet) throw new Error(errDet.message)
 
-      const { error: errorDetalles } = await supabase
-        .from('pagos_nomina_detalle')
-        .insert(detallesParaBD)
-
-      if (errorDetalles) {
-        // Si falla el insert de detalles, eliminar la cabecera para no dejar inconsistencia
-        await supabase.from('pagos_nomina').delete().eq('id', pagoCreado.id)
-        throw new Error('Error al guardar detalles: ' + errorDetalles.message)
-      }
-
-      // ═══════════════════════════════════════════════════
-      // 🔗 INT-001: Generar gastos automáticos del ecosistema
-      // ───────────────────────────────────────────────────
-      // Filosofía: "si me rompo el pie derecho, cojeo y camino
-      // con el izquierdo". El pago de nómina trae 2 gastos
-      // automáticos al módulo de Gastos.
-      //
-      // IMPORTANTE: si falla la creación de gastos, NO revertimos
-      // el pago (ya fue exitoso). Solo logueamos el error para
-      // poder regenerarlos manualmente después.
-      // ═══════════════════════════════════════════════════
-      const descripcionPeriodo = periodo?.label || 
-        `${periodo?.tipo_periodo || 'Período'} ${periodo?.mes || ''}/${periodo?.año || ''}`
-
-      const resultadoGastos = await crearGastosDesdeNomina({
-        empresaId: empresa.id,
+      const resGasto = await crearGastosDesdeNomina?.({
+        empresaId,
         pagoNominaId: pagoCreado.id,
-        fechaPago: periodo.fecha_pago.toISOString().split('T')[0],
-        totalNeto: totalNeto,
-        totalAportes: totalAportes,
-        descripcionPeriodo: descripcionPeriodo,
+        periodo: periodoPagar,
+        totalNeto: totales.neto,
+        totalAportes: totales.aportes,
+        totalBonos: totales.bonos,
         registradoPor: usuarioActual?.id,
         registradoPorNombre: usuarioActual?.nombre || 'Sistema',
       })
+      if (resGasto && !resGasto.success) console.warn('Pago OK pero falló gasto automático:', resGasto.error)
 
-      if (!resultadoGastos.success) {
-        // No bloqueamos el éxito del pago — solo avisamos en consola
-        console.warn(
-          '⚠️ Pago de nómina OK, pero falló crear gastos automáticos:',
-          resultadoGastos.error
-        )
-      } else {
-        console.log(
-          `✅ Ecosistema conectado: ${resultadoGastos.gastos.length} gasto(s) automático(s) creado(s) desde nómina`
-        )
-      }
-
-      // Éxito
       setProcesando(false)
-      if (onPagoExitoso) onPagoExitoso(pagoCreado)
-
+      if (onPagado) onPagado(pagoCreado)
+      onCerrar()
     } catch (e) {
-      setError(e.message || 'Error al procesar el pago')
+      setError(e.message)
       setProcesando(false)
     }
   }
 
-  // ═══════════════════════════════════════════════════
-  // 🎨 RENDER
-  // ═══════════════════════════════════════════════════
+  function formatearMoneda(monto) {
+    return Number(monto || 0).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  }
 
-  const labelFreq = empresa?.nomina_frecuencia === 'quincenal' ? 'quincena' :
-                   empresa?.nomina_frecuencia === 'semanal' ? 'semana' :
-                   empresa?.nomina_frecuencia === 'mensual' ? 'mes' : 'período'
+  function labelPeriodo() {
+    if (!periodoPagar) return ''
+    const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+    if (periodoPagar.tipo === 'quincenal_1') return `1ra quincena de ${meses[periodoPagar.mes - 1]} ${periodoPagar.año}`
+    if (periodoPagar.tipo === 'quincenal_2') return `2da quincena de ${meses[periodoPagar.mes - 1]} ${periodoPagar.año}`
+    if (periodoPagar.tipo === 'mensual') return `${meses[periodoPagar.mes - 1]} ${periodoPagar.año}`
+    if (periodoPagar.tipo === 'semanal') return `Semana ${periodoPagar.semana} de ${meses[periodoPagar.mes - 1]} ${periodoPagar.año}`
+    return ''
+  }
+
+  // ─── ESTILOS ───
+  const input = {
+    width: '100%', boxSizing: 'border-box',
+    background: 'var(--color-bg-input)',
+    border: '1px solid var(--color-border-subtle)',
+    borderRadius: '8px', padding: '7px 10px',
+    color: 'var(--color-text-primary)',
+    fontSize: '12px', fontFamily: 'inherit', outline: 'none',
+  }
+  const labelStyle = {
+    display: 'block', fontSize: '10px', fontWeight: 500,
+    color: 'var(--color-text-muted)', marginBottom: '4px',
+    letterSpacing: '0.5px', textTransform: 'uppercase',
+  }
+  const panel = {
+    background: 'var(--color-modulo-bg)',
+    border: '1px solid var(--color-modulo-border)',
+    borderRadius: '14px', padding: '20px',
+    boxShadow: 'var(--modulo-sombra)',
+  }
+  const sectionTitle = {
+    fontSize: '11px', color: 'var(--color-text-muted)',
+    letterSpacing: '1.5px', fontWeight: 600, marginBottom: '14px',
+  }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full my-8 max-h-[95vh] flex flex-col">
-
-        {/* HEADER FIJO */}
-        <div className="bg-gradient-to-br from-pink-600 to-rose-700 text-white rounded-t-2xl p-6 flex justify-between items-start">
-          <div>
-            <p className="text-pink-100 text-xs font-semibold tracking-wider">
-              PROCESAR PAGO DE NÓMINA
-            </p>
-            <h2 className="text-2xl font-bold mt-1">
-              💸 {periodo?.label}
-            </h2>
-            <p className="text-pink-200 text-sm mt-1">
-              Fecha de pago: {periodo?.fecha_pago?.toLocaleDateString('es-DO', { 
-                weekday: 'long', day: 'numeric', month: 'long' 
-              })}
-            </p>
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 90,
+      background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
+      display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+      padding: '20px', overflowY: 'auto',
+    }}>
+      <div style={{
+        background: 'var(--color-bg-primary)',
+        border: '1px solid var(--color-border-accent)',
+        borderRadius: '16px',
+        maxWidth: '880px', width: '100%',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+      }}>
+        {/* HEADER del modal */}
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '20px 24px',
+          borderBottom: '1px solid var(--color-border-subtle)',
+          flexWrap: 'wrap', gap: '12px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{
+              width: '44px', height: '44px', borderRadius: '12px',
+              background: 'rgba(29, 158, 117, 0.18)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '22px',
+            }}>💵</div>
+            <div>
+              <div style={{ fontSize: '10px', color: '#1D9E75', letterSpacing: '1.5px', fontWeight: 600 }}>
+                PROCESAR PAGO
+              </div>
+              <div style={{ fontSize: '18px', fontWeight: 500, color: 'var(--color-text-primary)', marginTop: '2px' }}>
+                {labelPeriodo()}
+              </div>
+            </div>
           </div>
-          <button
-            onClick={onCerrar}
-            disabled={procesando}
-            className="bg-pink-800 hover:bg-pink-900 text-white text-sm px-3 py-2 rounded-lg disabled:opacity-50"
-          >
-            ✖ Cerrar
-          </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center',
+              background: 'var(--color-bg-elevated)',
+              border: '1px solid var(--color-border-subtle)',
+              borderRadius: '20px', padding: '3px', gap: '2px',
+            }}>
+              <button type="button" onClick={() => setTema('oscuro')} style={{
+                background: tema === 'oscuro' ? 'var(--gradient-toggle-active)' : 'transparent',
+                border: 'none', borderRadius: '16px', padding: '6px 10px',
+                display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer',
+              }}>
+                <span style={{ fontSize: '11px' }}>🌙</span>
+                <span style={{ fontSize: '10px', fontWeight: 500, color: tema === 'oscuro' ? 'white' : 'var(--color-text-muted)' }}>Oscuro</span>
+              </button>
+              <button type="button" onClick={() => setTema('tropical')} style={{
+                background: tema === 'tropical' ? 'var(--gradient-toggle-active)' : 'transparent',
+                border: 'none', borderRadius: '16px', padding: '6px 10px',
+                display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer',
+              }}>
+                <span style={{ fontSize: '11px' }}>☀️</span>
+                <span style={{ fontSize: '10px', fontWeight: 500, color: tema === 'tropical' ? 'white' : 'var(--color-text-muted)' }}>Claro</span>
+              </button>
+            </div>
+            <button onClick={onCerrar} disabled={procesando} style={{
+              background: 'var(--color-bg-elevated)',
+              border: '1px solid var(--color-border-subtle)',
+              borderRadius: '20px', padding: '7px 14px',
+              color: 'var(--color-text-secondary)', fontSize: '12px',
+              cursor: procesando ? 'not-allowed' : 'pointer',
+              opacity: procesando ? 0.6 : 1, fontFamily: 'inherit',
+            }}>✖ Cerrar</button>
+          </div>
         </div>
 
-        {/* BODY SCROLLABLE */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-
-          {/* PASO 1: REVISIÓN */}
-          {paso === 'revision' && (
+        {/* BODY */}
+        <div style={{ padding: '20px 24px' }}>
+          {cargando ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--color-text-muted)' }}>⏳ Cargando empleados...</div>
+          ) : (
             <>
-              {/* Resumen visual top */}
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
-                  <div>
-                    <p className="text-xs text-blue-700 font-semibold">EMPLEADOS</p>
-                    <p className="text-2xl font-bold text-blue-900">{detallesIncluidos.length}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-green-700 font-semibold">TOTAL A PAGAR</p>
-                    <p className="text-2xl font-bold text-green-900">RD$ {formatearMoneda(totalNeto)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-purple-700 font-semibold">COSTO TOTAL</p>
-                    <p className="text-2xl font-bold text-purple-900">RD$ {formatearMoneda(totalBruto)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-orange-700 font-semibold">BONOS EXTRA</p>
-                    <p className="text-2xl font-bold text-orange-900">RD$ {formatearMoneda(totalBonos)}</p>
-                  </div>
-                </div>
+              {/* RESUMEN TOTALES */}
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(29, 158, 117, 0.18) 0%, rgba(15, 110, 86, 0.08) 100%)',
+                border: '1px solid rgba(29, 158, 117, 0.4)',
+                borderLeft: '4px solid #1D9E75',
+                borderRadius: '14px', padding: '16px 20px', marginBottom: '16px',
+                display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '14px',
+              }}>
+                <ResumenItem label="TOTAL NETO" valor={totales.neto} color="#1D9E75" sub={`${detallePagos.length} empleados`} formatear={formatearMoneda} grande />
+                <ResumenItem label="TOTAL BRUTO" valor={totales.bruto} color="#378ADD" sub="incluye aportes" formatear={formatearMoneda} />
+                <ResumenItem label="APORTES" valor={totales.aportes} color="#7F77DD" sub="TSS + AFP" formatear={formatearMoneda} />
+                {totales.bonos > 0 && (
+                  <ResumenItem label="BONOS EXTRA" valor={totales.bonos} color="#EF9F27" sub="adicionales" formatear={formatearMoneda} />
+                )}
               </div>
 
-              {/* Lista de empleados editable */}
-              <div>
-                <p className="text-sm font-bold text-gray-700 mb-3">
-                  👥 EMPLEADOS A PAGAR ({detallesIncluidos.length} de {detallesPago.length})
-                </p>
-                
-                <div className="space-y-3">
-                  {detallesPago.map((d) => {
-                    const total = calcularTotalEmpleado(d)
+              {/* DETALLE POR EMPLEADO */}
+              <div style={{ ...panel, marginBottom: '16px' }}>
+                <div style={sectionTitle}>👥 DETALLE POR EMPLEADO ({detallePagos.length})</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {detallePagos.map(d => {
+                    const aj = ajusteEmpleado(d.usuario_id)
+                    const bono = bonoEmpleado(d.usuario_id)
+                    const total = totalEmpleado(d)
                     return (
-                      <div 
-                        key={d.usuario_id}
-                        className={`border rounded-xl p-4 transition ${
-                          d.incluido 
-                            ? 'border-blue-300 bg-blue-50/30' 
-                            : 'border-gray-200 bg-gray-100 opacity-60'
-                        }`}
-                      >
-                        {/* Header del empleado */}
-                        <div className="flex items-center justify-between gap-3 mb-3">
-                          <label className="flex items-center gap-3 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={d.incluido}
-                              onChange={(e) => actualizarDetalle(d.usuario_id, 'incluido', e.target.checked)}
-                              className="w-5 h-5"
-                            />
-                            <div>
-                              <p className="font-bold text-gray-900">{d.empleado_nombre}</p>
-                              <p className="text-xs text-gray-600 capitalize">
-                                {d.empleado_rol?.replace('_', ' ')}
-                              </p>
+                      <div key={d.usuario_id} style={{
+                        background: 'var(--color-bg-input)',
+                        border: '1px solid var(--color-border-subtle)',
+                        borderLeft: '4px solid #1D9E75',
+                        borderRadius: '10px', padding: '12px 14px',
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                          <div>
+                            <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--color-text-primary)' }}>{d.nombre}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', textTransform: 'capitalize' }}>
+                              {d.rol?.replace('_', ' ')} · Pago {d.frecuencia}
                             </div>
-                          </label>
-                          
-                          <div className="text-right">
-                            <p className="text-xs text-gray-600">Total a pagar</p>
-                            <p className="text-xl font-bold text-green-700">
-                              RD$ {formatearMoneda(total)}
-                            </p>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Total a pagar</div>
+                            <div style={{ fontSize: '18px', fontWeight: 600, color: '#1D9E75' }}>RD$ {formatearMoneda(total)}</div>
                           </div>
                         </div>
 
-                        {d.incluido && (
-                          <div className="space-y-3 mt-3 pt-3 border-t border-gray-200">
-                            
-                            {/* Salario base (no editable) */}
-                            <div className="bg-white rounded-lg p-3 text-sm">
-                              <div className="grid grid-cols-3 gap-2">
-                                <div>
-                                  <p className="text-xs text-gray-500">Neto base</p>
-                                  <p className="font-bold text-gray-900">
-                                    RD$ {formatearMoneda(d.salario_neto_base)}
-                                  </p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-gray-500">Bruto</p>
-                                  <p className="font-bold text-blue-700">
-                                    RD$ {formatearMoneda(d.salario_bruto_base)}
-                                  </p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-gray-500">Aporte TSS+AFP</p>
-                                  <p className="font-bold text-purple-700">
-                                    RD$ {formatearMoneda(d.aporte_tss_afp)}
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Bono extra */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                              <div>
-                                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                                  🎁 Bono extra (opcional)
-                                </label>
-                                <input
-                                  type="number"
-                                  step="100"
-                                  min="0"
-                                  value={d.bono_extra}
-                                  onChange={(e) => actualizarDetalle(d.usuario_id, 'bono_extra', e.target.value)}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                                  placeholder="0"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                                  Descripción del bono
-                                </label>
-                                <input
-                                  type="text"
-                                  value={d.bono_descripcion}
-                                  onChange={(e) => actualizarDetalle(d.usuario_id, 'bono_descripcion', e.target.value)}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                                  placeholder="Ej: Productividad, cumpleaños..."
-                                />
-                              </div>
-                            </div>
-
-                            {/* Ajustes +/- */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                              <div>
-                                <label className="block text-xs font-semibold text-green-700 mb-1">
-                                  ➕ Ajuste positivo
-                                </label>
-                                <input
-                                  type="number"
-                                  step="100"
-                                  min="0"
-                                  value={d.ajuste_positivo}
-                                  onChange={(e) => actualizarDetalle(d.usuario_id, 'ajuste_positivo', e.target.value)}
-                                  className="w-full px-3 py-2 border border-green-200 rounded-lg text-sm"
-                                  placeholder="0"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-xs font-semibold text-red-700 mb-1">
-                                  ➖ Ajuste negativo
-                                </label>
-                                <input
-                                  type="number"
-                                  step="100"
-                                  min="0"
-                                  value={d.ajuste_negativo}
-                                  onChange={(e) => actualizarDetalle(d.usuario_id, 'ajuste_negativo', e.target.value)}
-                                  className="w-full px-3 py-2 border border-red-200 rounded-lg text-sm"
-                                  placeholder="0"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                                  Razón ajuste
-                                </label>
-                                <input
-                                  type="text"
-                                  value={d.ajuste_razon}
-                                  onChange={(e) => actualizarDetalle(d.usuario_id, 'ajuste_razon', e.target.value)}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                                  placeholder="Ej: descuento por adelanto..."
-                                />
-                              </div>
-                            </div>
-
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px', fontSize: '11px', marginBottom: '10px' }}>
+                          <div>
+                            <div style={{ color: 'var(--color-text-muted)' }}>Neto base</div>
+                            <div style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>RD$ {formatearMoneda(d.salario_neto)}</div>
                           </div>
-                        )}
+                          <div>
+                            <div style={{ color: 'var(--color-text-muted)' }}>Bruto</div>
+                            <div style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>RD$ {formatearMoneda(d.salario_bruto)}</div>
+                          </div>
+                          <div>
+                            <div style={{ color: 'var(--color-text-muted)' }}>Aporte TSS+AFP</div>
+                            <div style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>RD$ {formatearMoneda(d.aporte_tss_afp)}</div>
+                          </div>
+                        </div>
+
+                        {/* Ajustes y bono */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' }}>
+                          <div>
+                            <label style={labelStyle}>➕ Ajuste +</label>
+                            <input type="number" placeholder="0.00" value={aj.positivo || ''}
+                              onChange={(e) => setAjustes({ ...ajustes, [d.usuario_id]: { ...aj, positivo: e.target.value } })}
+                              style={input} />
+                          </div>
+                          <div>
+                            <label style={labelStyle}>➖ Ajuste −</label>
+                            <input type="number" placeholder="0.00" value={aj.negativo || ''}
+                              onChange={(e) => setAjustes({ ...ajustes, [d.usuario_id]: { ...aj, negativo: e.target.value } })}
+                              style={input} />
+                          </div>
+                          <div>
+                            <label style={labelStyle}>🎁 Bono extra</label>
+                            <input type="number" placeholder="0.00" value={bono.monto || ''}
+                              onChange={(e) => setBonosExtra({ ...bonosExtra, [d.usuario_id]: { ...bono, monto: e.target.value } })}
+                              style={input} />
+                          </div>
+                          {(aj.positivo > 0 || aj.negativo > 0) && (
+                            <div style={{ gridColumn: '1 / -1' }}>
+                              <label style={labelStyle}>Razón del ajuste</label>
+                              <input type="text" placeholder="Ej: Hora extra, descuento..."
+                                value={aj.razon || ''}
+                                onChange={(e) => setAjustes({ ...ajustes, [d.usuario_id]: { ...aj, razon: e.target.value } })}
+                                style={input} />
+                            </div>
+                          )}
+                          {bono.monto > 0 && (
+                            <div style={{ gridColumn: '1 / -1' }}>
+                              <label style={labelStyle}>Descripción del bono</label>
+                              <input type="text" placeholder="Ej: Bono productividad..."
+                                value={bono.descripcion || ''}
+                                onChange={(e) => setBonosExtra({ ...bonosExtra, [d.usuario_id]: { ...bono, descripcion: e.target.value } })}
+                                style={input} />
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )
                   })}
                 </div>
               </div>
 
-              {/* Notas generales */}
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">
-                  📝 Notas generales del pago (opcional)
-                </label>
-                <textarea
-                  value={notasGenerales}
-                  onChange={(e) => setNotasGenerales(e.target.value)}
-                  rows={2}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              {/* NOTAS */}
+              <div style={{ ...panel, marginBottom: '16px' }}>
+                <label style={labelStyle}>📝 Notas del período (opcional)</label>
+                <textarea value={notas} onChange={(e) => setNotas(e.target.value)} rows={2}
                   placeholder="Cualquier comentario sobre este pago..."
-                />
+                  style={{
+                    width: '100%', boxSizing: 'border-box',
+                    background: 'var(--color-bg-input)',
+                    border: '1px solid var(--color-border-subtle)',
+                    borderRadius: '10px', padding: '10px 12px',
+                    color: 'var(--color-text-primary)', fontSize: '13px',
+                    fontFamily: 'inherit', resize: 'none', outline: 'none',
+                  }} />
               </div>
 
               {error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
-                  ⚠️ {error}
-                </div>
+                <div style={{
+                  background: 'rgba(244, 67, 54, 0.1)',
+                  border: '1px solid rgba(244, 67, 54, 0.3)',
+                  borderRadius: '10px', padding: '12px',
+                  fontSize: '12px', color: '#F4C0D1', marginBottom: '12px',
+                }}>⚠️ {error}</div>
               )}
+
+              {/* BOTONES */}
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <button onClick={onCerrar} disabled={procesando} style={{
+                  flex: 1, minWidth: '140px', padding: '14px',
+                  background: 'var(--color-bg-elevated)',
+                  border: '1px solid var(--color-border-subtle)',
+                  borderRadius: '10px',
+                  color: 'var(--color-text-secondary)',
+                  fontSize: '13px', fontWeight: 500,
+                  cursor: procesando ? 'not-allowed' : 'pointer',
+                  opacity: procesando ? 0.6 : 1, fontFamily: 'inherit',
+                }}>Cancelar</button>
+                <button onClick={() => setConfirmar(true)} disabled={procesando} style={{
+                  flex: 2, minWidth: '200px', padding: '14px',
+                  background: 'linear-gradient(135deg, #1D9E75 0%, #0F6E56 100%)',
+                  border: 'none', borderRadius: '10px',
+                  color: 'white', fontSize: '13px', fontWeight: 600,
+                  cursor: procesando ? 'not-allowed' : 'pointer',
+                  opacity: procesando ? 0.6 : 1, fontFamily: 'inherit',
+                }}>💰 Procesar pago — RD$ {formatearMoneda(totales.neto)}</button>
+              </div>
             </>
           )}
+        </div>
 
-          {/* PASO 2: CONFIRMACIÓN */}
-          {paso === 'confirmacion' && (
-            <div className="space-y-4">
-              <div className="bg-yellow-50 border border-yellow-300 rounded-xl p-6 text-center">
-                <p className="text-5xl mb-3">⚠️</p>
-                <h3 className="text-2xl font-bold text-yellow-900 mb-2">
-                  ¿Confirmas el procesamiento?
-                </h3>
-                <p className="text-yellow-800 text-sm">
-                  Esta acción quedará registrada y no se puede revertir fácilmente.
-                </p>
+        {/* MODAL DE CONFIRMACIÓN */}
+        {confirmar && (
+          <div style={{
+            position: 'fixed', inset: 0, zIndex: 100,
+            background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '20px',
+          }}>
+            <div style={{
+              background: 'var(--color-bg-elevated)',
+              border: '0.5px solid var(--color-border-accent)',
+              borderRadius: '16px', maxWidth: '420px', width: '100%',
+              overflow: 'hidden',
+            }}>
+              <div style={{
+                background: 'linear-gradient(135deg, #1D9E75 0%, #0F6E56 100%)',
+                padding: '24px', textAlign: 'center', color: 'white',
+              }}>
+                <div style={{ fontSize: '40px', marginBottom: '6px' }}>💰</div>
+                <div style={{ fontSize: '18px', fontWeight: 600 }}>¿Confirmar pago?</div>
+                <div style={{ fontSize: '11px', opacity: 0.9, marginTop: '2px' }}>{labelPeriodo()}</div>
               </div>
+              <div style={{ padding: '20px' }}>
+                <div style={{
+                  background: 'var(--color-bg-input)',
+                  border: '1px solid var(--color-border-subtle)',
+                  borderRadius: '10px', padding: '14px',
+                  fontSize: '13px', textAlign: 'center', marginBottom: '14px',
+                }}>
+                  <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', letterSpacing: '0.5px' }}>TOTAL A PAGAR</div>
+                  <div style={{ fontSize: '24px', fontWeight: 600, color: '#1D9E75', marginTop: '4px' }}>
+                    RD$ {formatearMoneda(totales.neto)}
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                    a {detallePagos.length} empleado(s)
+                  </div>
+                </div>
 
-              <div className="bg-gray-50 rounded-xl p-4 space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-700">Período:</span>
-                  <span className="font-bold">{periodo?.label}</span>
+                <div style={{
+                  background: 'rgba(239, 159, 39, 0.12)',
+                  border: '1px solid rgba(239, 159, 39, 0.35)',
+                  borderRadius: '10px', padding: '10px 12px',
+                  fontSize: '11px', color: 'var(--color-text-secondary)', marginBottom: '14px',
+                }}>
+                  <div style={{ fontWeight: 600, color: '#EF9F27', marginBottom: '4px' }}>Al confirmar:</div>
+                  📝 Se guarda el pago en el histórico de nómina<br />
+                  💰 Se crea gasto automático en módulo Gastos<br />
+                  📊 Aparece en reportes y dashboard
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-700">Empleados a pagar:</span>
-                  <span className="font-bold">{detallesIncluidos.length}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-700">Total bonos extra:</span>
-                  <span className="font-bold text-orange-700">RD$ {formatearMoneda(totalBonos)}</span>
-                </div>
-                <div className="flex justify-between text-lg pt-2 border-t border-gray-300">
-                  <span className="font-bold text-gray-900">TOTAL NETO A PAGAR:</span>
-                  <span className="font-bold text-green-700">RD$ {formatearMoneda(totalNeto)}</span>
-                </div>
-                <div className="flex justify-between text-sm text-gray-600">
-                  <span>Costo total (con aportes):</span>
-                  <span>RD$ {formatearMoneda(totalBruto)}</span>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button onClick={() => setConfirmar(false)} disabled={procesando} style={{
+                    flex: 1, padding: '12px',
+                    background: 'var(--color-bg-elevated)',
+                    border: '1px solid var(--color-border-subtle)',
+                    borderRadius: '10px',
+                    color: 'var(--color-text-secondary)',
+                    fontSize: '13px', fontWeight: 500,
+                    cursor: procesando ? 'not-allowed' : 'pointer',
+                    opacity: procesando ? 0.6 : 1, fontFamily: 'inherit',
+                  }}>Cancelar</button>
+                  <button onClick={procesarPago} disabled={procesando} style={{
+                    flex: 1, padding: '12px',
+                    background: 'linear-gradient(135deg, #1D9E75 0%, #0F6E56 100%)',
+                    border: 'none', borderRadius: '10px',
+                    color: 'white', fontSize: '13px', fontWeight: 600,
+                    cursor: procesando ? 'not-allowed' : 'pointer',
+                    opacity: procesando ? 0.6 : 1, fontFamily: 'inherit',
+                  }}>{procesando ? '⏳ Procesando...' : '✓ CONFIRMAR'}</button>
                 </div>
               </div>
-
-              {/* 🔗 Aviso de conexión con Gastos */}
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                <p className="text-sm font-semibold text-blue-900 mb-2">
-                  🔗 Conexión automática con Gastos
-                </p>
-                <p className="text-xs text-blue-800">
-                  Al confirmar, se crearán automáticamente <strong>2 gastos</strong> en el módulo de Gastos:
-                </p>
-                <ul className="text-xs text-blue-800 mt-2 space-y-1 ml-4">
-                  <li>💰 <strong>Sueldos y Salarios:</strong> RD$ {formatearMoneda(totalNeto)}</li>
-                  <li>🏛️ <strong>Aportes Patronales (TSS+AFP):</strong> RD$ {formatearMoneda(totalAportes)}</li>
-                </ul>
-              </div>
-
-              {error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
-                  ⚠️ {error}
-                </div>
-              )}
             </div>
-          )}
-
-        </div>
-
-        {/* FOOTER FIJO */}
-        <div className="bg-gray-50 rounded-b-2xl p-4 flex justify-between gap-2 border-t border-gray-200">
-          {paso === 'revision' && (
-            <>
-              <button
-                onClick={onCerrar}
-                disabled={procesando}
-                className="px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-xl disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-              <div className="flex-1 text-center">
-                <p className="text-xs text-gray-500">Total a pagar</p>
-                <p className="text-2xl font-bold text-green-700">
-                  RD$ {formatearMoneda(totalNeto)}
-                </p>
-              </div>
-              <button
-                onClick={() => setPaso('confirmacion')}
-                disabled={procesando || detallesIncluidos.length === 0}
-                className="px-6 py-3 bg-pink-600 hover:bg-pink-700 text-white font-bold rounded-xl disabled:opacity-50"
-              >
-                Continuar →
-              </button>
-            </>
-          )}
-
-          {paso === 'confirmacion' && (
-            <>
-              <button
-                onClick={() => setPaso('revision')}
-                disabled={procesando}
-                className="px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-xl disabled:opacity-50"
-              >
-                ← Volver
-              </button>
-              <button
-                onClick={procesarPago}
-                disabled={procesando}
-                className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {procesando ? (
-                  <>
-                    <span className="animate-spin">⏳</span> Procesando...
-                  </>
-                ) : (
-                  <>
-                    ✅ Confirmar y procesar pago
-                  </>
-                )}
-              </button>
-            </>
-          )}
-        </div>
-
+          </div>
+        )}
       </div>
+    </div>
+  )
+}
+
+function ResumenItem({ label, valor, color, sub, formatear, grande }) {
+  return (
+    <div>
+      <div style={{ fontSize: '10px', color: color, letterSpacing: '0.5px', fontWeight: 600 }}>{label}</div>
+      <div style={{ fontSize: grande ? '20px' : '16px', fontWeight: 600, color: 'var(--color-text-primary)', marginTop: '4px' }}>
+        RD$ {formatear(valor)}
+      </div>
+      {sub && <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '2px' }}>{sub}</div>}
     </div>
   )
 }

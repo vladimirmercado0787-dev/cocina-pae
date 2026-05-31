@@ -3,473 +3,417 @@ import { supabase } from '../../supabaseClient'
 import { crearGastoDesdeBonificacion } from '../../utils/gastosAutomaticos'
 
 const TIPOS_BONO = [
-  { value: 'navideño', label: '🎄 Navideño', color: 'red' },
-  { value: 'cumpleaños', label: '🎂 Cumpleaños', color: 'pink' },
-  { value: 'productividad', label: '🏆 Productividad', color: 'amber' },
-  { value: 'reconocimiento', label: '❤️ Reconocimiento', color: 'purple' },
-  { value: 'otro', label: '✨ Otro', color: 'blue' },
+  { value: 'navideño',    label: '🎄 Navideño',      color: '#1D9E75' },
+  { value: 'cumpleaños',  label: '🎂 Cumpleaños',    color: '#D4537E' },
+  { value: 'productividad', label: '🏆 Productividad', color: '#EF9F27' },
+  { value: 'reconocimiento', label: '⭐ Reconocimiento', color: '#7F77DD' },
+  { value: 'otro',        label: '🎁 Otro',          color: '#378ADD' },
 ]
 
-function ModalBonificacion({ empresa, usuarioActual, onCerrar, onExito }) {
+function ModalBonificacion({ empresaId, usuarioActual, onCerrar, onGuardado, bonificacionExistente = null }) {
   const [empleados, setEmpleados] = useState([])
+  const [empleadosSeleccionados, setEmpleadosSeleccionados] = useState([])
   const [tipo, setTipo] = useState('navideño')
-  const [titulo, setTitulo] = useState('Bono Navideño')
+  const [tituloBono, setTituloBono] = useState('')
   const [descripcion, setDescripcion] = useState('')
+  const [montoIgual, setMontoIgual] = useState(true)
+  const [montoBase, setMontoBase] = useState('')
+  const [montosIndividuales, setMontosIndividuales] = useState({})
   const [fechaPago, setFechaPago] = useState(new Date().toISOString().split('T')[0])
-  const [asignaciones, setAsignaciones] = useState([])
   const [notas, setNotas] = useState('')
-  const [procesando, setProcesando] = useState(false)
-  const [error, setError] = useState('')
   const [cargando, setCargando] = useState(true)
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState('')
 
-  // ─── Tema dual (reactivo vía MutationObserver) ───
-  const [tema, setTema] = useState(() => document.documentElement.getAttribute('data-tema') || 'oscuro')
+  // Tema dual (mismo patrón del Dashboard)
+  const [tema, setTema] = useState(() => localStorage.getItem('cocina_pae_tema') || 'oscuro')
   useEffect(() => {
-    const obs = new MutationObserver(() => {
-      setTema(document.documentElement.getAttribute('data-tema') || 'oscuro')
-    })
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-tema'] })
-    return () => obs.disconnect()
-  }, [])
-  const esTropical = tema === 'tropical'
-
-  // ─── Estilos reutilizables según tema (fondos SÓLIDOS, no transparentes) ───
-  const superficie = {
-    background: 'var(--color-bg-primary)',
-    border: esTropical ? '1px solid #E5E7EB' : '1px solid rgba(255,255,255,0.10)',
-  }
-  const panel = {
-    background: esTropical ? '#F9FAFB' : 'rgba(255,255,255,0.05)',
-    border: esTropical ? '1px solid #E5E7EB' : '1px solid rgba(255,255,255,0.10)',
-  }
-  const footerBg = { background: esTropical ? '#F9FAFB' : 'rgba(255,255,255,0.03)', borderTop: '1px solid var(--color-border-subtle)' }
-  const inputStyle = {
-    background: esTropical ? '#FFFFFF' : 'rgba(255,255,255,0.06)',
-    border: esTropical ? '1px solid #D1D5DB' : '1px solid rgba(255,255,255,0.14)',
-    color: 'var(--color-text-primary)',
-  }
-  const cajaAzul = {
-    background: esTropical ? '#EFF6FF' : 'rgba(59,130,246,0.10)',
-    border: esTropical ? '1px solid #BFDBFE' : '1px solid rgba(59,130,246,0.30)',
-  }
+    document.documentElement.setAttribute('data-tema', tema)
+    localStorage.setItem('cocina_pae_tema', tema)
+  }, [tema])
 
   useEffect(() => {
-    cargarEmpleados()
-  }, [empresa])
+    if (empresaId) cargarDatos()
+  }, [empresaId])
 
-  async function cargarEmpleados() {
+  async function cargarDatos() {
     setCargando(true)
     const { data } = await supabase
       .from('usuarios')
       .select('*')
-      .eq('empresa_id', empresa.id)
+      .eq('empresa_id', empresaId)
       .eq('activo', true)
       .neq('rol', 'propietario')
       .order('nombre')
-    
-    const emps = data || []
-    setEmpleados(emps)
-    
-    setAsignaciones(emps.map(e => ({
-      usuario_id: e.id,
-      nombre: e.nombre,
-      rol: e.rol,
-      incluido: false,
-      monto: 0,
-    })))
-    
+    setEmpleados(data || [])
+
+    if (bonificacionExistente) {
+      setTipo(bonificacionExistente.tipo || 'navideño')
+      setTituloBono(bonificacionExistente.titulo || '')
+      setDescripcion(bonificacionExistente.descripcion || '')
+      setFechaPago(bonificacionExistente.fecha_pago || new Date().toISOString().split('T')[0])
+      setNotas(bonificacionExistente.notas || '')
+    }
     setCargando(false)
   }
 
-  function actualizarTipo(nuevoTipo) {
-    setTipo(nuevoTipo)
-    const tipoObj = TIPOS_BONO.find(t => t.value === nuevoTipo)
-    if (tipoObj) {
-      if (nuevoTipo === 'navideño') setTitulo(`Bono Navideño ${new Date().getFullYear()}`)
-      else if (nuevoTipo === 'cumpleaños') setTitulo('Bono de Cumpleaños')
-      else if (nuevoTipo === 'productividad') setTitulo('Bono de Productividad')
-      else if (nuevoTipo === 'reconocimiento') setTitulo('Bono de Reconocimiento')
-      else setTitulo('Bonificación Extra')
+  function toggleEmpleado(id) {
+    if (empleadosSeleccionados.includes(id)) {
+      setEmpleadosSeleccionados(empleadosSeleccionados.filter(e => e !== id))
+    } else {
+      setEmpleadosSeleccionados([...empleadosSeleccionados, id])
     }
   }
 
-  function actualizarAsignacion(usuarioId, campo, valor) {
-    setAsignaciones(prev => prev.map(a => 
-      a.usuario_id === usuarioId ? { ...a, [campo]: valor } : a
-    ))
+  function seleccionarTodos() {
+    if (empleadosSeleccionados.length === empleados.length) {
+      setEmpleadosSeleccionados([])
+    } else {
+      setEmpleadosSeleccionados(empleados.map(e => e.id))
+    }
   }
 
-  function asignarMontoATodos() {
-    const monto = prompt('¿Qué monto quieres asignar a todos los empleados?', '5000')
-    const montoNum = parseFloat(monto)
-    if (isNaN(montoNum) || montoNum <= 0) return
-    
-    setAsignaciones(prev => prev.map(a => ({
-      ...a,
-      incluido: true,
-      monto: montoNum,
-    })))
+  function montoEmpleado(emp) {
+    if (montoIgual) return parseFloat(montoBase || 0)
+    return parseFloat(montosIndividuales[emp.id] || 0)
   }
 
-  function limpiarTodos() {
-    setAsignaciones(prev => prev.map(a => ({
-      ...a,
-      incluido: false,
-      monto: 0,
-    })))
-  }
+  const totalBono = empleadosSeleccionados.reduce((sum, id) => {
+    const emp = empleados.find(e => e.id === id)
+    return sum + (emp ? montoEmpleado(emp) : 0)
+  }, 0)
 
-  function formatearMoneda(monto) {
-    return Number(monto || 0).toLocaleString('es-DO', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    })
-  }
-
-  const asignacionesIncluidas = asignaciones.filter(a => a.incluido && parseFloat(a.monto) > 0)
-  const totalBono = asignacionesIncluidas.reduce((sum, a) => sum + parseFloat(a.monto || 0), 0)
-
-  async function procesarBonificacion() {
+  async function guardar() {
     setError('')
+    if (empleadosSeleccionados.length === 0) { setError('Selecciona al menos un empleado'); return }
+    if (!tituloBono.trim()) { setError('Pon un título a la bonificación'); return }
+    if (totalBono <= 0) { setError('El monto total debe ser mayor a 0'); return }
 
-    if (!titulo.trim()) {
-      setError('Debes ingresar un título para la bonificación')
-      return
-    }
-    if (asignacionesIncluidas.length === 0) {
-      setError('Debes seleccionar al menos un empleado con un monto mayor a cero')
-      return
-    }
-    if (totalBono <= 0) {
-      setError('El monto total debe ser mayor a cero')
-      return
-    }
-
-    setProcesando(true)
-
+    setGuardando(true)
     try {
-      const año = new Date(fechaPago).getFullYear()
-      
-      const detalleJson = asignacionesIncluidas.map(a => ({
-        usuario_id: a.usuario_id,
-        nombre: a.nombre,
-        rol: a.rol,
-        monto: parseFloat(a.monto),
-      }))
+      const detalle = empleadosSeleccionados.map(id => {
+        const emp = empleados.find(e => e.id === id)
+        return {
+          usuario_id: emp.id,
+          nombre: emp.nombre,
+          rol: emp.rol,
+          monto: montoEmpleado(emp),
+        }
+      })
 
-      const nuevaBoni = {
-        empresa_id: empresa.id,
-        titulo: titulo.trim(),
+      const nuevoBono = {
+        empresa_id: empresaId,
+        titulo: tituloBono.trim(),
         descripcion: descripcion.trim() || null,
         tipo: tipo,
         fecha_pago: fechaPago,
-        año: año,
+        año: new Date(fechaPago).getFullYear(),
         estado: 'pagado',
         fecha_pagado: new Date().toISOString(),
         monto_total: totalBono,
-        cantidad_empleados: asignacionesIncluidas.length,
-        detalle: detalleJson,
-        creado_por_usuario_id: usuarioActual.id,
+        cantidad_empleados: empleadosSeleccionados.length,
+        detalle: detalle,
+        creado_por_usuario_id: usuarioActual?.id || null,
         notas: notas.trim() || null,
       }
 
-      const { data: bonificacionCreada, error: errorInsert } = await supabase
-        .from('bonificaciones_extra')
-        .insert([nuevaBoni])
-        .select()
-        .single()
+      const { data: bonoCreado, error: errBono } = await supabase
+        .from('bonificaciones_extra').insert([nuevoBono]).select().single()
+      if (errBono) throw new Error(errBono.message)
 
-      if (errorInsert) {
-        throw new Error(errorInsert.message)
-      }
-
-      const resultadoGasto = await crearGastoDesdeBonificacion({
-        empresaId: empresa.id,
-        bonificacionId: bonificacionCreada.id,
-        fechaPago: fechaPago,
-        titulo: titulo.trim(),
-        tipo: tipo,
+      const resGasto = await crearGastoDesdeBonificacion?.({
+        empresaId,
+        bonificacionId: bonoCreado.id,
+        titulo: tituloBono.trim(),
+        tipo,
+        fechaPago,
         montoTotal: totalBono,
-        cantidadEmpleados: asignacionesIncluidas.length,
         registradoPor: usuarioActual?.id,
         registradoPorNombre: usuarioActual?.nombre || 'Sistema',
       })
+      if (resGasto && !resGasto.success) console.warn('Bono OK pero falló gasto automático:', resGasto.error)
 
-      if (!resultadoGasto.success) {
-        console.warn('⚠️ Bonificación OK, pero falló crear gasto automático:', resultadoGasto.error)
-      } else {
-        console.log('✅ Ecosistema conectado: gasto automático creado desde bonificación')
-      }
-
-      setProcesando(false)
-      if (onExito) onExito()
-
+      setGuardando(false)
+      if (onGuardado) onGuardado(bonoCreado)
+      onCerrar()
     } catch (e) {
-      setError('Error al procesar la bonificación: ' + e.message)
-      setProcesando(false)
+      setError(e.message)
+      setGuardando(false)
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto" style={{ background: 'rgba(0,0,0,0.6)' }}>
-      <div className="rounded-2xl shadow-2xl max-w-3xl w-full my-8 max-h-[95vh] flex flex-col" style={superficie}>
+  function formatearMoneda(monto) {
+    return Number(monto || 0).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  }
 
-        {/* HEADER */}
-        <div className="bg-gradient-to-br from-amber-500 to-orange-600 text-white rounded-t-2xl p-6 flex justify-between items-start">
-          <div>
-            <p className="text-amber-100 text-xs font-semibold tracking-wider">
-              NUEVA BONIFICACIÓN
-            </p>
-            <h2 className="text-2xl font-bold mt-1">
-              🎁 Bono Extra para Empleados
-            </h2>
-            <p className="text-amber-200 text-sm mt-1">
-              Bonos especiales fuera de la nómina regular
-            </p>
+  const colorTipo = TIPOS_BONO.find(t => t.value === tipo)?.color || '#1D9E75'
+
+  // ─── ESTILOS ───
+  const input = {
+    width: '100%', boxSizing: 'border-box',
+    background: 'var(--color-bg-input)',
+    border: '1px solid var(--color-border-subtle)',
+    borderRadius: '10px', padding: '10px 12px',
+    color: 'var(--color-text-primary)',
+    fontSize: '13px', fontFamily: 'inherit', outline: 'none',
+  }
+  const labelStyle = {
+    display: 'block', fontSize: '10px', fontWeight: 500,
+    color: 'var(--color-text-muted)', marginBottom: '6px',
+    letterSpacing: '0.5px', textTransform: 'uppercase',
+  }
+  const sectionTitle = {
+    fontSize: '11px', color: 'var(--color-text-muted)',
+    letterSpacing: '1.5px', fontWeight: 600, marginBottom: '14px',
+  }
+  const panel = {
+    background: 'var(--color-modulo-bg)',
+    border: '1px solid var(--color-modulo-border)',
+    borderRadius: '14px', padding: '20px',
+    boxShadow: 'var(--modulo-sombra)',
+  }
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 90,
+      background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
+      display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+      padding: '20px', overflowY: 'auto',
+    }}>
+      <div style={{
+        background: 'var(--color-bg-primary)',
+        border: '1px solid var(--color-border-accent)',
+        borderRadius: '16px',
+        maxWidth: '720px', width: '100%',
+        my: '20px',
+        position: 'relative',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+      }}>
+        {/* HEADER del modal */}
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '20px 24px',
+          borderBottom: '1px solid var(--color-border-subtle)',
+          flexWrap: 'wrap', gap: '12px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{
+              width: '44px', height: '44px', borderRadius: '12px',
+              background: `${colorTipo}25`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '22px',
+            }}>🎁</div>
+            <div>
+              <div style={{ fontSize: '10px', color: colorTipo, letterSpacing: '1.5px', fontWeight: 600 }}>
+                BONIFICACIÓN EXTRA
+              </div>
+              <div style={{ fontSize: '18px', fontWeight: 500, color: 'var(--color-text-primary)', marginTop: '2px' }}>
+                {bonificacionExistente ? 'Editar bonificación' : 'Nueva bonificación'}
+              </div>
+            </div>
           </div>
-          <button
-            onClick={onCerrar}
-            disabled={procesando}
-            className="bg-amber-700 hover:bg-amber-800 text-white text-sm px-3 py-2 rounded-lg disabled:opacity-50"
-          >
-            ✖ Cerrar
-          </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center',
+              background: 'var(--color-bg-elevated)',
+              border: '1px solid var(--color-border-subtle)',
+              borderRadius: '20px', padding: '3px', gap: '2px',
+            }}>
+              <button type="button" onClick={() => setTema('oscuro')} style={{
+                background: tema === 'oscuro' ? 'var(--gradient-toggle-active)' : 'transparent',
+                border: 'none', borderRadius: '16px', padding: '6px 10px',
+                display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer',
+              }}>
+                <span style={{ fontSize: '11px' }}>🌙</span>
+                <span style={{ fontSize: '10px', fontWeight: 500, color: tema === 'oscuro' ? 'white' : 'var(--color-text-muted)' }}>Oscuro</span>
+              </button>
+              <button type="button" onClick={() => setTema('tropical')} style={{
+                background: tema === 'tropical' ? 'var(--gradient-toggle-active)' : 'transparent',
+                border: 'none', borderRadius: '16px', padding: '6px 10px',
+                display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer',
+              }}>
+                <span style={{ fontSize: '11px' }}>☀️</span>
+                <span style={{ fontSize: '10px', fontWeight: 500, color: tema === 'tropical' ? 'white' : 'var(--color-text-muted)' }}>Claro</span>
+              </button>
+            </div>
+            <button onClick={onCerrar} style={{
+              background: 'var(--color-bg-elevated)',
+              border: '1px solid var(--color-border-subtle)',
+              borderRadius: '20px', padding: '7px 14px',
+              color: 'var(--color-text-secondary)', fontSize: '12px',
+              cursor: 'pointer', fontFamily: 'inherit',
+            }}>✖ Cerrar</button>
+          </div>
         </div>
 
         {/* BODY */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        <div style={{ padding: '20px 24px' }}>
+          {cargando ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--color-text-muted)' }}>⏳ Cargando empleados...</div>
+          ) : (
+            <>
+              {/* DATOS BÁSICOS */}
+              <div style={{ ...panel, marginBottom: '16px' }}>
+                <div style={sectionTitle}>📋 DATOS DE LA BONIFICACIÓN</div>
 
-          {/* TIPO DE BONO */}
-          <div>
-            <label className="block text-sm font-bold mb-2" style={{ color: 'var(--color-text-secondary)' }}>
-              📋 Tipo de bonificación
-            </label>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-              {TIPOS_BONO.map(t => {
-                const activo = tipo === t.value
-                return (
-                  <button
-                    key={t.value}
-                    onClick={() => actualizarTipo(t.value)}
-                    disabled={procesando}
-                    className="p-3 rounded-xl text-sm font-bold transition"
-                    style={activo ? {
-                      background: esTropical ? '#FEF3C7' : 'rgba(245,158,11,0.18)',
-                      border: '2px solid #F59E0B',
-                      color: esTropical ? '#78350F' : '#FAC775',
-                    } : {
-                      background: 'var(--color-modulo-bg)',
-                      border: '2px solid var(--color-border-subtle)',
-                      color: 'var(--color-text-muted)',
-                    }}
-                  >
-                    {t.label}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* TÍTULO Y FECHA */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-bold mb-1" style={{ color: 'var(--color-text-secondary)' }}>
-                📝 Título
-              </label>
-              <input
-                type="text"
-                value={titulo}
-                onChange={(e) => setTitulo(e.target.value)}
-                disabled={procesando}
-                className="w-full px-3 py-2 rounded-lg"
-                style={inputStyle}
-                placeholder="Bono Navideño 2026"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-1" style={{ color: 'var(--color-text-secondary)' }}>
-                📅 Fecha de pago
-              </label>
-              <input
-                type="date"
-                value={fechaPago}
-                onChange={(e) => setFechaPago(e.target.value)}
-                disabled={procesando}
-                className="w-full px-3 py-2 rounded-lg"
-                style={inputStyle}
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-bold mb-1" style={{ color: 'var(--color-text-secondary)' }}>
-              📄 Descripción (opcional)
-            </label>
-            <input
-              type="text"
-              value={descripcion}
-              onChange={(e) => setDescripcion(e.target.value)}
-              disabled={procesando}
-              className="w-full px-3 py-2 rounded-lg"
-              style={inputStyle}
-              placeholder="Ej: Reconocimiento por trabajo durante inspección INABIE"
-            />
-          </div>
-
-          {/* EMPLEADOS */}
-          <div>
-            <div className="flex justify-between items-center mb-2 flex-wrap gap-2">
-              <label className="text-sm font-bold" style={{ color: 'var(--color-text-secondary)' }}>
-                👥 Empleados a recibir el bono
-              </label>
-              <div className="flex gap-2">
-                <button
-                  onClick={asignarMontoATodos}
-                  disabled={procesando}
-                  className="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-50"
-                >
-                  🚀 Asignar a todos
-                </button>
-                <button
-                  onClick={limpiarTodos}
-                  disabled={procesando}
-                  className="text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-50"
-                  style={{ background: 'var(--color-modulo-bg)', border: '1px solid var(--color-border-subtle)', color: 'var(--color-text-secondary)' }}
-                >
-                  🧹 Limpiar
-                </button>
-              </div>
-            </div>
-
-            {cargando ? (
-              <div className="text-center py-8" style={{ color: 'var(--color-text-muted)' }}>⏳ Cargando empleados...</div>
-            ) : empleados.length === 0 ? (
-              <div className="text-center py-8" style={{ color: 'var(--color-text-muted)' }}>
-                No hay empleados activos disponibles
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {asignaciones.map(a => (
-                  <div 
-                    key={a.usuario_id}
-                    className="rounded-xl p-3 transition flex items-center gap-3"
-                    style={a.incluido ? {
-                      background: esTropical ? 'rgba(245,158,11,0.08)' : 'rgba(245,158,11,0.10)',
-                      border: '1px solid rgba(245,158,11,0.40)',
-                    } : panel}
-                  >
-                    <label className="flex items-center gap-3 flex-1 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={a.incluido}
-                        onChange={(e) => actualizarAsignacion(a.usuario_id, 'incluido', e.target.checked)}
-                        disabled={procesando}
-                        className="w-5 h-5"
-                      />
-                      <div>
-                        <p className="font-bold" style={{ color: 'var(--color-text-primary)' }}>{a.nombre}</p>
-                        <p className="text-xs capitalize" style={{ color: 'var(--color-text-muted)' }}>
-                          {a.rol?.replace('_', ' ')}
-                        </p>
-                      </div>
-                    </label>
-
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>RD$</span>
-                      <input
-                        type="number"
-                        step="100"
-                        min="0"
-                        value={a.monto || ''}
-                        onChange={(e) => actualizarAsignacion(a.usuario_id, 'monto', e.target.value)}
-                        disabled={procesando || !a.incluido}
-                        className="w-28 px-2 py-1.5 rounded-lg text-right font-bold disabled:opacity-50"
-                        style={inputStyle}
-                        placeholder="0"
-                      />
-                    </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginBottom: '12px' }}>
+                  <div>
+                    <label style={labelStyle}>Tipo</label>
+                    <select value={tipo} onChange={(e) => setTipo(e.target.value)} style={input}>
+                      {TIPOS_BONO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
                   </div>
-                ))}
+                  <div>
+                    <label style={labelStyle}>Fecha de pago</label>
+                    <input type="date" value={fechaPago} onChange={(e) => setFechaPago(e.target.value)} style={input} />
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={labelStyle}>Título</label>
+                  <input type="text" value={tituloBono} onChange={(e) => setTituloBono(e.target.value)} placeholder="Ej: Bono Navideño 2026" style={input} />
+                </div>
+
+                <div>
+                  <label style={labelStyle}>Descripción (opcional)</label>
+                  <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} placeholder="Detalles del bono..." style={{ ...input, resize: 'none' }} />
+                </div>
               </div>
-            )}
-          </div>
 
-          {/* NOTAS */}
-          <div>
-            <label className="block text-sm font-bold mb-1" style={{ color: 'var(--color-text-secondary)' }}>
-              📝 Notas adicionales (opcional)
-            </label>
-            <textarea
-              value={notas}
-              onChange={(e) => setNotas(e.target.value)}
-              disabled={procesando}
-              rows={2}
-              className="w-full px-3 py-2 rounded-lg"
-              style={inputStyle}
-              placeholder="Cualquier nota sobre esta bonificación..."
-            />
-          </div>
+              {/* EMPLEADOS */}
+              <div style={{ ...panel, marginBottom: '16px' }}>
+                <div style={{ ...sectionTitle, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                  <span>👥 EMPLEADOS QUE RECIBEN ({empleadosSeleccionados.length}/{empleados.length})</span>
+                  <button onClick={seleccionarTodos} style={{
+                    background: 'var(--color-bg-elevated)',
+                    border: '1px solid var(--color-border-subtle)',
+                    borderRadius: '16px', padding: '5px 12px',
+                    color: 'var(--color-text-secondary)', fontSize: '11px',
+                    cursor: 'pointer', fontFamily: 'inherit', letterSpacing: 0,
+                  }}>
+                    {empleadosSeleccionados.length === empleados.length ? 'Quitar todos' : 'Seleccionar todos'}
+                  </button>
+                </div>
 
-          {/* AVISO CONEXIÓN GASTOS */}
-          {totalBono > 0 && (
-            <div className="rounded-xl p-4" style={cajaAzul}>
-              <p className="text-sm font-semibold mb-2" style={{ color: esTropical ? '#1E3A8A' : '#93C5FD' }}>
-                🔗 Conexión automática con Gastos
-              </p>
-              <p className="text-xs" style={{ color: esTropical ? '#1E40AF' : '#BFDBFE' }}>
-                Al procesar, se creará automáticamente <strong>1 gasto</strong> en el módulo de Gastos:
-              </p>
-              <ul className="text-xs mt-2 space-y-1 ml-4" style={{ color: esTropical ? '#1E40AF' : '#BFDBFE' }}>
-                <li>💰 <strong>Sueldos y Salarios:</strong> RD$ {formatearMoneda(totalBono)} ({asignacionesIncluidas.length} {asignacionesIncluidas.length === 1 ? 'empleado' : 'empleados'})</li>
-              </ul>
-            </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '280px', overflowY: 'auto' }}>
+                  {empleados.map(emp => {
+                    const sel = empleadosSeleccionados.includes(emp.id)
+                    return (
+                      <label key={emp.id} style={{
+                        display: 'flex', alignItems: 'center', gap: '12px',
+                        padding: '10px 12px', cursor: 'pointer',
+                        background: sel ? `${colorTipo}15` : 'var(--color-bg-input)',
+                        border: sel ? `1px solid ${colorTipo}50` : '1px solid var(--color-border-subtle)',
+                        borderRadius: '10px',
+                      }}>
+                        <input type="checkbox" checked={sel} onChange={() => toggleEmpleado(emp.id)} />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-primary)' }}>{emp.nombre}</div>
+                          <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', textTransform: 'capitalize' }}>{emp.rol?.replace('_', ' ')}</div>
+                        </div>
+                        {sel && !montoIgual && (
+                          <input
+                            type="number" placeholder="0.00"
+                            value={montosIndividuales[emp.id] || ''}
+                            onChange={(e) => setMontosIndividuales({ ...montosIndividuales, [emp.id]: e.target.value })}
+                            style={{ ...input, width: '120px', padding: '6px 10px', fontSize: '12px' }}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        )}
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* MONTO */}
+              <div style={{ ...panel, marginBottom: '16px' }}>
+                <div style={sectionTitle}>💰 MONTO</div>
+
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                  <button onClick={() => setMontoIgual(true)} style={{
+                    flex: 1, minWidth: '140px', padding: '10px',
+                    background: montoIgual ? `${colorTipo}25` : 'var(--color-bg-input)',
+                    border: montoIgual ? `1px solid ${colorTipo}` : '1px solid var(--color-border-subtle)',
+                    borderRadius: '10px',
+                    color: montoIgual ? colorTipo : 'var(--color-text-secondary)',
+                    fontSize: '12px', fontWeight: 500,
+                    cursor: 'pointer', fontFamily: 'inherit',
+                  }}>📊 Monto igual a todos</button>
+                  <button onClick={() => setMontoIgual(false)} style={{
+                    flex: 1, minWidth: '140px', padding: '10px',
+                    background: !montoIgual ? `${colorTipo}25` : 'var(--color-bg-input)',
+                    border: !montoIgual ? `1px solid ${colorTipo}` : '1px solid var(--color-border-subtle)',
+                    borderRadius: '10px',
+                    color: !montoIgual ? colorTipo : 'var(--color-text-secondary)',
+                    fontSize: '12px', fontWeight: 500,
+                    cursor: 'pointer', fontFamily: 'inherit',
+                  }}>🎯 Monto individual</button>
+                </div>
+
+                {montoIgual && (
+                  <div>
+                    <label style={labelStyle}>Monto por empleado (RD$)</label>
+                    <input type="number" value={montoBase} onChange={(e) => setMontoBase(e.target.value)} placeholder="0.00" style={{ ...input, fontSize: '15px', fontWeight: 600 }} />
+                  </div>
+                )}
+              </div>
+
+              {/* TOTAL */}
+              <div style={{
+                background: `linear-gradient(135deg, ${colorTipo}25 0%, ${colorTipo}08 100%)`,
+                border: `1px solid ${colorTipo}50`,
+                borderLeft: `4px solid ${colorTipo}`,
+                borderRadius: '14px', padding: '16px 20px',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                marginBottom: '16px', flexWrap: 'wrap', gap: '10px',
+              }}>
+                <div>
+                  <div style={{ fontSize: '10px', color: colorTipo, letterSpacing: '1.5px', fontWeight: 600 }}>TOTAL A PAGAR</div>
+                  <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>{empleadosSeleccionados.length} empleado(s)</div>
+                </div>
+                <div style={{ fontSize: '24px', fontWeight: 600, color: 'var(--color-text-primary)' }}>RD$ {formatearMoneda(totalBono)}</div>
+              </div>
+
+              {/* NOTAS */}
+              <div style={{ ...panel, marginBottom: '16px' }}>
+                <label style={labelStyle}>Notas adicionales (opcional)</label>
+                <textarea value={notas} onChange={(e) => setNotas(e.target.value)} rows={2} placeholder="Observaciones..." style={{ ...input, resize: 'none' }} />
+              </div>
+
+              {error && (
+                <div style={{
+                  background: 'rgba(244, 67, 54, 0.1)',
+                  border: '1px solid rgba(244, 67, 54, 0.3)',
+                  borderRadius: '10px', padding: '12px',
+                  fontSize: '12px', color: '#F4C0D1', marginBottom: '12px',
+                }}>⚠️ {error}</div>
+              )}
+
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <button onClick={onCerrar} disabled={guardando} style={{
+                  flex: 1, minWidth: '140px', padding: '14px',
+                  background: 'var(--color-bg-elevated)',
+                  border: '1px solid var(--color-border-subtle)',
+                  borderRadius: '10px',
+                  color: 'var(--color-text-secondary)',
+                  fontSize: '13px', fontWeight: 500,
+                  cursor: guardando ? 'not-allowed' : 'pointer',
+                  opacity: guardando ? 0.6 : 1, fontFamily: 'inherit',
+                }}>Cancelar</button>
+                <button onClick={guardar} disabled={guardando} style={{
+                  flex: 1, minWidth: '140px', padding: '14px',
+                  background: `linear-gradient(135deg, ${colorTipo} 0%, ${colorTipo}AA 100%)`,
+                  border: 'none', borderRadius: '10px',
+                  color: 'white', fontSize: '13px', fontWeight: 600,
+                  cursor: guardando ? 'not-allowed' : 'pointer',
+                  opacity: guardando ? 0.6 : 1, fontFamily: 'inherit',
+                }}>{guardando ? '⏳ Guardando...' : '💾 Guardar bonificación'}</button>
+              </div>
+            </>
           )}
-
-          {error && (
-            <div className="rounded-lg p-3 text-sm" style={{ background: esTropical ? '#FEF2F2' : 'rgba(239,68,68,0.10)', border: esTropical ? '1px solid #FECACA' : '1px solid rgba(239,68,68,0.30)', color: esTropical ? '#991B1B' : '#FCA5A5' }}>
-              ⚠️ {error}
-            </div>
-          )}
-
         </div>
-
-        {/* FOOTER */}
-        <div className="rounded-b-2xl p-4 flex justify-between items-center gap-2 flex-wrap" style={footerBg}>
-          <button
-            onClick={onCerrar}
-            disabled={procesando}
-            className="px-6 py-3 font-bold rounded-xl disabled:opacity-50"
-            style={{ background: 'var(--color-modulo-bg)', border: '1px solid var(--color-border-subtle)', color: 'var(--color-text-secondary)' }}
-          >
-            Cancelar
-          </button>
-
-          <div className="text-center">
-            <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-              {asignacionesIncluidas.length} empleado{asignacionesIncluidas.length !== 1 ? 's' : ''} · Total
-            </p>
-            <p className="text-2xl font-bold" style={{ color: esTropical ? '#B45309' : '#FAC775' }}>
-              RD$ {formatearMoneda(totalBono)}
-            </p>
-          </div>
-
-          <button
-            onClick={procesarBonificacion}
-            disabled={procesando || totalBono <= 0}
-            className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl disabled:opacity-50 flex items-center gap-2"
-          >
-            {procesando ? (
-              <>
-                <span className="animate-spin">⏳</span> Procesando...
-              </>
-            ) : (
-              <>
-                💰 Procesar bonificación
-              </>
-            )}
-          </button>
-        </div>
-
       </div>
     </div>
   )

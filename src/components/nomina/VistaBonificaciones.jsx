@@ -2,48 +2,37 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import ModalBonificacion from './ModalBonificacion'
 
-const ICONOS_TIPO = {
-  navideño: '🎄',
-  cumpleaños: '🎂',
-  productividad: '🏆',
-  reconocimiento: '❤️',
-  otro: '✨',
-}
-
-const LABELS_TIPO = {
-  navideño: 'Navideño',
-  cumpleaños: 'Cumpleaños',
-  productividad: 'Productividad',
-  reconocimiento: 'Reconocimiento',
-  otro: 'Otro',
+const TIPOS_BONO_INFO = {
+  navideño:        { label: 'Navideño',        icon: '🎄', color: '#1D9E75' },
+  cumpleaños:      { label: 'Cumpleaños',      icon: '🎂', color: '#D4537E' },
+  productividad:   { label: 'Productividad',   icon: '🏆', color: '#EF9F27' },
+  reconocimiento:  { label: 'Reconocimiento',  icon: '⭐', color: '#7F77DD' },
+  otro:            { label: 'Otro',            icon: '🎁', color: '#378ADD' },
 }
 
 function VistaBonificaciones({ empresaId, usuarioActual, onVolver }) {
   const [bonificaciones, setBonificaciones] = useState([])
   const [añoSeleccionado, setAñoSeleccionado] = useState(new Date().getFullYear())
   const [añosDisponibles, setAñosDisponibles] = useState([])
-  const [modalAbierto, setModalAbierto] = useState(false)
-  const [bonoDetalle, setBonoDetalle] = useState(null)
   const [cargando, setCargando] = useState(true)
-  const [empresa, setEmpresa] = useState(null)
-  const [mensajeExito, setMensajeExito] = useState('')
+  const [modalAbierto, setModalAbierto] = useState(false)
+  const [bonoEditando, setBonoEditando] = useState(null)
+  const [bonoVerDetalle, setBonoVerDetalle] = useState(null)
+
+  // Tema dual (mismo patrón del Dashboard)
+  const [tema, setTema] = useState(() => localStorage.getItem('cocina_pae_tema') || 'oscuro')
+  useEffect(() => {
+    document.documentElement.setAttribute('data-tema', tema)
+    localStorage.setItem('cocina_pae_tema', tema)
+  }, [tema])
 
   useEffect(() => {
-    if (empresaId) {
-      cargarEmpresa()
-      cargarAños()
-    }
+    if (empresaId) cargarAños()
   }, [empresaId])
 
   useEffect(() => {
-    if (empresaId && añoSeleccionado) cargarBonificaciones()
-  }, [añoSeleccionado, empresaId])
-
-  async function cargarEmpresa() {
-    const { data } = await supabase
-      .from('empresas').select('*').eq('id', empresaId).single()
-    setEmpresa(data)
-  }
+    if (empresaId && añoSeleccionado) cargarBonos()
+  }, [empresaId, añoSeleccionado])
 
   async function cargarAños() {
     const { data } = await supabase
@@ -51,13 +40,13 @@ function VistaBonificaciones({ empresaId, usuarioActual, onVolver }) {
       .select('año')
       .eq('empresa_id', empresaId)
       .order('año', { ascending: false })
-    
+
     const años = [...new Set((data || []).map(b => b.año))]
-    if (años.length === 0) años.push(new Date().getFullYear())
-    setAñosDisponibles(años)
+    if (!años.includes(new Date().getFullYear())) años.push(new Date().getFullYear())
+    setAñosDisponibles(años.sort((a, b) => b - a))
   }
 
-  async function cargarBonificaciones() {
+  async function cargarBonos() {
     setCargando(true)
     const { data } = await supabase
       .from('bonificaciones_extra')
@@ -65,134 +54,162 @@ function VistaBonificaciones({ empresaId, usuarioActual, onVolver }) {
       .eq('empresa_id', empresaId)
       .eq('año', añoSeleccionado)
       .order('fecha_pago', { ascending: false })
-    
     setBonificaciones(data || [])
     setCargando(false)
   }
 
-  function mostrarExito(msg) {
-    setMensajeExito(msg)
-    setTimeout(() => setMensajeExito(''), 4000)
+  function bonosPorTipo(tipo) {
+    return bonificaciones
+      .filter(b => b.tipo === tipo)
+      .reduce((sum, b) => sum + parseFloat(b.monto_total || 0), 0)
   }
 
-  function onBonoExitoso() {
-    setModalAbierto(false)
-    mostrarExito('✅ Bonificación procesada correctamente')
-    cargarAños()
-    cargarBonificaciones()
-  }
+  const totalAño = bonificaciones.reduce((sum, b) => sum + parseFloat(b.monto_total || 0), 0)
 
   function formatearMoneda(monto) {
-    return Number(monto || 0).toLocaleString('es-DO', {
-      minimumFractionDigits: 2, maximumFractionDigits: 2
-    })
+    return Number(monto || 0).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   }
 
   function formatearFecha(fecha) {
     if (!fecha) return '-'
-    return new Date(fecha).toLocaleDateString('es-DO', {
-      day: 'numeric', month: 'short', year: 'numeric'
-    })
+    return new Date(fecha).toLocaleDateString('es-DO', { day: 'numeric', month: 'short', year: 'numeric' })
   }
 
-  // KPIs por tipo
-  const totalAño = bonificaciones.reduce((sum, b) => sum + parseFloat(b.monto_total || 0), 0)
-  const totalNavideño = bonificaciones.filter(b => b.tipo === 'navideño').reduce((s, b) => s + parseFloat(b.monto_total), 0)
-  const totalCumpleaños = bonificaciones.filter(b => b.tipo === 'cumpleaños').reduce((s, b) => s + parseFloat(b.monto_total), 0)
-  const totalProductividad = bonificaciones.filter(b => b.tipo === 'productividad').reduce((s, b) => s + parseFloat(b.monto_total), 0)
-  const totalReconocimiento = bonificaciones.filter(b => b.tipo === 'reconocimiento').reduce((s, b) => s + parseFloat(b.monto_total), 0)
+  function abrirNuevo() {
+    setBonoEditando(null)
+    setModalAbierto(true)
+  }
+
+  function alGuardado() {
+    setModalAbierto(false)
+    setBonoEditando(null)
+    cargarBonos()
+    cargarAños()
+  }
+
+  // ─── ESTILOS ───
+  const panel = {
+    background: 'var(--color-modulo-bg)',
+    border: '1px solid var(--color-modulo-border)',
+    borderRadius: '14px', padding: '20px',
+    boxShadow: 'var(--modulo-sombra)',
+  }
+  const sectionTitle = {
+    fontSize: '11px', color: 'var(--color-text-muted)',
+    letterSpacing: '1.5px', fontWeight: 600, marginBottom: '14px',
+  }
 
   return (
-    <div className="w-full max-w-5xl">
+    <div style={{
+      minHeight: '100vh', background: 'var(--color-bg-primary)',
+      position: 'relative', padding: '20px', color: 'var(--color-text-primary)',
+    }}>
+      <style>{`
+        @keyframes vbSlideTop { 0% { opacity: 0; transform: translateY(-18px); } 100% { opacity: 1; transform: translateY(0); } }
+        @keyframes vbFadeUp { 0% { opacity: 0; transform: translateY(22px); } 100% { opacity: 1; transform: translateY(0); } }
+      `}</style>
 
-      {mensajeExito && (
-        <div className="fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-xl shadow-2xl z-[60] animate-pulse">
-          {mensajeExito}
-        </div>
-      )}
+      <div style={{
+        position: 'fixed', inset: 0,
+        backgroundImage: 'var(--glow-verde), var(--glow-ambar)',
+        pointerEvents: 'none', zIndex: 0,
+      }} />
 
-      {/* MODAL CREAR */}
-      {modalAbierto && empresa && (
+      {/* MODAL DE BONIFICACIÓN */}
+      {modalAbierto && (
         <ModalBonificacion
-          empresa={empresa}
+          empresaId={empresaId}
           usuarioActual={usuarioActual}
-          onCerrar={() => setModalAbierto(false)}
-          onExito={onBonoExitoso}
+          bonificacionExistente={bonoEditando}
+          onCerrar={() => { setModalAbierto(false); setBonoEditando(null) }}
+          onGuardado={alGuardado}
         />
       )}
 
-      {/* MODAL DETALLE */}
-      {bonoDetalle && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col">
-            <div className="bg-gradient-to-br from-amber-500 to-orange-600 text-white rounded-t-2xl p-6 flex justify-between items-start">
+      {/* MODAL DE DETALLE */}
+      {bonoVerDetalle && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 95,
+          background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '20px',
+        }}>
+          <div style={{
+            background: 'var(--color-bg-primary)',
+            border: '1px solid var(--color-border-accent)',
+            borderRadius: '16px', maxWidth: '560px', width: '100%',
+            maxHeight: '85vh', overflowY: 'auto',
+          }}>
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '20px 24px', borderBottom: '1px solid var(--color-border-subtle)',
+            }}>
               <div>
-                <p className="text-amber-100 text-xs font-semibold tracking-wider">
-                  DETALLE DE BONIFICACIÓN
-                </p>
-                <h2 className="text-2xl font-bold mt-1">
-                  {ICONOS_TIPO[bonoDetalle.tipo]} {bonoDetalle.titulo}
-                </h2>
-                <p className="text-amber-200 text-sm mt-1">
-                  Pagado el {formatearFecha(bonoDetalle.fecha_pago)}
-                </p>
+                <div style={{ fontSize: '10px', color: TIPOS_BONO_INFO[bonoVerDetalle.tipo]?.color || '#1D9E75', letterSpacing: '1.5px', fontWeight: 600 }}>
+                  {TIPOS_BONO_INFO[bonoVerDetalle.tipo]?.icon} {TIPOS_BONO_INFO[bonoVerDetalle.tipo]?.label?.toUpperCase()}
+                </div>
+                <div style={{ fontSize: '18px', fontWeight: 500, color: 'var(--color-text-primary)', marginTop: '2px' }}>
+                  {bonoVerDetalle.titulo}
+                </div>
               </div>
-              <button
-                onClick={() => setBonoDetalle(null)}
-                className="bg-amber-700 hover:bg-amber-800 text-white text-sm px-3 py-2 rounded-lg"
-              >
-                ✖ Cerrar
-              </button>
+              <button onClick={() => setBonoVerDetalle(null)} style={{
+                background: 'var(--color-bg-elevated)',
+                border: '1px solid var(--color-border-subtle)',
+                borderRadius: '20px', padding: '7px 14px',
+                color: 'var(--color-text-secondary)', fontSize: '12px',
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}>✖ Cerrar</button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              <div className="bg-gray-50 rounded-xl p-4">
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-                  <div>
-                    <p className="text-xs text-gray-500">Tipo</p>
-                    <p className="font-bold capitalize">{LABELS_TIPO[bonoDetalle.tipo]}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Empleados</p>
-                    <p className="font-bold">{bonoDetalle.cantidad_empleados}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Total</p>
-                    <p className="font-bold text-amber-700">
-                      RD$ {formatearMoneda(bonoDetalle.monto_total)}
-                    </p>
-                  </div>
+            <div style={{ padding: '20px 24px' }}>
+              <div style={{
+                background: 'var(--color-bg-input)',
+                border: '1px solid var(--color-border-subtle)',
+                borderRadius: '10px', padding: '14px',
+                fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '8px',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--color-text-muted)' }}>Fecha de pago:</span>
+                  <span style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>{formatearFecha(bonoVerDetalle.fecha_pago)}</span>
                 </div>
-                {bonoDetalle.descripcion && (
-                  <div className="mt-3 pt-3 border-t border-gray-200">
-                    <p className="text-xs text-gray-500 mb-1">Descripción</p>
-                    <p className="text-sm text-gray-700">{bonoDetalle.descripcion}</p>
-                  </div>
-                )}
-                {bonoDetalle.notas && (
-                  <div className="mt-3 pt-3 border-t border-gray-200">
-                    <p className="text-xs text-gray-500 mb-1">📝 Notas</p>
-                    <p className="text-sm text-gray-700 italic">{bonoDetalle.notas}</p>
-                  </div>
-                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--color-text-muted)' }}>Empleados:</span>
+                  <span style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>{bonoVerDetalle.cantidad_empleados}</span>
+                </div>
+                <div style={{
+                  display: 'flex', justifyContent: 'space-between',
+                  paddingTop: '8px', borderTop: '1px solid var(--color-border-subtle)',
+                  fontSize: '14px',
+                }}>
+                  <span style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>Total:</span>
+                  <span style={{ color: '#1D9E75', fontWeight: 600 }}>RD$ {formatearMoneda(bonoVerDetalle.monto_total)}</span>
+                </div>
               </div>
 
-              <div>
-                <p className="text-sm font-bold text-gray-700 mb-3">
-                  👥 EMPLEADOS BENEFICIADOS
-                </p>
-                <div className="space-y-2">
-                  {(bonoDetalle.detalle || []).map((emp, idx) => (
-                    <div key={idx} className="border border-gray-200 rounded-xl p-3 flex items-center justify-between">
+              {bonoVerDetalle.descripcion && (
+                <div style={{ marginTop: '14px', fontSize: '12px', color: 'var(--color-text-secondary)', fontStyle: 'italic' }}>
+                  📝 {bonoVerDetalle.descripcion}
+                </div>
+              )}
+
+              <div style={{ marginTop: '16px' }}>
+                <div style={{ ...sectionTitle, marginBottom: '10px' }}>👥 EMPLEADOS</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {(bonoVerDetalle.detalle || []).map((d, i) => (
+                    <div key={i} style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '10px 12px',
+                      background: 'var(--color-bg-input)',
+                      border: '1px solid var(--color-border-subtle)',
+                      borderRadius: '10px',
+                    }}>
                       <div>
-                        <p className="font-bold text-gray-900">{emp.nombre}</p>
-                        <p className="text-xs text-gray-600 capitalize">
-                          {emp.rol?.replace('_', ' ')}
-                        </p>
+                        <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-primary)' }}>{d.nombre}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', textTransform: 'capitalize' }}>{d.rol?.replace('_', ' ')}</div>
                       </div>
-                      <p className="text-xl font-bold text-amber-700">
-                        RD$ {formatearMoneda(emp.monto)}
-                      </p>
+                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#1D9E75' }}>
+                        RD$ {formatearMoneda(d.monto)}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -203,155 +220,205 @@ function VistaBonificaciones({ empresaId, usuarioActual, onVolver }) {
       )}
 
       {/* HEADER */}
-      <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-6 mb-6 text-white">
-        <div className="flex justify-between items-start">
-          <div>
-            <p className="text-amber-100 text-xs font-semibold tracking-wider">
-              BONIFICACIONES EXTRA
-            </p>
-            <h2 className="text-3xl font-bold mt-1">
-              🎁 Bonos Especiales
-            </h2>
-            <p className="text-amber-200 mt-1 text-sm">
-              Bonos fuera de la nómina regular
-            </p>
-          </div>
-          <div className="flex gap-2 flex-wrap justify-end">
-            <button
-              onClick={() => setModalAbierto(true)}
-              className="bg-white text-amber-700 hover:bg-amber-50 font-bold text-sm px-4 py-2 rounded-lg shadow-lg"
-            >
-              ➕ Nueva bonificación
-            </button>
-            <button
-              onClick={onVolver}
-              className="bg-amber-700 hover:bg-amber-800 text-white text-sm px-4 py-2 rounded-lg"
-            >
-              ← Volver
-            </button>
-          </div>
+      <div style={{
+        position: 'relative', zIndex: 1,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        marginBottom: '20px', flexWrap: 'wrap', gap: '12px',
+        opacity: 0, animation: 'vbSlideTop 0.5s ease forwards',
+      }}>
+        <button onClick={onVolver} style={{
+          background: 'var(--color-bg-elevated)',
+          border: '1px solid var(--color-border-subtle)',
+          borderRadius: '20px', padding: '7px 14px',
+          color: 'var(--color-text-secondary)', fontSize: '12px',
+          cursor: 'pointer', fontFamily: 'inherit',
+          display: 'flex', alignItems: 'center', gap: '6px',
+        }}>← Volver</button>
+
+        <div style={{
+          display: 'flex', alignItems: 'center',
+          background: 'var(--color-bg-elevated)',
+          border: '1px solid var(--color-border-subtle)',
+          borderRadius: '20px', padding: '3px', gap: '2px',
+        }}>
+          <button type="button" onClick={() => setTema('oscuro')} style={{
+            background: tema === 'oscuro' ? 'var(--gradient-toggle-active)' : 'transparent',
+            border: 'none', borderRadius: '16px', padding: '6px 10px',
+            display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer',
+          }}>
+            <span style={{ fontSize: '11px' }}>🌙</span>
+            <span style={{ fontSize: '10px', fontWeight: 500, color: tema === 'oscuro' ? 'white' : 'var(--color-text-muted)' }}>Oscuro</span>
+          </button>
+          <button type="button" onClick={() => setTema('tropical')} style={{
+            background: tema === 'tropical' ? 'var(--gradient-toggle-active)' : 'transparent',
+            border: 'none', borderRadius: '16px', padding: '6px 10px',
+            display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer',
+          }}>
+            <span style={{ fontSize: '11px' }}>☀️</span>
+            <span style={{ fontSize: '10px', fontWeight: 500, color: tema === 'tropical' ? 'white' : 'var(--color-text-muted)' }}>Claro</span>
+          </button>
         </div>
       </div>
 
-      {/* KPIs */}
-      <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-        <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
-          <p className="text-xs text-gray-500 font-semibold tracking-wider">
-            📊 RESUMEN AÑO {añoSeleccionado}
-          </p>
+      {/* TÍTULO */}
+      <div style={{
+        position: 'relative', zIndex: 1,
+        background: 'var(--color-modulo-bg)',
+        border: '1px solid var(--color-modulo-border)',
+        borderLeft: '4px solid #EF9F27',
+        borderRadius: '14px', padding: '20px',
+        marginBottom: '20px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: '16px', flexWrap: 'wrap',
+        boxShadow: 'var(--modulo-sombra)',
+        opacity: 0, animation: 'vbFadeUp 0.5s ease 0.1s forwards',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{
+            width: '52px', height: '52px', borderRadius: '14px',
+            background: 'rgba(239, 159, 39, 0.18)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '26px',
+          }}>🎁</div>
+          <div>
+            <div style={{ fontSize: '10px', color: '#EF9F27', letterSpacing: '1.5px', fontWeight: 600 }}>
+              BONIFICACIONES EXTRA
+            </div>
+            <div style={{ fontSize: '22px', fontWeight: 500, color: 'var(--color-text-primary)', marginTop: '2px' }}>
+              Bonos Especiales
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
+              Bonos fuera de la nómina regular
+            </div>
+          </div>
+        </div>
+
+        <button onClick={abrirNuevo} style={{
+          padding: '12px 18px',
+          background: 'linear-gradient(135deg, #EF9F27 0%, #BA7517 100%)',
+          border: 'none', borderRadius: '10px',
+          color: 'white', fontSize: '13px', fontWeight: 600,
+          cursor: 'pointer', fontFamily: 'inherit',
+          display: 'flex', alignItems: 'center', gap: '6px',
+        }}>+ Nueva bonificación</button>
+      </div>
+
+      {/* RESUMEN AÑO */}
+      <div style={{
+        position: 'relative', zIndex: 1, marginBottom: '20px',
+        opacity: 0, animation: 'vbFadeUp 0.5s ease 0.15s forwards',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '14px' }}>
+          <div style={sectionTitle}>📊 RESUMEN AÑO {añoSeleccionado}</div>
           <select
             value={añoSeleccionado}
             onChange={(e) => setAñoSeleccionado(parseInt(e.target.value))}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-semibold"
+            style={{
+              background: 'var(--color-bg-elevated)',
+              border: '1px solid var(--color-border-subtle)',
+              borderRadius: '10px', padding: '7px 12px',
+              color: 'var(--color-text-primary)',
+              fontSize: '12px', fontFamily: 'inherit',
+              cursor: 'pointer',
+            }}
           >
-            {añosDisponibles.map(año => (
-              <option key={año} value={año}>{año}</option>
-            ))}
+            {añosDisponibles.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
-            <p className="text-xs text-amber-700 font-semibold">TOTAL</p>
-            <p className="text-lg font-bold text-amber-900">
-              RD$ {formatearMoneda(totalAño)}
-            </p>
-            <p className="text-xs text-amber-600 mt-1">{bonificaciones.length} bonos</p>
-          </div>
-          <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
-            <p className="text-xs text-red-700 font-semibold">🎄 NAVIDEÑO</p>
-            <p className="text-sm font-bold text-red-900">
-              RD$ {formatearMoneda(totalNavideño)}
-            </p>
-          </div>
-          <div className="bg-pink-50 border border-pink-200 rounded-xl p-3 text-center">
-            <p className="text-xs text-pink-700 font-semibold">🎂 CUMPLEAÑOS</p>
-            <p className="text-sm font-bold text-pink-900">
-              RD$ {formatearMoneda(totalCumpleaños)}
-            </p>
-          </div>
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-center">
-            <p className="text-xs text-yellow-700 font-semibold">🏆 PROD.</p>
-            <p className="text-sm font-bold text-yellow-900">
-              RD$ {formatearMoneda(totalProductividad)}
-            </p>
-          </div>
-          <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 text-center">
-            <p className="text-xs text-purple-700 font-semibold">❤️ RECON.</p>
-            <p className="text-sm font-bold text-purple-900">
-              RD$ {formatearMoneda(totalReconocimiento)}
-            </p>
-          </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px' }}>
+          <KpiTipo label="TOTAL" valor={totalAño} sub={`${bonificaciones.length} bonos`} color="#FAC775" formatear={formatearMoneda} />
+          {Object.entries(TIPOS_BONO_INFO).map(([key, info]) => (
+            <KpiTipo key={key} label={`${info.icon} ${info.label.toUpperCase()}`} valor={bonosPorTipo(key)} color={info.color} formatear={formatearMoneda} />
+          ))}
         </div>
       </div>
 
-      {/* LISTA */}
-      <div className="bg-white rounded-2xl shadow-xl p-6">
-        <p className="text-xs text-gray-500 font-semibold tracking-wider mb-4">
-          🎁 BONIFICACIONES DEL AÑO
-        </p>
+      {/* LISTA DE BONIFICACIONES */}
+      <div style={{
+        position: 'relative', zIndex: 1, marginBottom: '20px',
+        opacity: 0, animation: 'vbFadeUp 0.5s ease 0.2s forwards',
+      }}>
+        <div style={sectionTitle}>🎁 BONIFICACIONES DEL AÑO</div>
 
         {cargando ? (
-          <div className="text-center py-12 text-gray-500">⏳ Cargando...</div>
+          <div style={{ ...panel, textAlign: 'center', color: 'var(--color-text-muted)' }}>⏳ Cargando bonificaciones...</div>
         ) : bonificaciones.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-4xl mb-2">🎁</p>
-            <p className="text-gray-700 font-bold mb-1">
+          <div style={{ ...panel, textAlign: 'center' }}>
+            <div style={{ fontSize: '32px', marginBottom: '8px' }}>📭</div>
+            <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: '4px' }}>
               No hay bonificaciones en {añoSeleccionado}
-            </p>
-            <p className="text-sm text-gray-500 mb-4">
-              Crea tu primera bonificación para empleados
-            </p>
-            <button
-              onClick={() => setModalAbierto(true)}
-              className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-6 py-3 rounded-xl"
-            >
-              ➕ Crear bonificación
-            </button>
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
+              Toca "+ Nueva bonificación" para agregar la primera.
+            </div>
           </div>
         ) : (
-          <div className="space-y-2">
-            {bonificaciones.map(b => (
-              <div 
-                key={b.id}
-                className="border border-gray-200 rounded-xl p-4 hover:bg-gray-50 transition cursor-pointer flex items-center justify-between gap-3 flex-wrap"
-                onClick={() => setBonoDetalle(b)}
-              >
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-2xl flex-shrink-0">
-                    {ICONOS_TIPO[b.tipo]}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {bonificaciones.map(b => {
+              const info = TIPOS_BONO_INFO[b.tipo] || TIPOS_BONO_INFO.otro
+              return (
+                <div key={b.id} style={{
+                  background: 'var(--color-modulo-bg)',
+                  border: '1px solid var(--color-modulo-border)',
+                  borderLeft: `4px solid ${info.color}`,
+                  borderRadius: '12px', padding: '14px 16px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  gap: '12px', flexWrap: 'wrap',
+                  boxShadow: 'var(--modulo-sombra)',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: '200px' }}>
+                    <div style={{
+                      width: '40px', height: '40px', borderRadius: '10px',
+                      background: `${info.color}25`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '20px',
+                    }}>{info.icon}</div>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--color-text-primary)' }}>{b.titulo}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
+                        {formatearFecha(b.fecha_pago)} · {b.cantidad_empleados} empleado(s) · {info.label}
+                      </div>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="font-bold text-gray-900 truncate">
-                      {b.titulo}
-                    </p>
-                    <p className="text-xs text-gray-600">
-                      {formatearFecha(b.fecha_pago)} · {b.cantidad_empleados} empleado{b.cantidad_empleados !== 1 ? 's' : ''} · 
-                      {' '}<span className="capitalize">{LABELS_TIPO[b.tipo]}</span>
-                    </p>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Total</div>
+                      <div style={{ fontSize: '16px', fontWeight: 600, color: info.color }}>RD$ {formatearMoneda(b.monto_total)}</div>
+                    </div>
+                    <button onClick={() => setBonoVerDetalle(b)} style={{
+                      padding: '7px 12px',
+                      background: `${info.color}25`,
+                      border: `1px solid ${info.color}50`,
+                      borderRadius: '8px',
+                      color: info.color,
+                      fontSize: '11px', fontWeight: 600,
+                      cursor: 'pointer', fontFamily: 'inherit',
+                    }}>👁️ Ver</button>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-xs text-gray-500">Total</p>
-                  <p className="text-lg font-bold text-amber-700">
-                    RD$ {formatearMoneda(b.monto_total)}
-                  </p>
-                </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setBonoDetalle(b)
-                  }}
-                  className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-3 py-2 rounded-lg"
-                >
-                  👁️ Ver
-                </button>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
+    </div>
+  )
+}
 
+function KpiTipo({ label, valor, sub, color, formatear }) {
+  return (
+    <div style={{
+      background: 'var(--color-modulo-bg)',
+      border: '1px solid var(--color-modulo-border)',
+      borderLeft: `4px solid ${color}`,
+      borderRadius: '12px', padding: '12px 14px',
+      boxShadow: 'var(--modulo-sombra)',
+    }}>
+      <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginBottom: '6px', letterSpacing: '0.5px' }}>{label}</div>
+      <div style={{ fontSize: '15px', fontWeight: 600, color: color }}>RD$ {formatear(valor)}</div>
+      {sub && <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '2px' }}>{sub}</div>}
     </div>
   )
 }

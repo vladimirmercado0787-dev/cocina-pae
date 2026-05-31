@@ -3,57 +3,18 @@ import { supabase } from '../../supabaseClient'
 import { crearGastoDesdeLiquidacion } from '../../utils/gastosAutomaticos'
 
 const TIPOS_CONTRATO_INFO = {
-  'indefinido': { 
-    label: 'Indefinido', 
-    icon: '∞',
-    color: 'blue',
-    explicacion: 'El contrato dura indefinidamente hasta que una de las partes lo termine'
-  },
-  'obra_servicio': { 
-    label: 'Obra/Servicio Determinado', 
-    icon: '📑',
-    color: 'amber',
-    explicacion: 'Contrato con fecha fija de fin (típico en PAE: año escolar)'
-  },
-  'estacional': { 
-    label: 'Estacional', 
-    icon: '🍂',
-    color: 'orange',
-    explicacion: 'Trabajo por temporadas específicas'
-  },
+  'indefinido':     { label: 'Indefinido',                 icon: '∞',  color: '#378ADD' },
+  'obra_servicio':  { label: 'Obra/Servicio Determinado',  icon: '📑', color: '#EF9F27' },
+  'estacional':     { label: 'Estacional',                 icon: '🍂', color: '#D85A30' },
 }
 
 const RAZONES_SALIDA = [
-  { 
-    value: 'terminacion_natural', 
-    label: '✅ Terminación natural del contrato',
-    descripcion: 'El contrato llegó a su fecha fin pactada'
-  },
-  { 
-    value: 'renuncia', 
-    label: '👋 Renuncia voluntaria (Art. 87)',
-    descripcion: 'El empleado decide dejar el trabajo'
-  },
-  { 
-    value: 'despido_justa', 
-    label: '⚠️ Despido con causa justa',
-    descripcion: 'Despido por falta grave del empleado'
-  },
-  { 
-    value: 'despido_sin_causa', 
-    label: '🚨 Despido sin causa (Art. 75 - Desahucio)',
-    descripcion: 'Empleador termina sin razón justificada'
-  },
-  { 
-    value: 'despido_anticipado_obra', 
-    label: '🚨 Despido anticipado en obra/servicio',
-    descripcion: 'Termina obra/servicio ANTES de la fecha fin (¡puede ser caro!)'
-  },
-  { 
-    value: 'mutuo_acuerdo', 
-    label: '🤝 Mutuo acuerdo',
-    descripcion: 'Ambas partes acuerdan terminar'
-  },
+  { value: 'terminacion_natural',     label: '✅ Terminación natural del contrato',     descripcion: 'El contrato llegó a su fecha fin pactada' },
+  { value: 'renuncia',                label: '👋 Renuncia voluntaria (Art. 87)',         descripcion: 'El empleado decide dejar el trabajo' },
+  { value: 'despido_justa',           label: '⚠️ Despido con causa justa',               descripcion: 'Despido por falta grave del empleado' },
+  { value: 'despido_sin_causa',       label: '🚨 Despido sin causa (Art. 75 - Desahucio)', descripcion: 'Empleador termina sin razón justificada' },
+  { value: 'despido_anticipado_obra', label: '🚨 Despido anticipado en obra/servicio',   descripcion: 'Termina obra/servicio ANTES de la fecha fin (¡puede ser caro!)' },
+  { value: 'mutuo_acuerdo',           label: '🤝 Mutuo acuerdo',                          descripcion: 'Ambas partes acuerdan terminar' },
 ]
 
 function CalculadoraLiquidacion({ empresaId, usuarioActual, onVolver, empleadoPreseleccionado = null }) {
@@ -67,32 +28,35 @@ function CalculadoraLiquidacion({ empresaId, usuarioActual, onVolver, empleadoPr
   const [fechaFinContrato, setFechaFinContrato] = useState('')
   const [notasLiquidacion, setNotasLiquidacion] = useState('')
   const [cargando, setCargando] = useState(true)
-  
-  // Estados para el flujo de procesamiento
   const [mostrarConfirmacion, setMostrarConfirmacion] = useState(false)
   const [procesando, setProcesando] = useState(false)
   const [error, setError] = useState('')
   const [liquidacionExitosa, setLiquidacionExitosa] = useState(null)
 
+  // Tema dual (mismo patrón del Dashboard)
+  const [tema, setTema] = useState(() => {
+    return localStorage.getItem('cocina_pae_tema') || 'oscuro'
+  })
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-tema', tema)
+    localStorage.setItem('cocina_pae_tema', tema)
+  }, [tema])
+
   useEffect(() => {
     if (empresaId) cargarDatos()
   }, [empresaId])
 
-  // INT-005: Si viene empleado preseleccionado desde VistaEmpleados,
-  // lo activamos automáticamente después de cargar los datos
   useEffect(() => {
     if (empleadoPreseleccionado && empleados.length > 0) {
       const emp = empleados.find(e => e.id === empleadoPreseleccionado.id)
-      if (emp) {
-        onEmpleadoChange(empleadoPreseleccionado.id)
-      }
+      if (emp) onEmpleadoChange(empleadoPreseleccionado.id)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empleadoPreseleccionado, empleados])
 
   async function cargarDatos() {
     setCargando(true)
-
     const { data: empresaData } = await supabase
       .from('empresas').select('*').eq('id', empresaId).single()
     setEmpresa(empresaData)
@@ -106,27 +70,18 @@ function CalculadoraLiquidacion({ empresaId, usuarioActual, onVolver, empleadoPr
       .not('sueldo', 'is', null)
       .order('nombre')
     setEmpleados(empleadosData || [])
-
     setCargando(false)
   }
 
   async function onEmpleadoChange(empleadoId) {
-    if (!empleadoId) {
-      setEmpleadoSeleccionado(null)
-      return
-    }
+    if (!empleadoId) { setEmpleadoSeleccionado(null); return }
     const emp = empleados.find(e => e.id === empleadoId)
     setEmpleadoSeleccionado(emp)
-    
+
     const { data: contratoData } = await supabase
-      .from('contratos')
-      .select('*')
-      .eq('usuario_id', empleadoId)
-      .eq('estado', 'activo')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    
+      .from('contratos').select('*').eq('usuario_id', empleadoId).eq('estado', 'activo')
+      .order('created_at', { ascending: false }).limit(1).maybeSingle()
+
     if (contratoData) {
       setTipoContrato(contratoData.tipo_contrato || 'indefinido')
       setFechaInicioContrato(contratoData.fecha_inicio || '')
@@ -137,10 +92,6 @@ function CalculadoraLiquidacion({ empresaId, usuarioActual, onVolver, empleadoPr
       setFechaFinContrato('')
     }
   }
-
-  // ═══════════════════════════════════════════════════
-  // 🧮 HELPERS
-  // ═══════════════════════════════════════════════════
 
   function salarioMensual(emp) {
     if (!emp) return 0
@@ -153,92 +104,55 @@ function CalculadoraLiquidacion({ empresaId, usuarioActual, onVolver, empleadoPr
     return sueldo
   }
 
-  function salarioDiario(emp) {
-    return salarioMensual(emp) / 23.83
-  }
+  function salarioDiario(emp) { return salarioMensual(emp) / 23.83 }
 
   function calcularTiempo() {
     if (!fechaInicioContrato || !fechaSalida) return { años: 0, meses: 0, dias: 0, totalDias: 0, totalMeses: 0 }
-    
     const inicio = new Date(fechaInicioContrato)
     const fin = new Date(fechaSalida)
-    
     const totalMs = fin - inicio
     const totalDias = Math.floor(totalMs / (1000 * 60 * 60 * 24))
-    
     if (totalDias < 0) return { años: 0, meses: 0, dias: 0, totalDias: 0, totalMeses: 0 }
-    
     const años = Math.floor(totalDias / 365.25)
     const restoDias1 = totalDias - Math.floor(años * 365.25)
     const meses = Math.floor(restoDias1 / 30.44)
     const dias = Math.floor(restoDias1 - (meses * 30.44))
     const totalMeses = totalDias / 30.44
-    
     return { años, meses, dias, totalDias, totalMeses }
   }
 
   function formatearMoneda(monto) {
-    return Number(monto || 0).toLocaleString('es-DO', {
-      minimumFractionDigits: 2, maximumFractionDigits: 2
-    })
+    return Number(monto || 0).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   }
 
   function formatearFecha(fecha) {
     if (!fecha) return '-'
-    return new Date(fecha).toLocaleDateString('es-DO', {
-      day: 'numeric', month: 'long', year: 'numeric'
-    })
+    return new Date(fecha).toLocaleDateString('es-DO', { day: 'numeric', month: 'long', year: 'numeric' })
   }
 
-  // ═══════════════════════════════════════════════════
-  // ⚖️ CÁLCULOS DE LIQUIDACIÓN
-  // ═══════════════════════════════════════════════════
-
   function calcularLiquidacion() {
-    if (!empleadoSeleccionado || !razonSalida || !fechaInicioContrato) {
-      return null
-    }
-
+    if (!empleadoSeleccionado || !razonSalida || !fechaInicioContrato) return null
     const tiempo = calcularTiempo()
     const salDiario = salarioDiario(empleadoSeleccionado)
     const salMensual = salarioMensual(empleadoSeleccionado)
-    
+
     let result = {
-      tiempo,
-      salariosDiario: salDiario,
-      salariosMensual: salMensual,
-      salariosPendientes: 0,
-      regaliaProporcional: 0,
-      vacaciones: 0,
-      preaviso: 0,
-      cesantia: 0,
-      salariosFaltantes: 0,
-      diasPreaviso: 0,
-      diasCesantia: 0,
-      diasVacaciones: 0,
-      total: 0,
-      mesesParaSalariosFaltantes: 0,
-      alertas: [],
-      aplica: {
-        salariosPendientes: false,
-        regalia: false,
-        vacaciones: false,
-        preaviso: false,
-        cesantia: false,
-        salariosFaltantes: false,
-      }
+      tiempo, salariosDiario: salDiario, salariosMensual: salMensual,
+      salariosPendientes: 0, regaliaProporcional: 0, vacaciones: 0,
+      preaviso: 0, cesantia: 0, salariosFaltantes: 0,
+      diasPreaviso: 0, diasCesantia: 0, diasVacaciones: 0,
+      total: 0, mesesParaSalariosFaltantes: 0, alertas: [],
+      aplica: { salariosPendientes: false, regalia: false, vacaciones: false, preaviso: false, cesantia: false, salariosFaltantes: false }
     }
 
     result.salariosPendientes = salDiario * 5
     result.aplica.salariosPendientes = true
 
     const inicioAñoActual = new Date(new Date(fechaSalida).getFullYear(), 0, 1)
-    const inicioConteo = new Date(fechaInicioContrato) > inicioAñoActual 
-      ? new Date(fechaInicioContrato) 
-      : inicioAñoActual
-    const mesesEsteAño = Math.max(0, 
-      (new Date(fechaSalida) - inicioConteo) / (1000 * 60 * 60 * 24 * 30.44))
-    
+    const inicioConteo = new Date(fechaInicioContrato) > inicioAñoActual
+      ? new Date(fechaInicioContrato) : inicioAñoActual
+    const mesesEsteAño = Math.max(0, (new Date(fechaSalida) - inicioConteo) / (1000 * 60 * 60 * 24 * 30.44))
+
     if (mesesEsteAño >= 3 || tiempo.totalMeses >= 3) {
       const salariosAñoActual = salMensual * mesesEsteAño
       result.regaliaProporcional = salariosAñoActual / 12
@@ -251,7 +165,6 @@ function CalculadoraLiquidacion({ empresaId, usuarioActual, onVolver, empleadoPr
       if (tiempo.años >= 10) result.diasVacaciones = 24
       else if (tiempo.años >= 5) result.diasVacaciones = 18
       else result.diasVacaciones = 14
-      
       result.vacaciones = salDiario * result.diasVacaciones
       result.aplica.vacaciones = true
     } else if (tipoContrato !== 'indefinido') {
@@ -261,27 +174,18 @@ function CalculadoraLiquidacion({ empresaId, usuarioActual, onVolver, empleadoPr
     }
 
     if (tipoContrato === 'indefinido' && razonSalida === 'despido_sin_causa') {
-      if (tiempo.totalDias >= 30 && tiempo.totalDias < 180) {
-        result.diasPreaviso = 7
-      } else if (tiempo.totalDias >= 180 && tiempo.totalDias < 365) {
-        result.diasPreaviso = 14
-      } else if (tiempo.totalDias >= 365) {
-        result.diasPreaviso = 28
-      }
+      if (tiempo.totalDias >= 30 && tiempo.totalDias < 180) result.diasPreaviso = 7
+      else if (tiempo.totalDias >= 180 && tiempo.totalDias < 365) result.diasPreaviso = 14
+      else if (tiempo.totalDias >= 365) result.diasPreaviso = 28
       result.preaviso = salDiario * result.diasPreaviso
       result.aplica.preaviso = true
     }
 
     if (tipoContrato === 'indefinido' && razonSalida === 'despido_sin_causa') {
-      if (tiempo.totalDias >= 90 && tiempo.totalDias < 180) {
-        result.diasCesantia = 6
-      } else if (tiempo.totalDias >= 180 && tiempo.totalDias < 365) {
-        result.diasCesantia = 13
-      } else if (tiempo.años >= 1 && tiempo.años < 5) {
-        result.diasCesantia = 21 * tiempo.años
-      } else if (tiempo.años >= 5) {
-        result.diasCesantia = 23 * tiempo.años
-      }
+      if (tiempo.totalDias >= 90 && tiempo.totalDias < 180) result.diasCesantia = 6
+      else if (tiempo.totalDias >= 180 && tiempo.totalDias < 365) result.diasCesantia = 13
+      else if (tiempo.años >= 1 && tiempo.años < 5) result.diasCesantia = 21 * tiempo.años
+      else if (tiempo.años >= 5) result.diasCesantia = 23 * tiempo.años
       result.cesantia = salDiario * result.diasCesantia
       result.aplica.cesantia = true
     }
@@ -289,32 +193,20 @@ function CalculadoraLiquidacion({ empresaId, usuarioActual, onVolver, empleadoPr
     if (tipoContrato === 'obra_servicio' && razonSalida === 'despido_anticipado_obra' && fechaFinContrato) {
       const finContrato = new Date(fechaFinContrato)
       const salida = new Date(fechaSalida)
-      
       if (salida < finContrato) {
         const diffMs = finContrato - salida
         const mesesFaltantes = diffMs / (1000 * 60 * 60 * 24 * 30.44)
         result.mesesParaSalariosFaltantes = Math.round(mesesFaltantes * 10) / 10
         result.salariosFaltantes = salMensual * mesesFaltantes
         result.aplica.salariosFaltantes = true
-        result.alertas.push(
-          `🚨 ALERTA: Debes pagar ${result.mesesParaSalariosFaltantes} meses de salario por terminar el contrato anticipadamente (Art. 95)`
-        )
+        result.alertas.push(`🚨 ALERTA: Debes pagar ${result.mesesParaSalariosFaltantes} meses de salario por terminar el contrato anticipadamente (Art. 95)`)
       }
     }
 
-    result.total = result.salariosPendientes + 
-                  result.regaliaProporcional + 
-                  result.vacaciones + 
-                  result.preaviso + 
-                  result.cesantia + 
-                  result.salariosFaltantes
+    result.total = result.salariosPendientes + result.regaliaProporcional + result.vacaciones + result.preaviso + result.cesantia + result.salariosFaltantes
 
-    if (razonSalida === 'renuncia') {
-      result.alertas.push('ℹ️ En renuncia voluntaria solo aplica regalía proporcional y vacaciones acumuladas')
-    }
-    if (razonSalida === 'despido_justa') {
-      result.alertas.push('ℹ️ Despido con causa justa: solo aplican prestaciones mínimas (regalía y vacaciones acumuladas)')
-    }
+    if (razonSalida === 'renuncia') result.alertas.push('ℹ️ En renuncia voluntaria solo aplica regalía proporcional y vacaciones acumuladas')
+    if (razonSalida === 'despido_justa') result.alertas.push('ℹ️ Despido con causa justa: solo aplican prestaciones mínimas (regalía y vacaciones acumuladas)')
     if (razonSalida === 'terminacion_natural' && tipoContrato === 'obra_servicio') {
       result.alertas.push('✅ Terminación natural de obra/servicio: NO genera cesantía ni preaviso. Buena planificación.')
     }
@@ -325,10 +217,7 @@ function CalculadoraLiquidacion({ empresaId, usuarioActual, onVolver, empleadoPr
   function generarCartaLiquidacion(liq) {
     const empleadoNombre = empleadoSeleccionado.nombre
     const empresaNombre = empresa?.nombre || 'La Empresa'
-    const fechaHoy = new Date().toLocaleDateString('es-DO', {
-      day: 'numeric', month: 'long', year: 'numeric'
-    })
-
+    const fechaHoy = new Date().toLocaleDateString('es-DO', { day: 'numeric', month: 'long', year: 'numeric' })
     const razonTexto = RAZONES_SALIDA.find(r => r.value === razonSalida)?.label || ''
 
     const carta = `
@@ -397,7 +286,7 @@ ${new Date().toLocaleString('es-DO')}
         <body>
           <pre>${carta}</pre>
           <div style="text-align: center; margin-top: 20px;" class="no-print">
-            <button onclick="window.print()" style="padding: 10px 30px; background: #DC2626; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">
+            <button onclick="window.print()" style="padding: 10px 30px; background: #1D9E75; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">
               🖨️ Imprimir carta
             </button>
           </div>
@@ -406,23 +295,13 @@ ${new Date().toLocaleString('es-DO')}
     `)
   }
 
-  // ═══════════════════════════════════════════════════
-  // 💾 PROCESAMIENTO COMPLETO DE LA LIQUIDACIÓN
-  // ═══════════════════════════════════════════════════
-  
   async function procesarLiquidacion() {
     setError('')
     setProcesando(true)
-    
     const liq = calcularLiquidacion()
-    if (!liq) {
-      setError('No se puede procesar: datos incompletos')
-      setProcesando(false)
-      return
-    }
-    
+    if (!liq) { setError('No se puede procesar: datos incompletos'); setProcesando(false); return }
+
     try {
-      // ─── 1. INSERT en tabla liquidaciones ───
       const nuevaLiquidacion = {
         empresa_id: empresaId,
         usuario_id: empleadoSeleccionado.id,
@@ -464,32 +343,15 @@ ${new Date().toLocaleString('es-DO')}
         procesado_por_usuario_id: usuarioActual?.id || null,
         procesado_por_nombre: usuarioActual?.nombre || 'Sistema',
       }
-      
+
       const { data: liqCreada, error: errorLiq } = await supabase
-        .from('liquidaciones')
-        .insert([nuevaLiquidacion])
-        .select()
-        .single()
-      
-      if (errorLiq) {
-        throw new Error('Error al guardar liquidación: ' + errorLiq.message)
-      }
-      
-      // ─── 2. Soft-delete del empleado (activo = false) ───
+        .from('liquidaciones').insert([nuevaLiquidacion]).select().single()
+      if (errorLiq) throw new Error('Error al guardar liquidación: ' + errorLiq.message)
+
       const { error: errorEmpleado } = await supabase
-        .from('usuarios')
-        .update({ 
-          activo: false,
-          fecha_salida: fechaSalida,
-        })
-        .eq('id', empleadoSeleccionado.id)
-      
-      if (errorEmpleado) {
-        // Logueamos pero no bloqueamos: la liquidación ya quedó registrada
-        console.warn('⚠️ Liquidación guardada pero falló desactivar empleado:', errorEmpleado.message)
-      }
-      
-      // ─── 3. INT-003: Generar gasto automático ───
+        .from('usuarios').update({ activo: false, fecha_salida: fechaSalida }).eq('id', empleadoSeleccionado.id)
+      if (errorEmpleado) console.warn('⚠️ Liquidación guardada pero falló desactivar empleado:', errorEmpleado.message)
+
       const resultadoGasto = await crearGastoDesdeLiquidacion({
         empresaId: empresaId,
         liquidacionId: liqCreada.id,
@@ -500,26 +362,11 @@ ${new Date().toLocaleString('es-DO')}
         registradoPor: usuarioActual?.id,
         registradoPorNombre: usuarioActual?.nombre || 'Sistema',
       })
-      
-      if (!resultadoGasto.success) {
-        console.warn(
-          '⚠️ Liquidación OK pero falló crear gasto automático:',
-          resultadoGasto.error
-        )
-      } else {
-        console.log(
-          '✅ Ecosistema conectado: gasto automático creado desde liquidación'
-        )
-      }
-      
-      // ─── 4. ÉXITO ───
-      setLiquidacionExitosa({
-        ...liqCreada,
-        liquidacionCalculada: liq,
-      })
+      if (!resultadoGasto.success) console.warn('⚠️ Liquidación OK pero falló crear gasto automático:', resultadoGasto.error)
+
+      setLiquidacionExitosa({ ...liqCreada, liquidacionCalculada: liq })
       setMostrarConfirmacion(false)
       setProcesando(false)
-      
     } catch (e) {
       console.error('❌ Error procesando liquidación:', e)
       setError(e.message)
@@ -529,244 +376,356 @@ ${new Date().toLocaleString('es-DO')}
 
   const liquidacion = empleadoSeleccionado && razonSalida ? calcularLiquidacion() : null
 
+  // ─── ESTILOS BASE ───
+  const panel = {
+    background: 'var(--color-modulo-bg)',
+    border: '1px solid var(--color-modulo-border)',
+    borderRadius: '14px',
+    padding: '20px',
+    boxShadow: 'var(--modulo-sombra)',
+  }
+  const input = {
+    width: '100%', boxSizing: 'border-box',
+    background: 'var(--color-bg-input)',
+    border: '1px solid var(--color-border-subtle)',
+    borderRadius: '10px',
+    padding: '10px 12px',
+    color: 'var(--color-text-primary)',
+    fontSize: '13px',
+    fontFamily: 'inherit',
+    outline: 'none',
+  }
+  const labelStyle = {
+    display: 'block', fontSize: '10px', fontWeight: 500,
+    color: 'var(--color-text-muted)', marginBottom: '6px',
+    letterSpacing: '0.5px', textTransform: 'uppercase',
+  }
+  const sectionTitle = {
+    fontSize: '11px', color: 'var(--color-text-muted)',
+    letterSpacing: '1.5px', fontWeight: 600, marginBottom: '14px',
+    display: 'flex', alignItems: 'center', gap: '8px',
+  }
+
   if (cargando) {
     return (
-      <div className="w-full max-w-5xl">
-        <div className="text-center py-12 text-gray-500">⏳ Cargando calculadora...</div>
+      <div style={{
+        minHeight: '100vh', background: 'var(--color-bg-primary)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <p style={{ color: 'var(--color-text-muted)' }}>⏳ Cargando calculadora...</p>
       </div>
     )
   }
 
-  // ═══════════════════════════════════════════════════
-  // 🎉 PANTALLA DE ÉXITO (después de procesar)
-  // ═══════════════════════════════════════════════════
+  // ─── PANTALLA DE ÉXITO ───
   if (liquidacionExitosa) {
     return (
-      <div className="w-full max-w-3xl">
-        <div className="bg-gradient-to-br from-green-600 to-emerald-700 rounded-2xl p-8 mb-6 text-white text-center">
-          <p className="text-6xl mb-3">✅</p>
-          <h2 className="text-3xl font-bold mb-2">Liquidación Procesada</h2>
-          <p className="text-green-100">
-            {liquidacionExitosa.empleado_nombre} ha sido liquidado(a) exitosamente
-          </p>
-        </div>
+      <div style={{
+        minHeight: '100vh', background: 'var(--color-bg-primary)',
+        position: 'relative', padding: '20px', color: 'var(--color-text-primary)',
+      }}>
+        <div style={{
+          position: 'fixed', inset: 0,
+          backgroundImage: 'var(--glow-verde), var(--glow-ambar)',
+          pointerEvents: 'none', zIndex: 0,
+        }} />
+        <div style={{ position: 'relative', zIndex: 1, maxWidth: '700px', margin: '0 auto' }}>
+          <div style={{ marginBottom: '24px' }}>
+            <button
+              onClick={onVolver}
+              style={{
+                background: 'var(--color-bg-elevated)',
+                border: '1px solid var(--color-border-subtle)',
+                borderRadius: '20px', padding: '7px 14px',
+                color: 'var(--color-text-secondary)', fontSize: '12px',
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              ← Volver
+            </button>
+          </div>
 
-        <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-          <p className="text-xs text-gray-500 font-semibold tracking-wider mb-3">
-            📋 RESUMEN DEL PROCESO
-          </p>
-          
-          <div className="space-y-3">
-            <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg">
-              <span className="text-2xl">📝</span>
-              <div className="flex-1">
-                <p className="font-bold text-blue-900">Liquidación registrada</p>
-                <p className="text-xs text-blue-700">
-                  Guardada en histórico para auditoría legal
-                </p>
-              </div>
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(29, 158, 117, 0.18) 0%, rgba(15, 110, 86, 0.08) 100%)',
+            border: '1px solid rgba(29, 158, 117, 0.4)',
+            borderLeft: '4px solid #1D9E75',
+            borderRadius: '14px', padding: '28px', marginBottom: '20px', textAlign: 'center',
+          }}>
+            <div style={{ fontSize: '52px', marginBottom: '12px' }}>✅</div>
+            <div style={{ fontSize: '20px', fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: '6px' }}>
+              Liquidación Procesada
             </div>
-            
-            <div className="flex items-start gap-3 p-3 bg-orange-50 rounded-lg">
-              <span className="text-2xl">🔒</span>
-              <div className="flex-1">
-                <p className="font-bold text-orange-900">Empleado desactivado</p>
-                <p className="text-xs text-orange-700">
-                  {liquidacionExitosa.empleado_nombre} ya no aparece en la lista de empleados activos
-                </p>
-              </div>
-            </div>
-            
-            <div className="flex items-start gap-3 p-3 bg-green-50 rounded-lg">
-              <span className="text-2xl">🔗</span>
-              <div className="flex-1">
-                <p className="font-bold text-green-900">Gasto automático creado</p>
-                <p className="text-xs text-green-700">
-                  RD$ {formatearMoneda(liquidacionExitosa.monto_total)} registrado en módulo de Gastos
-                </p>
-              </div>
+            <div style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>
+              {liquidacionExitosa.empleado_nombre} ha sido liquidado(a) exitosamente
             </div>
           </div>
-        </div>
 
-        <div className="flex flex-col md:flex-row gap-3">
-          <button
-            onClick={() => generarCartaLiquidacion(liquidacionExitosa.liquidacionCalculada)}
-            className="flex-1 bg-purple-700 hover:bg-purple-800 text-white font-bold px-6 py-4 rounded-xl shadow-lg"
-          >
-            📄 Imprimir carta de liquidación
-          </button>
-          <button
-            onClick={onVolver}
-            className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold px-6 py-4 rounded-xl"
-          >
-            ← Volver al panel
-          </button>
+          <div style={panel}>
+            <div style={sectionTitle}>📋 RESUMEN DEL PROCESO</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <PasoCheck color="#378ADD" emoji="📝" titulo="Liquidación registrada" sub="Guardada en histórico para auditoría legal" />
+              <PasoCheck color="#EF9F27" emoji="🔒" titulo="Empleado desactivado" sub={`${liquidacionExitosa.empleado_nombre} ya no aparece en la lista activa`} />
+              <PasoCheck color="#1D9E75" emoji="🔗" titulo="Gasto automático creado" sub={`RD$ ${formatearMoneda(liquidacionExitosa.monto_total)} registrado en módulo de Gastos`} />
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px', marginTop: '16px', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => generarCartaLiquidacion(liquidacionExitosa.liquidacionCalculada)}
+              style={{
+                flex: 1, minWidth: '200px', padding: '14px',
+                background: 'var(--gradient-button)',
+                border: 'none', borderRadius: '10px',
+                color: 'white', fontSize: '13px', fontWeight: 500,
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              📄 Imprimir carta de liquidación
+            </button>
+            <button
+              onClick={onVolver}
+              style={{
+                flex: 1, minWidth: '200px', padding: '14px',
+                background: 'var(--color-bg-elevated)',
+                border: '1px solid var(--color-border-subtle)',
+                borderRadius: '10px',
+                color: 'var(--color-text-secondary)',
+                fontSize: '13px', fontWeight: 500,
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              ← Volver al panel
+            </button>
+          </div>
         </div>
       </div>
     )
   }
 
+  // ─── PANTALLA PRINCIPAL ───
   return (
-    <div className="w-full max-w-5xl">
+    <div style={{
+      minHeight: '100vh', background: 'var(--color-bg-primary)',
+      position: 'relative', padding: '20px', color: 'var(--color-text-primary)',
+    }}>
+      <style>{`
+        @keyframes calcSlideTop { 0% { opacity: 0; transform: translateY(-18px); } 100% { opacity: 1; transform: translateY(0); } }
+        @keyframes calcFadeUp { 0% { opacity: 0; transform: translateY(22px); } 100% { opacity: 1; transform: translateY(0); } }
+      `}</style>
+
+      <div style={{
+        position: 'fixed', inset: 0,
+        backgroundImage: 'var(--glow-verde), var(--glow-ambar)',
+        pointerEvents: 'none', zIndex: 0,
+      }} />
 
       {/* HEADER */}
-      <div className="bg-gradient-to-br from-purple-700 to-purple-900 rounded-2xl p-6 mb-6 text-white">
-        <div className="flex justify-between items-start flex-wrap gap-3">
-          <div>
-            <p className="text-purple-200 text-xs font-semibold tracking-wider">
-              CALCULADORA LEGAL
-            </p>
-            <h2 className="text-3xl font-bold mt-1">
-              ⚖️ Liquidación de Empleado
-            </h2>
-            <p className="text-purple-200 mt-1 text-sm">
-              Calcula y procesa prestaciones laborales según ley dominicana
-            </p>
-          </div>
+      <div style={{
+        position: 'relative', zIndex: 1,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        marginBottom: '24px', flexWrap: 'wrap', gap: '12px',
+        opacity: 0, animation: 'calcSlideTop 0.5s ease forwards',
+      }}>
+        <button
+          onClick={onVolver}
+          style={{
+            background: 'var(--color-bg-elevated)',
+            border: '1px solid var(--color-border-subtle)',
+            borderRadius: '20px', padding: '7px 14px',
+            color: 'var(--color-text-secondary)', fontSize: '12px',
+            cursor: 'pointer', fontFamily: 'inherit',
+            display: 'flex', alignItems: 'center', gap: '6px',
+          }}
+        >
+          ← Volver
+        </button>
+
+        <div style={{
+          display: 'flex', alignItems: 'center',
+          background: 'var(--color-bg-elevated)',
+          border: '1px solid var(--color-border-subtle)',
+          borderRadius: '20px', padding: '3px', gap: '2px',
+        }}>
           <button
-            onClick={onVolver}
-            className="bg-purple-800 hover:bg-purple-900 text-white text-sm px-4 py-2 rounded-lg"
+            type="button"
+            onClick={() => setTema('oscuro')}
+            style={{
+              background: tema === 'oscuro' ? 'var(--gradient-toggle-active)' : 'transparent',
+              border: 'none', borderRadius: '16px', padding: '6px 10px',
+              display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer',
+            }}
           >
-            ← Volver
+            <span style={{ fontSize: '11px' }}>🌙</span>
+            <span style={{ fontSize: '10px', fontWeight: 500, color: tema === 'oscuro' ? 'white' : 'var(--color-text-muted)' }}>Oscuro</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setTema('tropical')}
+            style={{
+              background: tema === 'tropical' ? 'var(--gradient-toggle-active)' : 'transparent',
+              border: 'none', borderRadius: '16px', padding: '6px 10px',
+              display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer',
+            }}
+          >
+            <span style={{ fontSize: '11px' }}>☀️</span>
+            <span style={{ fontSize: '10px', fontWeight: 500, color: tema === 'tropical' ? 'white' : 'var(--color-text-muted)' }}>Claro</span>
           </button>
         </div>
       </div>
 
-      {/* 🔗 AVISO si viene desde "Dar de baja" en Empleados (INT-005) */}
+      {/* TÍTULO */}
+      <div style={{
+        position: 'relative', zIndex: 1,
+        background: 'var(--color-modulo-bg)',
+        border: '1px solid var(--color-modulo-border)',
+        borderLeft: '4px solid #D4537E',
+        borderRadius: '14px', padding: '20px',
+        marginBottom: '20px',
+        display: 'flex', alignItems: 'center', gap: '16px',
+        boxShadow: 'var(--modulo-sombra)',
+        opacity: 0, animation: 'calcFadeUp 0.5s ease 0.1s forwards',
+      }}>
+        <div style={{
+          width: '52px', height: '52px', borderRadius: '14px',
+          background: 'rgba(212, 83, 126, 0.18)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '26px',
+        }}>⚖️</div>
+        <div>
+          <div style={{ fontSize: '10px', color: '#D4537E', letterSpacing: '1.5px', fontWeight: 600 }}>
+            CALCULADORA LEGAL
+          </div>
+          <div style={{ fontSize: '22px', fontWeight: 500, color: 'var(--color-text-primary)', marginTop: '2px' }}>
+            Liquidación de Empleado
+          </div>
+          <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
+            Calcula y procesa prestaciones laborales según ley dominicana
+          </div>
+        </div>
+      </div>
+
+      {/* AVISO si viene desde Empleados */}
       {empleadoPreseleccionado && (
-        <div className="bg-blue-50 border-2 border-blue-300 rounded-2xl p-4 mb-6">
-          <div className="flex items-start gap-3">
-            <span className="text-2xl">🔗</span>
-            <div>
-              <p className="font-bold text-blue-900 text-sm">
-                Vienes desde "Dar de baja" en Empleados
-              </p>
-              <p className="text-xs text-blue-800 mt-1">
-                <strong>{empleadoPreseleccionado.nombre}</strong> fue preseleccionado automáticamente. 
-                Completa el resto de los pasos para procesar su liquidación según ley dominicana.
-              </p>
+        <div style={{
+          position: 'relative', zIndex: 1,
+          background: 'rgba(55, 138, 221, 0.12)',
+          border: '1px solid rgba(55, 138, 221, 0.35)',
+          borderLeft: '4px solid #378ADD',
+          borderRadius: '12px', padding: '14px 16px',
+          marginBottom: '16px',
+          display: 'flex', alignItems: 'flex-start', gap: '12px',
+          opacity: 0, animation: 'calcFadeUp 0.5s ease 0.15s forwards',
+        }}>
+          <span style={{ fontSize: '20px' }}>🔗</span>
+          <div>
+            <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
+              Vienes desde "Dar de baja" en Empleados
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
+              <strong>{empleadoPreseleccionado.nombre}</strong> fue preseleccionado automáticamente. Completa los pasos para procesar su liquidación.
             </div>
           </div>
         </div>
       )}
 
       {/* AVISO LEGAL */}
-      <div className="bg-yellow-50 border-2 border-yellow-300 rounded-2xl p-4 mb-6">
-        <div className="flex items-start gap-3">
-          <span className="text-2xl">⚠️</span>
-          <div>
-            <p className="font-bold text-yellow-900 text-sm">
-              IMPORTANTE: Esta es una calculadora orientativa
-            </p>
-            <p className="text-xs text-yellow-800 mt-1">
-              Los cálculos son aproximados según la ley dominicana. Para liquidaciones 
-              reales se recomienda consultar con un abogado laboral. Los montos pueden 
-              variar según situaciones específicas.
-            </p>
+      <div style={{
+        position: 'relative', zIndex: 1,
+        background: 'rgba(239, 159, 39, 0.12)',
+        border: '1px solid rgba(239, 159, 39, 0.35)',
+        borderLeft: '4px solid #EF9F27',
+        borderRadius: '12px', padding: '14px 16px',
+        marginBottom: '20px',
+        display: 'flex', alignItems: 'flex-start', gap: '12px',
+        opacity: 0, animation: 'calcFadeUp 0.5s ease 0.2s forwards',
+      }}>
+        <span style={{ fontSize: '20px' }}>⚠️</span>
+        <div>
+          <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
+            IMPORTANTE: Esta es una calculadora orientativa
+          </div>
+          <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
+            Los cálculos son aproximados según la ley dominicana. Para liquidaciones reales se recomienda consultar con un abogado laboral.
           </div>
         </div>
       </div>
 
-      {/* PASO 1: SELECCIONAR EMPLEADO */}
-      <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-        <p className="text-xs text-gray-500 font-semibold tracking-wider mb-3">
-          PASO 1 — SELECCIONAR EMPLEADO
-        </p>
-        
+      {/* PASO 1 — EMPLEADO */}
+      <div style={{ ...panel, marginBottom: '16px', position: 'relative', zIndex: 1, opacity: 0, animation: 'calcFadeUp 0.5s ease 0.25s forwards' }}>
+        <div style={sectionTitle}>PASO 1 — SELECCIONAR EMPLEADO</div>
         <select
           value={empleadoSeleccionado?.id || ''}
           onChange={(e) => onEmpleadoChange(e.target.value)}
-          className="w-full px-3 py-3 border border-gray-300 rounded-lg text-base font-semibold"
+          style={{ ...input, fontWeight: 500 }}
         >
           <option value="">-- Selecciona un empleado --</option>
           {empleados.map(e => (
-            <option key={e.id} value={e.id}>
-              {e.nombre} - {e.rol?.replace('_', ' ')}
-            </option>
+            <option key={e.id} value={e.id}>{e.nombre} - {e.rol?.replace('_', ' ')}</option>
           ))}
         </select>
 
         {empleadoSeleccionado && (
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div style={{ marginTop: '14px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Tipo de contrato
-              </label>
-              <select
-                value={tipoContrato}
-                onChange={(e) => setTipoContrato(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              >
+              <label style={labelStyle}>Tipo de contrato</label>
+              <select value={tipoContrato} onChange={(e) => setTipoContrato(e.target.value)} style={input}>
                 <option value="indefinido">∞ Indefinido</option>
                 <option value="obra_servicio">📑 Obra/Servicio</option>
                 <option value="estacional">🍂 Estacional</option>
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Sueldo mensual
-              </label>
-              <p className="px-3 py-2 bg-gray-100 rounded-lg text-sm font-bold">
+              <label style={labelStyle}>Sueldo mensual</label>
+              <div style={{
+                background: 'var(--color-bg-input)',
+                border: '1px solid var(--color-border-subtle)',
+                borderRadius: '10px', padding: '10px 12px',
+                fontSize: '13px', fontWeight: 600,
+                color: 'var(--color-text-primary)',
+              }}>
                 RD$ {formatearMoneda(salarioMensual(empleadoSeleccionado))}
-              </p>
+              </div>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Fecha inicio contrato
-              </label>
-              <input
-                type="date"
-                value={fechaInicioContrato}
-                onChange={(e) => setFechaInicioContrato(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              />
+              <label style={labelStyle}>Fecha inicio contrato</label>
+              <input type="date" value={fechaInicioContrato} onChange={(e) => setFechaInicioContrato(e.target.value)} style={input} />
             </div>
             {tipoContrato === 'obra_servicio' && (
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Fecha fin contrato
-                </label>
-                <input
-                  type="date"
-                  value={fechaFinContrato}
-                  onChange={(e) => setFechaFinContrato(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                />
+                <label style={labelStyle}>Fecha fin contrato</label>
+                <input type="date" value={fechaFinContrato} onChange={(e) => setFechaFinContrato(e.target.value)} style={input} />
               </div>
             )}
           </div>
         )}
       </div>
 
-      {/* PASO 2: RAZÓN DE SALIDA */}
+      {/* PASO 2 — RAZÓN */}
       {empleadoSeleccionado && (
-        <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-          <p className="text-xs text-gray-500 font-semibold tracking-wider mb-3">
-            PASO 2 — RAZÓN DE LA SALIDA
-          </p>
-          
-          <div className="space-y-2">
+        <div style={{ ...panel, marginBottom: '16px', position: 'relative', zIndex: 1, opacity: 0, animation: 'calcFadeUp 0.5s ease 0.3s forwards' }}>
+          <div style={sectionTitle}>PASO 2 — RAZÓN DE LA SALIDA</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {RAZONES_SALIDA.map(r => (
-              <label 
+              <label
                 key={r.value}
-                className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer transition border-2 ${
-                  razonSalida === r.value 
-                    ? 'bg-purple-50 border-purple-500' 
-                    : 'bg-white border-gray-200 hover:border-gray-300'
-                }`}
+                style={{
+                  display: 'flex', alignItems: 'flex-start', gap: '12px',
+                  padding: '12px 14px', cursor: 'pointer',
+                  background: razonSalida === r.value ? 'rgba(212, 83, 126, 0.12)' : 'var(--color-bg-input)',
+                  border: razonSalida === r.value ? '1px solid rgba(212, 83, 126, 0.5)' : '1px solid var(--color-border-subtle)',
+                  borderRadius: '10px',
+                  transition: 'all 0.15s ease',
+                }}
               >
                 <input
-                  type="radio"
-                  name="razon"
-                  value={r.value}
+                  type="radio" name="razon" value={r.value}
                   checked={razonSalida === r.value}
                   onChange={(e) => setRazonSalida(e.target.value)}
-                  className="mt-1"
+                  style={{ marginTop: '3px' }}
                 />
                 <div>
-                  <p className="font-bold text-gray-900 text-sm">{r.label}</p>
-                  <p className="text-xs text-gray-600">{r.descripcion}</p>
+                  <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-primary)' }}>{r.label}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>{r.descripcion}</div>
                 </div>
               </label>
             ))}
@@ -774,36 +733,23 @@ ${new Date().toLocaleString('es-DO')}
         </div>
       )}
 
-      {/* PASO 3: FECHA SALIDA Y NOTAS */}
+      {/* PASO 3 — FECHA Y NOTAS */}
       {razonSalida && (
-        <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-          <p className="text-xs text-gray-500 font-semibold tracking-wider mb-3">
-            PASO 3 — FECHA Y NOTAS
-          </p>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+        <div style={{ ...panel, marginBottom: '16px', position: 'relative', zIndex: 1, opacity: 0, animation: 'calcFadeUp 0.5s ease 0.35s forwards' }}>
+          <div style={sectionTitle}>PASO 3 — FECHA Y NOTAS</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginBottom: '12px' }}>
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Fecha de salida
-              </label>
-              <input
-                type="date"
-                value={fechaSalida}
-                onChange={(e) => setFechaSalida(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-base font-semibold"
-              />
+              <label style={labelStyle}>Fecha de salida</label>
+              <input type="date" value={fechaSalida} onChange={(e) => setFechaSalida(e.target.value)} style={{ ...input, fontWeight: 500 }} />
             </div>
           </div>
-          
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">
-              Notas adicionales (opcional)
-            </label>
+            <label style={labelStyle}>Notas adicionales (opcional)</label>
             <textarea
               value={notasLiquidacion}
               onChange={(e) => setNotasLiquidacion(e.target.value)}
               rows={2}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              style={{ ...input, resize: 'none' }}
               placeholder="Cualquier comentario sobre esta liquidación..."
             />
           </div>
@@ -813,96 +759,111 @@ ${new Date().toLocaleString('es-DO')}
       {/* RESULTADO */}
       {liquidacion && (
         <>
-          <div className="bg-gradient-to-br from-purple-600 to-purple-800 rounded-2xl shadow-xl p-6 mb-6 text-white">
-            <p className="text-xs text-purple-200 font-semibold tracking-wider mb-3">
+          <div style={{
+            position: 'relative', zIndex: 1, marginBottom: '16px',
+            background: 'linear-gradient(135deg, rgba(212, 83, 126, 0.18) 0%, rgba(153, 53, 86, 0.08) 100%)',
+            border: '1px solid rgba(212, 83, 126, 0.4)',
+            borderLeft: '4px solid #D4537E',
+            borderRadius: '14px', padding: '20px',
+            opacity: 0, animation: 'calcFadeUp 0.5s ease 0.4s forwards',
+          }}>
+            <div style={{ fontSize: '11px', color: '#D4537E', letterSpacing: '1.5px', fontWeight: 600, marginBottom: '12px' }}>
               💰 RESUMEN DE LIQUIDACIÓN
-            </p>
-            
-            <div className="bg-white/10 rounded-xl p-3 mb-4 text-sm">
-              <p>
-                <strong>Tiempo trabajado:</strong> {liquidacion.tiempo.años} años, 
-                {' '}{liquidacion.tiempo.meses} meses, {liquidacion.tiempo.dias} días
-                {' '}({liquidacion.tiempo.totalDias} días totales)
-              </p>
-              <p>
-                <strong>Salario diario:</strong> RD$ {formatearMoneda(liquidacion.salariosDiario)}
-              </p>
             </div>
 
-            <div className="space-y-2 text-sm">
-              <div className={`flex justify-between p-2 rounded ${liquidacion.aplica.salariosPendientes ? 'bg-white/10' : 'opacity-50'}`}>
-                <span>1. Salarios pendientes (5 días estimados)</span>
-                <span className="font-bold">RD$ {formatearMoneda(liquidacion.salariosPendientes)}</span>
-              </div>
-              <div className={`flex justify-between p-2 rounded ${liquidacion.aplica.regalia ? 'bg-white/10' : 'opacity-50'}`}>
-                <span>2. Regalía proporcional</span>
-                <span className="font-bold">RD$ {formatearMoneda(liquidacion.regaliaProporcional)}</span>
-              </div>
-              <div className={`flex justify-between p-2 rounded ${liquidacion.aplica.vacaciones ? 'bg-white/10' : 'opacity-50'}`}>
-                <span>3. Vacaciones ({liquidacion.diasVacaciones} días)</span>
-                <span className="font-bold">RD$ {formatearMoneda(liquidacion.vacaciones)}</span>
-              </div>
-              <div className={`flex justify-between p-2 rounded ${liquidacion.aplica.preaviso ? 'bg-white/10' : 'opacity-50'}`}>
-                <span>4. Preaviso ({liquidacion.diasPreaviso} días)</span>
-                <span className="font-bold">RD$ {formatearMoneda(liquidacion.preaviso)}</span>
-              </div>
-              <div className={`flex justify-between p-2 rounded ${liquidacion.aplica.cesantia ? 'bg-white/10' : 'opacity-50'}`}>
-                <span>5. Cesantía ({liquidacion.diasCesantia} días)</span>
-                <span className="font-bold">RD$ {formatearMoneda(liquidacion.cesantia)}</span>
-              </div>
+            <div style={{
+              background: 'rgba(0,0,0,0.15)', borderRadius: '10px',
+              padding: '12px', marginBottom: '14px', fontSize: '12px',
+              color: 'var(--color-text-secondary)',
+            }}>
+              <div><strong style={{ color: 'var(--color-text-primary)' }}>Tiempo trabajado:</strong> {liquidacion.tiempo.años} años, {liquidacion.tiempo.meses} meses, {liquidacion.tiempo.dias} días ({liquidacion.tiempo.totalDias} días totales)</div>
+              <div style={{ marginTop: '4px' }}><strong style={{ color: 'var(--color-text-primary)' }}>Salario diario:</strong> RD$ {formatearMoneda(liquidacion.salariosDiario)}</div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <LineaResumen aplica={liquidacion.aplica.salariosPendientes} label="1. Salarios pendientes (5 días estimados)" monto={liquidacion.salariosPendientes} />
+              <LineaResumen aplica={liquidacion.aplica.regalia} label="2. Regalía proporcional" monto={liquidacion.regaliaProporcional} />
+              <LineaResumen aplica={liquidacion.aplica.vacaciones} label={`3. Vacaciones (${liquidacion.diasVacaciones} días)`} monto={liquidacion.vacaciones} />
+              <LineaResumen aplica={liquidacion.aplica.preaviso} label={`4. Preaviso (${liquidacion.diasPreaviso} días)`} monto={liquidacion.preaviso} />
+              <LineaResumen aplica={liquidacion.aplica.cesantia} label={`5. Cesantía (${liquidacion.diasCesantia} días)`} monto={liquidacion.cesantia} />
               {liquidacion.salariosFaltantes > 0 && (
-                <div className="flex justify-between p-2 rounded bg-red-500/30">
-                  <span>🚨 6. Salarios faltantes ({liquidacion.mesesParaSalariosFaltantes} meses)</span>
-                  <span className="font-bold">RD$ {formatearMoneda(liquidacion.salariosFaltantes)}</span>
-                </div>
+                <LineaResumen aplica alerta label={`🚨 6. Salarios faltantes (${liquidacion.mesesParaSalariosFaltantes} meses)`} monto={liquidacion.salariosFaltantes} />
               )}
             </div>
 
-            <div className="mt-4 pt-4 border-t-2 border-white/30">
-              <div className="flex justify-between items-center">
-                <p className="text-lg font-bold">TOTAL A PAGAR:</p>
-                <p className="text-3xl font-bold">RD$ {formatearMoneda(liquidacion.total)}</p>
-              </div>
+            <div style={{
+              marginTop: '14px', paddingTop: '14px',
+              borderTop: '1px solid rgba(212, 83, 126, 0.3)',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            }}>
+              <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-primary)' }}>TOTAL A PAGAR:</div>
+              <div style={{ fontSize: '24px', fontWeight: 600, color: '#D4537E' }}>RD$ {formatearMoneda(liquidacion.total)}</div>
             </div>
           </div>
 
-          {/* ALERTAS */}
           {liquidacion.alertas.length > 0 && (
-            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-6">
-              <p className="text-xs text-blue-800 font-semibold tracking-wider mb-2">
+            <div style={{
+              position: 'relative', zIndex: 1, marginBottom: '16px',
+              background: 'rgba(55, 138, 221, 0.12)',
+              border: '1px solid rgba(55, 138, 221, 0.35)',
+              borderLeft: '4px solid #378ADD',
+              borderRadius: '12px', padding: '14px 16px',
+            }}>
+              <div style={{ fontSize: '11px', color: '#378ADD', letterSpacing: '1.5px', fontWeight: 600, marginBottom: '8px' }}>
                 📋 NOTAS Y ALERTAS
-              </p>
-              <div className="space-y-1 text-sm text-blue-900">
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 {liquidacion.alertas.map((alerta, i) => (
-                  <p key={i}>{alerta}</p>
+                  <div key={i} style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>{alerta}</div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* 🔗 AVISO DE ECOSISTEMA */}
-          <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 mb-6">
-            <p className="text-sm font-bold text-amber-900 mb-2">
+          <div style={{
+            position: 'relative', zIndex: 1, marginBottom: '16px',
+            background: 'rgba(239, 159, 39, 0.12)',
+            border: '1px solid rgba(239, 159, 39, 0.4)',
+            borderLeft: '4px solid #EF9F27',
+            borderRadius: '12px', padding: '14px 16px',
+          }}>
+            <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: '8px' }}>
               🔗 Al procesar esta liquidación se ejecutarán 3 acciones:
-            </p>
-            <ul className="text-xs text-amber-800 space-y-1 ml-4">
-              <li>📝 <strong>Registrar liquidación</strong> en el histórico legal</li>
-              <li>🔒 <strong>Desactivar al empleado</strong> (soft-delete, queda en histórico)</li>
-              <li>💰 <strong>Crear gasto automático</strong> de RD$ {formatearMoneda(liquidacion.total)} en Sueldos y Salarios</li>
-            </ul>
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
+              📝 <strong>Registrar liquidación</strong> en el histórico legal<br />
+              🔒 <strong>Desactivar al empleado</strong> (soft-delete, queda en histórico)<br />
+              💰 <strong>Crear gasto automático</strong> de RD$ {formatearMoneda(liquidacion.total)} en Sueldos y Salarios
+            </div>
           </div>
 
-          {/* BOTONES DE ACCIÓN */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+          <div style={{
+            position: 'relative', zIndex: 1, marginBottom: '16px',
+            display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px',
+          }}>
             <button
               onClick={() => generarCartaLiquidacion(liquidacion)}
-              className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold px-6 py-4 rounded-xl"
+              style={{
+                padding: '14px',
+                background: 'var(--color-bg-elevated)',
+                border: '1px solid var(--color-border-subtle)',
+                borderRadius: '10px',
+                color: 'var(--color-text-secondary)',
+                fontSize: '13px', fontWeight: 500,
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
             >
               📄 Vista previa de carta
             </button>
             <button
               onClick={() => setMostrarConfirmacion(true)}
-              className="bg-purple-700 hover:bg-purple-800 text-white font-bold px-6 py-4 rounded-xl shadow-lg"
+              style={{
+                padding: '14px',
+                background: 'linear-gradient(135deg, #D4537E 0%, #993556 100%)',
+                border: 'none', borderRadius: '10px',
+                color: 'white', fontSize: '13px', fontWeight: 600,
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
             >
               ⚖️ Procesar liquidación
             </button>
@@ -912,81 +873,152 @@ ${new Date().toLocaleString('es-DO')}
 
       {/* MODAL DE CONFIRMACIÓN */}
       {mostrarConfirmacion && liquidacion && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
-            
-            <div className="bg-gradient-to-br from-red-600 to-rose-700 text-white rounded-t-2xl p-6 text-center">
-              <p className="text-5xl mb-2">⚠️</p>
-              <h3 className="text-2xl font-bold">¿Confirmar liquidación?</h3>
-              <p className="text-red-100 text-sm mt-1">Esta acción es irreversible</p>
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 100,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px',
+          backdropFilter: 'blur(8px)',
+        }}>
+          <div style={{
+            background: 'var(--color-bg-elevated)',
+            backdropFilter: 'blur(20px)',
+            border: '0.5px solid var(--color-border-accent)',
+            borderRadius: '16px',
+            maxWidth: '440px', width: '100%',
+            overflow: 'hidden',
+          }}>
+            <div style={{
+              background: 'linear-gradient(135deg, #D4537E 0%, #993556 100%)',
+              padding: '24px', textAlign: 'center', color: 'white',
+            }}>
+              <div style={{ fontSize: '40px', marginBottom: '6px' }}>⚠️</div>
+              <div style={{ fontSize: '18px', fontWeight: 600 }}>¿Confirmar liquidación?</div>
+              <div style={{ fontSize: '11px', opacity: 0.9, marginTop: '2px' }}>Esta acción es irreversible</div>
             </div>
 
-            <div className="p-6 space-y-4">
-              <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-700">Empleado:</span>
-                  <span className="font-bold">{empleadoSeleccionado.nombre}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-700">Razón:</span>
-                  <span className="font-bold text-right text-xs">
-                    {RAZONES_SALIDA.find(r => r.value === razonSalida)?.label.replace(/^\W+\s/, '')}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-700">Fecha salida:</span>
-                  <span className="font-bold">{formatearFecha(fechaSalida)}</span>
-                </div>
-                <div className="flex justify-between text-lg pt-2 border-t border-gray-300">
-                  <span className="font-bold">TOTAL:</span>
-                  <span className="font-bold text-green-700">
-                    RD$ {formatearMoneda(liquidacion.total)}
-                  </span>
+            <div style={{ padding: '20px' }}>
+              <div style={{
+                background: 'var(--color-bg-input)',
+                border: '1px solid var(--color-border-subtle)',
+                borderRadius: '10px', padding: '14px',
+                fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '8px',
+              }}>
+                <FilaConfirma label="Empleado:" valor={empleadoSeleccionado.nombre} />
+                <FilaConfirma label="Razón:" valor={RAZONES_SALIDA.find(r => r.value === razonSalida)?.label.replace(/^\W+\s/, '')} />
+                <FilaConfirma label="Fecha salida:" valor={formatearFecha(fechaSalida)} />
+                <div style={{
+                  display: 'flex', justifyContent: 'space-between',
+                  paddingTop: '8px', marginTop: '4px',
+                  borderTop: '1px solid var(--color-border-subtle)',
+                  fontSize: '14px',
+                }}>
+                  <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>TOTAL:</span>
+                  <span style={{ fontWeight: 600, color: '#1D9E75' }}>RD$ {formatearMoneda(liquidacion.total)}</span>
                 </div>
               </div>
 
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900">
-                <p className="font-bold mb-1">Al confirmar:</p>
-                <ul className="space-y-0.5 ml-3">
-                  <li>📝 Se guarda en histórico de liquidaciones</li>
-                  <li>🔒 {empleadoSeleccionado.nombre} queda desactivado</li>
-                  <li>💰 Se crea gasto automático en módulo Gastos</li>
-                </ul>
+              <div style={{
+                marginTop: '14px',
+                background: 'rgba(239, 159, 39, 0.12)',
+                border: '1px solid rgba(239, 159, 39, 0.35)',
+                borderRadius: '10px', padding: '10px 12px',
+                fontSize: '11px', color: 'var(--color-text-secondary)',
+              }}>
+                <div style={{ fontWeight: 600, color: '#EF9F27', marginBottom: '4px' }}>Al confirmar:</div>
+                📝 Se guarda en histórico de liquidaciones<br />
+                🔒 {empleadoSeleccionado.nombre} queda desactivado<br />
+                💰 Se crea gasto automático en módulo Gastos
               </div>
 
               {error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
+                <div style={{
+                  marginTop: '12px',
+                  background: 'rgba(244, 67, 54, 0.1)',
+                  border: '1px solid rgba(244, 67, 54, 0.3)',
+                  borderRadius: '10px', padding: '10px 12px',
+                  fontSize: '12px', color: '#F4C0D1',
+                }}>
                   ⚠️ {error}
                 </div>
               )}
 
-              <div className="flex gap-2">
+              <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
                 <button
                   onClick={() => { setMostrarConfirmacion(false); setError('') }}
                   disabled={procesando}
-                  className="flex-1 px-4 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-xl disabled:opacity-50"
+                  style={{
+                    flex: 1, padding: '12px',
+                    background: 'var(--color-bg-elevated)',
+                    border: '1px solid var(--color-border-subtle)',
+                    borderRadius: '10px',
+                    color: 'var(--color-text-secondary)',
+                    fontSize: '13px', fontWeight: 500,
+                    cursor: procesando ? 'not-allowed' : 'pointer',
+                    opacity: procesando ? 0.6 : 1, fontFamily: 'inherit',
+                  }}
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={procesarLiquidacion}
                   disabled={procesando}
-                  className="flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2"
+                  style={{
+                    flex: 1, padding: '12px',
+                    background: 'linear-gradient(135deg, #D4537E 0%, #993556 100%)',
+                    border: 'none', borderRadius: '10px',
+                    color: 'white', fontSize: '13px', fontWeight: 600,
+                    cursor: procesando ? 'not-allowed' : 'pointer',
+                    opacity: procesando ? 0.6 : 1, fontFamily: 'inherit',
+                  }}
                 >
-                  {procesando ? (
-                    <>
-                      <span className="animate-spin">⏳</span> Procesando...
-                    </>
-                  ) : (
-                    <>✓ CONFIRMAR</>
-                  )}
+                  {procesando ? '⏳ Procesando...' : '✓ CONFIRMAR'}
                 </button>
               </div>
             </div>
           </div>
         </div>
       )}
+    </div>
+  )
+}
 
+function PasoCheck({ color, emoji, titulo, sub }) {
+  return (
+    <div style={{
+      background: 'var(--color-bg-input)',
+      border: '1px solid var(--color-border-subtle)',
+      borderLeft: `4px solid ${color}`,
+      borderRadius: '10px', padding: '12px 14px',
+      display: 'flex', alignItems: 'flex-start', gap: '10px',
+    }}>
+      <span style={{ fontSize: '20px' }}>{emoji}</span>
+      <div>
+        <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-primary)' }}>{titulo}</div>
+        <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>{sub}</div>
+      </div>
+    </div>
+  )
+}
+
+function LineaResumen({ aplica, alerta, label, monto }) {
+  return (
+    <div style={{
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      padding: '8px 10px', borderRadius: '8px',
+      background: alerta ? 'rgba(244, 67, 54, 0.15)' : 'rgba(0,0,0,0.15)',
+      opacity: aplica ? 1 : 0.4,
+      fontSize: '12px',
+    }}>
+      <span style={{ color: 'var(--color-text-secondary)' }}>{label}</span>
+      <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>RD$ {Number(monto || 0).toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
+    </div>
+  )
+}
+
+function FilaConfirma({ label, valor }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px' }}>
+      <span style={{ color: 'var(--color-text-muted)' }}>{label}</span>
+      <span style={{ fontWeight: 500, color: 'var(--color-text-primary)', textAlign: 'right' }}>{valor}</span>
     </div>
   )
 }

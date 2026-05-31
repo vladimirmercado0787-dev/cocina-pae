@@ -12,6 +12,13 @@ function VistaRegaliaPascual({ empresaId, usuarioActual, onVolver }) {
   const [modalConfirmar, setModalConfirmar] = useState(false)
   const [procesando, setProcesando] = useState(false)
 
+  // Tema dual (mismo patrón del Dashboard)
+  const [tema, setTema] = useState(() => localStorage.getItem('cocina_pae_tema') || 'oscuro')
+  useEffect(() => {
+    document.documentElement.setAttribute('data-tema', tema)
+    localStorage.setItem('cocina_pae_tema', tema)
+  }, [tema])
+
   useEffect(() => {
     if (empresaId) cargarDatos()
   }, [empresaId, añoSeleccionado])
@@ -19,41 +26,29 @@ function VistaRegaliaPascual({ empresaId, usuarioActual, onVolver }) {
   async function cargarDatos() {
     setCargando(true)
 
-    // Cargar empresa
     const { data: empresaData } = await supabase
       .from('empresas').select('*').eq('id', empresaId).single()
     setEmpresa(empresaData)
 
-    // Cargar empleados activos
     const { data: empleadosData } = await supabase
-      .from('usuarios')
-      .select('*')
-      .eq('empresa_id', empresaId)
-      .eq('activo', true)
-      .neq('rol', 'propietario')
-      .not('sueldo', 'is', null)
+      .from('usuarios').select('*')
+      .eq('empresa_id', empresaId).eq('activo', true)
+      .neq('rol', 'propietario').not('sueldo', 'is', null)
       .order('nombre')
     setEmpleados(empleadosData || [])
 
-    // Cargar pagos del año seleccionado
     const { data: pagosData } = await supabase
-      .from('pagos_nomina')
-      .select('*, pagos_nomina_detalle(*)')
-      .eq('empresa_id', empresaId)
-      .eq('año', añoSeleccionado)
-      .eq('estado', 'pagado')
+      .from('pagos_nomina').select('*, pagos_nomina_detalle(*)')
+      .eq('empresa_id', empresaId).eq('año', añoSeleccionado).eq('estado', 'pagado')
     setPagosAñoActual(pagosData || [])
 
-    // Cargar años disponibles (de pagos de regalía existentes)
     const { data: bonosData } = await supabase
-      .from('bonificaciones_extra')
-      .select('año')
-      .eq('empresa_id', empresaId)
-      .eq('tipo', 'regalia_pascual')
-    
+      .from('bonificaciones_extra').select('año')
+      .eq('empresa_id', empresaId).eq('tipo', 'navideño')
+
     const años = [...new Set((bonosData || []).map(b => b.año))]
     años.push(new Date().getFullYear())
-    setAñosDisponibles([...new Set(años)].sort((a,b) => b - a))
+    setAñosDisponibles([...new Set(años)].sort((a, b) => b - a))
 
     setCargando(false)
   }
@@ -63,13 +58,9 @@ function VistaRegaliaPascual({ empresaId, usuarioActual, onVolver }) {
     setTimeout(() => setMensajeExito(''), 4000)
   }
 
-  // ═══════════════════════════════════════════════════
-  // 🧮 CÁLCULO DE REGALÍA POR EMPLEADO
-  // ═══════════════════════════════════════════════════
-
-  function salarioMensualEmpleado(empleado) {
-    const sueldo = parseFloat(empleado.sueldo || 0)
-    const freq = empleado.frecuencia_pago
+  function salarioMensualEmpleado(emp) {
+    const sueldo = parseFloat(emp.sueldo || 0)
+    const freq = emp.frecuencia_pago
     if (freq === 'mes') return sueldo
     if (freq === 'quincena') return sueldo * 2
     if (freq === 'semana') return sueldo * 4.33
@@ -77,156 +68,103 @@ function VistaRegaliaPascual({ empresaId, usuarioActual, onVolver }) {
     return sueldo
   }
 
-  function calcularRegaliaEmpleado(empleado) {
-    // Salarios pagados al empleado en el año (basado en pagos reales)
-    const detallesEmpleado = pagosAñoActual.flatMap(p => 
-      (p.pagos_nomina_detalle || []).filter(d => d.usuario_id === empleado.id)
+  function calcularRegaliaEmpleado(emp) {
+    const detallesEmpleado = pagosAñoActual.flatMap(p =>
+      (p.pagos_nomina_detalle || []).filter(d => d.usuario_id === emp.id)
     )
 
-    // Si NO hay pagos registrados aún, proyectamos basado en salario actual
     if (detallesEmpleado.length === 0) {
-      const salarioMensual = salarioMensualEmpleado(empleado)
-      
-      // Calcular cuántos meses lleva trabajando este año
-      const fechaIngreso = empleado.fecha_ingreso 
-        ? new Date(empleado.fecha_ingreso) 
-        : new Date(añoSeleccionado, 0, 1) // 1 enero del año
-      
+      const salarioMensual = salarioMensualEmpleado(emp)
+      const fechaIngreso = emp.fecha_ingreso ? new Date(emp.fecha_ingreso) : new Date(añoSeleccionado, 0, 1)
       const inicioAño = new Date(añoSeleccionado, 0, 1)
       const finAño = new Date(añoSeleccionado, 11, 31)
-      
-      // Tomar la fecha más reciente entre ingreso e inicio del año
       const inicioConteo = fechaIngreso > inicioAño ? fechaIngreso : inicioAño
-      
-      // Meses que ha/habrá trabajado
-      const mesesTrabajados = Math.min(
-        12,
-        Math.max(0, ((finAño - inicioConteo) / (1000 * 60 * 60 * 24 * 30.44)))
-      )
-      
+      const mesesTrabajados = Math.min(12, Math.max(0, ((finAño - inicioConteo) / (1000 * 60 * 60 * 24 * 30.44))))
       const salariosAcumulados = salarioMensual * mesesTrabajados
       const regalia = salariosAcumulados / 12
 
       return {
-        salariosAcumulados,
-        regalia,
+        salariosAcumulados, regalia,
         mesesTrabajados: Math.round(mesesTrabajados * 10) / 10,
-        elegible: mesesTrabajados >= 3, // Por ley, mínimo 3 meses
+        elegible: mesesTrabajados >= 3,
         fuente: 'proyeccion',
       }
     }
 
-    // Sumar salarios reales pagados (solo netos base, sin bonos)
-    const salariosAcumulados = detallesEmpleado.reduce((sum, d) => 
-      sum + parseFloat(d.salario_neto || 0), 0)
-    
+    const salariosAcumulados = detallesEmpleado.reduce((s, d) => s + parseFloat(d.salario_neto || 0), 0)
     const regalia = salariosAcumulados / 12
-    const mesesTrabajados = detallesEmpleado.length * 0.5 // quincenas, aproximado
+    const mesesTrabajados = detallesEmpleado.length * 0.5
 
     return {
-      salariosAcumulados,
-      regalia,
-      mesesTrabajados,
+      salariosAcumulados, regalia, mesesTrabajados,
       elegible: mesesTrabajados >= 3,
       fuente: 'real',
     }
   }
 
-  // ═══════════════════════════════════════════════════
-  // 💾 PROCESAR PAGO DE REGALÍA
-  // ═══════════════════════════════════════════════════
-
   async function procesarRegalia() {
     setProcesando(true)
-
     try {
-      // Verificar si ya se pagó la regalía este año
       const { data: bonosExistentes } = await supabase
-        .from('bonificaciones_extra')
-        .select('id')
-        .eq('empresa_id', empresaId)
-        .eq('año', añoSeleccionado)
-        .eq('tipo', 'regalia_pascual')
+        .from('bonificaciones_extra').select('id')
+        .eq('empresa_id', empresaId).eq('año', añoSeleccionado).eq('tipo', 'navideño')
 
       if (bonosExistentes && bonosExistentes.length > 0) {
         throw new Error('Ya se procesó la regalía pascual del año ' + añoSeleccionado)
       }
 
-      // Construir detalle de empleados elegibles
-      const detalleEmpleados = empleados
-        .map(emp => {
-          const calc = calcularRegaliaEmpleado(emp)
-          return {
-            usuario_id: emp.id,
-            nombre: emp.nombre,
-            rol: emp.rol,
-            monto: Math.round(calc.regalia * 100) / 100,
-            meses_trabajados: calc.mesesTrabajados,
-            salarios_acumulados: calc.salariosAcumulados,
-            elegible: calc.elegible,
-          }
-        })
-        .filter(d => d.elegible && d.monto > 0)
+      const detalleEmpleados = empleados.map(emp => {
+        const calc = calcularRegaliaEmpleado(emp)
+        return {
+          usuario_id: emp.id, nombre: emp.nombre, rol: emp.rol,
+          monto: Math.round(calc.regalia * 100) / 100,
+          meses_trabajados: calc.mesesTrabajados,
+          salarios_acumulados: calc.salariosAcumulados,
+          elegible: calc.elegible,
+        }
+      }).filter(d => d.elegible && d.monto > 0)
 
-      if (detalleEmpleados.length === 0) {
-        throw new Error('No hay empleados elegibles para regalía pascual')
-      }
+      if (detalleEmpleados.length === 0) throw new Error('No hay empleados elegibles para regalía pascual')
 
-      const totalRegalia = detalleEmpleados.reduce((sum, d) => sum + parseFloat(d.monto), 0)
+      const totalCalc = detalleEmpleados.reduce((s, d) => s + parseFloat(d.monto), 0)
 
       const nuevoPago = {
         empresa_id: empresaId,
         titulo: `Regalía Pascual ${añoSeleccionado}`,
         descripcion: `Salario 13 obligatorio por ley (Art. 219 Código Laboral RD)`,
-        tipo: 'regalia_pascual',
+        tipo: 'navideño',
         fecha_pago: new Date().toISOString().split('T')[0],
         año: añoSeleccionado,
         estado: 'pagado',
         fecha_pagado: new Date().toISOString(),
-        monto_total: totalRegalia,
+        monto_total: totalCalc,
         cantidad_empleados: detalleEmpleados.length,
         detalle: detalleEmpleados,
-        creado_por_usuario_id: usuarioActual.id,
+        creado_por_usuario_id: usuarioActual?.id || null,
         notas: 'Regalía pascual calculada automáticamente según ley dominicana',
       }
 
-      // Nota: 'regalia_pascual' no está en el CHECK constraint actual.
-      // Usaremos 'navideño' temporalmente o necesitamos ALTER TABLE
-      // Por ahora usamos 'navideño' como tipo válido
-      nuevoPago.tipo = 'navideño'
-
-      const { error } = await supabase
-        .from('bonificaciones_extra')
-        .insert([nuevoPago])
-
+      const { error } = await supabase.from('bonificaciones_extra').insert([nuevoPago])
       if (error) throw new Error(error.message)
 
       setProcesando(false)
       setModalConfirmar(false)
       mostrarExito('✅ Regalía pascual procesada correctamente')
       cargarDatos()
-
     } catch (e) {
       alert('❌ Error: ' + e.message)
       setProcesando(false)
     }
   }
 
-  // ═══════════════════════════════════════════════════
-  // 🧮 CÁLCULOS PARA UI
-  // ═══════════════════════════════════════════════════
-
   function formatearMoneda(monto) {
-    return Number(monto || 0).toLocaleString('es-DO', {
-      minimumFractionDigits: 2, maximumFractionDigits: 2
-    })
+    return Number(monto || 0).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   }
 
   function diasHastaFechaLimite() {
     const hoy = new Date()
-    const limite = new Date(añoSeleccionado, 11, 20) // 20 dic
-    const diffMs = limite - hoy
-    return Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+    const limite = new Date(añoSeleccionado, 11, 20)
+    return Math.ceil((limite - hoy) / (1000 * 60 * 60 * 24))
   }
 
   const calculosPorEmpleado = empleados.map(emp => ({
@@ -234,285 +172,371 @@ function VistaRegaliaPascual({ empresaId, usuarioActual, onVolver }) {
     ...calcularRegaliaEmpleado(emp),
   }))
 
-  const totalRegalia = calculosPorEmpleado
-    .filter(c => c.elegible)
-    .reduce((sum, c) => sum + c.regalia, 0)
-
+  const totalRegalia = calculosPorEmpleado.filter(c => c.elegible).reduce((s, c) => s + c.regalia, 0)
   const empleadosElegibles = calculosPorEmpleado.filter(c => c.elegible).length
   const empleadosNoElegibles = calculosPorEmpleado.filter(c => !c.elegible).length
 
   const diasFaltantes = diasHastaFechaLimite()
   const yaPasoFecha = diasFaltantes < 0
   const enPeriodoCritico = diasFaltantes <= 30 && diasFaltantes >= 0
-  const fuentePrincipal = calculosPorEmpleado.length > 0 
+  const fuentePrincipal = calculosPorEmpleado.length > 0
     ? (calculosPorEmpleado[0].fuente === 'real' ? 'real' : 'proyeccion')
     : 'proyeccion'
 
+  // ─── ESTILOS ───
+  const panel = {
+    background: 'var(--color-modulo-bg)',
+    border: '1px solid var(--color-modulo-border)',
+    borderRadius: '14px', padding: '20px',
+    boxShadow: 'var(--modulo-sombra)',
+  }
+  const sectionTitle = {
+    fontSize: '11px', color: 'var(--color-text-muted)',
+    letterSpacing: '1.5px', fontWeight: 600, marginBottom: '14px',
+  }
+
   if (cargando) {
     return (
-      <div className="w-full max-w-5xl">
-        <div className="text-center py-12 text-gray-500">⏳ Cargando regalía pascual...</div>
+      <div style={{
+        minHeight: '100vh', background: 'var(--color-bg-primary)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <p style={{ color: 'var(--color-text-muted)' }}>⏳ Cargando regalía pascual...</p>
       </div>
     )
   }
 
   return (
-    <div className="w-full max-w-5xl">
+    <div style={{
+      minHeight: '100vh', background: 'var(--color-bg-primary)',
+      position: 'relative', padding: '20px', color: 'var(--color-text-primary)',
+    }}>
+      <style>{`
+        @keyframes vrSlideTop { 0% { opacity: 0; transform: translateY(-18px); } 100% { opacity: 1; transform: translateY(0); } }
+        @keyframes vrFadeUp { 0% { opacity: 0; transform: translateY(22px); } 100% { opacity: 1; transform: translateY(0); } }
+      `}</style>
 
+      <div style={{
+        position: 'fixed', inset: 0,
+        backgroundImage: 'var(--glow-verde), var(--glow-ambar)',
+        pointerEvents: 'none', zIndex: 0,
+      }} />
+
+      {/* TOAST DE ÉXITO */}
       {mensajeExito && (
-        <div className="fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-xl shadow-2xl z-[60] animate-pulse">
-          {mensajeExito}
-        </div>
+        <div style={{
+          position: 'fixed', top: '20px', right: '20px', zIndex: 110,
+          background: 'linear-gradient(135deg, #1D9E75 0%, #0F6E56 100%)',
+          color: 'white', padding: '12px 18px', borderRadius: '12px',
+          fontSize: '13px', fontWeight: 500,
+          boxShadow: '0 8px 24px rgba(29, 158, 117, 0.4)',
+        }}>{mensajeExito}</div>
       )}
 
-      {/* MODAL CONFIRMAR PAGO */}
+      {/* MODAL CONFIRMAR */}
       {modalConfirmar && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
-            <p className="text-5xl text-center mb-3">🎄</p>
-            <h3 className="text-2xl font-bold text-center text-gray-900 mb-2">
-              ¿Procesar regalía pascual?
-            </h3>
-            <p className="text-sm text-gray-600 text-center mb-4">
-              Esto registrará el pago de regalía pascual {añoSeleccionado} para {empleadosElegibles} empleado{empleadosElegibles !== 1 ? 's' : ''}.
-            </p>
-
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4 text-center">
-              <p className="text-xs text-red-700 font-semibold">TOTAL A PAGAR</p>
-              <p className="text-3xl font-bold text-red-900">
-                RD$ {formatearMoneda(totalRegalia)}
-              </p>
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 100,
+          background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px',
+        }}>
+          <div style={{
+            background: 'var(--color-bg-elevated)',
+            border: '0.5px solid var(--color-border-accent)',
+            borderRadius: '16px', maxWidth: '420px', width: '100%',
+            overflow: 'hidden',
+          }}>
+            <div style={{
+              background: 'linear-gradient(135deg, #D85A30 0%, #993C1D 100%)',
+              padding: '24px', textAlign: 'center', color: 'white',
+            }}>
+              <div style={{ fontSize: '40px', marginBottom: '6px' }}>🎄</div>
+              <div style={{ fontSize: '18px', fontWeight: 600 }}>¿Procesar regalía pascual?</div>
+              <div style={{ fontSize: '11px', opacity: 0.9, marginTop: '2px' }}>
+                Regalía Pascual {añoSeleccionado} para {empleadosElegibles} empleado(s)
+              </div>
             </div>
+            <div style={{ padding: '20px' }}>
+              <div style={{
+                background: 'var(--color-bg-input)',
+                border: '1px solid var(--color-border-subtle)',
+                borderRadius: '10px', padding: '14px',
+                textAlign: 'center', marginBottom: '14px',
+              }}>
+                <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', letterSpacing: '0.5px' }}>TOTAL A PAGAR</div>
+                <div style={{ fontSize: '26px', fontWeight: 600, color: '#D85A30', marginTop: '4px' }}>
+                  RD$ {formatearMoneda(totalRegalia)}
+                </div>
+              </div>
 
-            <p className="text-xs text-gray-600 mb-4 text-center">
-              ⚠️ Asegúrate de tener el efectivo disponible.
-              Esta acción quedará registrada como bonificación tipo "navideño"
-              en el historial.
-            </p>
+              <div style={{
+                background: 'rgba(239, 159, 39, 0.12)',
+                border: '1px solid rgba(239, 159, 39, 0.35)',
+                borderRadius: '10px', padding: '10px 12px',
+                fontSize: '11px', color: 'var(--color-text-secondary)', marginBottom: '14px',
+              }}>
+                ⚠️ Asegúrate de tener el efectivo disponible.<br />
+                Esta acción quedará registrada como bonificación tipo "navideño" en el historial.
+              </div>
 
-            <div className="flex gap-2">
-              <button
-                onClick={() => setModalConfirmar(false)}
-                disabled={procesando}
-                className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 rounded-xl disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={procesarRegalia}
-                disabled={procesando}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl disabled:opacity-50"
-              >
-                {procesando ? '⏳ Procesando...' : '✅ Confirmar pago'}
-              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={() => setModalConfirmar(false)} disabled={procesando} style={{
+                  flex: 1, padding: '12px',
+                  background: 'var(--color-bg-elevated)',
+                  border: '1px solid var(--color-border-subtle)',
+                  borderRadius: '10px',
+                  color: 'var(--color-text-secondary)',
+                  fontSize: '13px', fontWeight: 500,
+                  cursor: procesando ? 'not-allowed' : 'pointer',
+                  opacity: procesando ? 0.6 : 1, fontFamily: 'inherit',
+                }}>Cancelar</button>
+                <button onClick={procesarRegalia} disabled={procesando} style={{
+                  flex: 1, padding: '12px',
+                  background: 'linear-gradient(135deg, #D85A30 0%, #993C1D 100%)',
+                  border: 'none', borderRadius: '10px',
+                  color: 'white', fontSize: '13px', fontWeight: 600,
+                  cursor: procesando ? 'not-allowed' : 'pointer',
+                  opacity: procesando ? 0.6 : 1, fontFamily: 'inherit',
+                }}>{procesando ? '⏳ Procesando...' : '✓ Confirmar'}</button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
       {/* HEADER */}
-      <div className="bg-gradient-to-br from-red-600 to-red-800 rounded-2xl p-6 mb-6 text-white">
-        <div className="flex justify-between items-start flex-wrap gap-3">
-          <div>
-            <p className="text-red-100 text-xs font-semibold tracking-wider">
-              SALARIO 13 OBLIGATORIO
-            </p>
-            <h2 className="text-3xl font-bold mt-1">
-              🎄 Regalía Pascual
-            </h2>
-            <p className="text-red-200 mt-1 text-sm">
-              Pago obligatorio antes del 20 de diciembre · Año {añoSeleccionado}
-            </p>
-          </div>
-          <div className="flex gap-2 flex-wrap justify-end">
-            <select
-              value={añoSeleccionado}
-              onChange={(e) => setAñoSeleccionado(parseInt(e.target.value))}
-              className="px-3 py-2 bg-red-700 border border-red-500 text-white rounded-lg text-sm font-semibold"
-            >
-              {añosDisponibles.map(año => (
-                <option key={año} value={año}>{año}</option>
-              ))}
-            </select>
-            <button
-              onClick={onVolver}
-              className="bg-red-800 hover:bg-red-900 text-white text-sm px-4 py-2 rounded-lg"
-            >
-              ← Volver
+      <div style={{
+        position: 'relative', zIndex: 1,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        marginBottom: '20px', flexWrap: 'wrap', gap: '12px',
+        opacity: 0, animation: 'vrSlideTop 0.5s ease forwards',
+      }}>
+        <button onClick={onVolver} style={{
+          background: 'var(--color-bg-elevated)',
+          border: '1px solid var(--color-border-subtle)',
+          borderRadius: '20px', padding: '7px 14px',
+          color: 'var(--color-text-secondary)', fontSize: '12px',
+          cursor: 'pointer', fontFamily: 'inherit',
+        }}>← Volver</button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <select value={añoSeleccionado} onChange={(e) => setAñoSeleccionado(parseInt(e.target.value))}
+            style={{
+              background: 'var(--color-bg-elevated)',
+              border: '1px solid var(--color-border-subtle)',
+              borderRadius: '20px', padding: '7px 12px',
+              color: 'var(--color-text-primary)',
+              fontSize: '12px', fontFamily: 'inherit', cursor: 'pointer',
+            }}>
+            {añosDisponibles.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+
+          <div style={{
+            display: 'flex', alignItems: 'center',
+            background: 'var(--color-bg-elevated)',
+            border: '1px solid var(--color-border-subtle)',
+            borderRadius: '20px', padding: '3px', gap: '2px',
+          }}>
+            <button type="button" onClick={() => setTema('oscuro')} style={{
+              background: tema === 'oscuro' ? 'var(--gradient-toggle-active)' : 'transparent',
+              border: 'none', borderRadius: '16px', padding: '6px 10px',
+              display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer',
+            }}>
+              <span style={{ fontSize: '11px' }}>🌙</span>
+              <span style={{ fontSize: '10px', fontWeight: 500, color: tema === 'oscuro' ? 'white' : 'var(--color-text-muted)' }}>Oscuro</span>
             </button>
+            <button type="button" onClick={() => setTema('tropical')} style={{
+              background: tema === 'tropical' ? 'var(--gradient-toggle-active)' : 'transparent',
+              border: 'none', borderRadius: '16px', padding: '6px 10px',
+              display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer',
+            }}>
+              <span style={{ fontSize: '11px' }}>☀️</span>
+              <span style={{ fontSize: '10px', fontWeight: 500, color: tema === 'tropical' ? 'white' : 'var(--color-text-muted)' }}>Claro</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* TÍTULO */}
+      <div style={{
+        position: 'relative', zIndex: 1,
+        background: 'var(--color-modulo-bg)',
+        border: '1px solid var(--color-modulo-border)',
+        borderLeft: '4px solid #D85A30',
+        borderRadius: '14px', padding: '20px',
+        marginBottom: '20px',
+        display: 'flex', alignItems: 'center', gap: '16px',
+        boxShadow: 'var(--modulo-sombra)',
+        opacity: 0, animation: 'vrFadeUp 0.5s ease 0.1s forwards',
+      }}>
+        <div style={{
+          width: '52px', height: '52px', borderRadius: '14px',
+          background: 'rgba(216, 90, 48, 0.18)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '26px',
+        }}>🎄</div>
+        <div>
+          <div style={{ fontSize: '10px', color: '#D85A30', letterSpacing: '1.5px', fontWeight: 600 }}>
+            SALARIO 13 OBLIGATORIO
+          </div>
+          <div style={{ fontSize: '22px', fontWeight: 500, color: 'var(--color-text-primary)', marginTop: '2px' }}>
+            Regalía Pascual {añoSeleccionado}
+          </div>
+          <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
+            Pago obligatorio antes del 20 de diciembre
           </div>
         </div>
       </div>
 
       {/* ALERTA TEMPORAL */}
       {!yaPasoFecha && enPeriodoCritico && (
-        <div className="bg-orange-50 border-2 border-orange-300 rounded-2xl p-4 mb-6">
-          <div className="flex items-start gap-3">
-            <span className="text-3xl">⚠️</span>
-            <div>
-              <p className="font-bold text-orange-900">
-                ¡Periodo crítico! Faltan {diasFaltantes} días para la fecha límite
-              </p>
-              <p className="text-sm text-orange-800 mt-1">
-                La regalía debe pagarse antes del 20 de diciembre. 
-                Considera procesar el pago pronto para evitar sanciones.
-              </p>
+        <div style={{
+          position: 'relative', zIndex: 1, marginBottom: '16px',
+          background: 'rgba(239, 159, 39, 0.15)',
+          border: '1px solid rgba(239, 159, 39, 0.45)',
+          borderLeft: '4px solid #EF9F27',
+          borderRadius: '12px', padding: '14px 16px',
+          display: 'flex', alignItems: 'flex-start', gap: '12px',
+          opacity: 0, animation: 'vrFadeUp 0.5s ease 0.15s forwards',
+        }}>
+          <span style={{ fontSize: '24px' }}>⚠️</span>
+          <div>
+            <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
+              ¡Periodo crítico! Faltan {diasFaltantes} días para la fecha límite
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
+              La regalía debe pagarse antes del 20 de diciembre. Considera procesar el pago pronto para evitar sanciones.
             </div>
           </div>
         </div>
       )}
 
       {yaPasoFecha && (
-        <div className="bg-red-50 border-2 border-red-400 rounded-2xl p-4 mb-6">
-          <div className="flex items-start gap-3">
-            <span className="text-3xl">🚨</span>
-            <div>
-              <p className="font-bold text-red-900">
-                Fecha límite vencida hace {Math.abs(diasFaltantes)} días
-              </p>
-              <p className="text-sm text-red-800 mt-1">
-                La fecha límite era el 20 de diciembre de {añoSeleccionado}. 
-                Si aún no la has pagado, hazlo lo antes posible.
-              </p>
+        <div style={{
+          position: 'relative', zIndex: 1, marginBottom: '16px',
+          background: 'rgba(244, 67, 54, 0.15)',
+          border: '1px solid rgba(244, 67, 54, 0.45)',
+          borderLeft: '4px solid #E24B4A',
+          borderRadius: '12px', padding: '14px 16px',
+          display: 'flex', alignItems: 'flex-start', gap: '12px',
+          opacity: 0, animation: 'vrFadeUp 0.5s ease 0.15s forwards',
+        }}>
+          <span style={{ fontSize: '24px' }}>🚨</span>
+          <div>
+            <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
+              Fecha límite vencida hace {Math.abs(diasFaltantes)} días
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
+              La fecha límite era el 20 de diciembre de {añoSeleccionado}. Si aún no la has pagado, hazlo lo antes posible.
             </div>
           </div>
         </div>
       )}
 
       {/* PROYECCIÓN */}
-      <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-        <p className="text-xs text-gray-500 font-semibold tracking-wider mb-4">
-          📊 PROYECCIÓN AL 20 DE DICIEMBRE {añoSeleccionado}
-        </p>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-            <p className="text-xs text-red-700 font-semibold tracking-wider mb-1">TOTAL ESTIMADO</p>
-            <p className="text-2xl font-bold text-red-900">
-              RD$ {formatearMoneda(totalRegalia)}
-            </p>
-            <p className="text-xs text-red-600 mt-1">a pagar en diciembre</p>
-          </div>
+      <div style={{
+        position: 'relative', zIndex: 1, marginBottom: '20px',
+        opacity: 0, animation: 'vrFadeUp 0.5s ease 0.2s forwards',
+      }}>
+        <div style={sectionTitle}>📊 PROYECCIÓN AL 20 DE DICIEMBRE {añoSeleccionado}</div>
 
-          <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-            <p className="text-xs text-green-700 font-semibold tracking-wider mb-1">EMPLEADOS</p>
-            <p className="text-2xl font-bold text-green-900">
-              {empleadosElegibles}
-            </p>
-            <p className="text-xs text-green-600 mt-1">
-              elegibles
-              {empleadosNoElegibles > 0 && ` (${empleadosNoElegibles} no aún)`}
-            </p>
-          </div>
-
-          <div className={`border rounded-xl p-4 ${
-            yaPasoFecha ? 'bg-red-50 border-red-300' :
-            enPeriodoCritico ? 'bg-orange-50 border-orange-200' : 
-            'bg-blue-50 border-blue-200'
-          }`}>
-            <p className={`text-xs font-semibold tracking-wider mb-1 ${
-              yaPasoFecha ? 'text-red-700' :
-              enPeriodoCritico ? 'text-orange-700' : 'text-blue-700'
-            }`}>
-              DÍAS RESTANTES
-            </p>
-            <p className={`text-2xl font-bold ${
-              yaPasoFecha ? 'text-red-900' :
-              enPeriodoCritico ? 'text-orange-900' : 'text-blue-900'
-            }`}>
-              {yaPasoFecha ? `−${Math.abs(diasFaltantes)}` : diasFaltantes}
-            </p>
-            <p className={`text-xs mt-1 ${
-              yaPasoFecha ? 'text-red-600' :
-              enPeriodoCritico ? 'text-orange-600' : 'text-blue-600'
-            }`}>
-              {yaPasoFecha ? 'fecha vencida' : 'hasta 20 dic'}
-            </p>
-          </div>
-
-          <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
-            <p className="text-xs text-purple-700 font-semibold tracking-wider mb-1">PROMEDIO</p>
-            <p className="text-2xl font-bold text-purple-900">
-              RD$ {formatearMoneda(empleadosElegibles > 0 ? totalRegalia / empleadosElegibles : 0)}
-            </p>
-            <p className="text-xs text-purple-600 mt-1">por empleado</p>
-          </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px', marginBottom: '12px' }}>
+          <KpiCard label="TOTAL ESTIMADO" valor={`RD$ ${formatearMoneda(totalRegalia)}`} sub="a pagar en diciembre" color="#D85A30" />
+          <KpiCard label="EMPLEADOS" valor={empleadosElegibles} sub={`elegibles${empleadosNoElegibles > 0 ? ` (${empleadosNoElegibles} no aún)` : ''}`} color="#1D9E75" />
+          <KpiCard
+            label="DÍAS RESTANTES"
+            valor={yaPasoFecha ? `−${Math.abs(diasFaltantes)}` : diasFaltantes}
+            sub={yaPasoFecha ? 'fecha vencida' : 'hasta 20 dic'}
+            color={yaPasoFecha ? '#E24B4A' : enPeriodoCritico ? '#EF9F27' : '#378ADD'}
+          />
+          <KpiCard
+            label="PROMEDIO"
+            valor={`RD$ ${formatearMoneda(empleadosElegibles > 0 ? totalRegalia / empleadosElegibles : 0)}`}
+            sub="por empleado"
+            color="#7F77DD"
+          />
         </div>
 
-        <div className={`mt-4 p-3 rounded-lg text-xs ${
-          fuentePrincipal === 'real' 
-            ? 'bg-green-50 border border-green-200 text-green-900'
-            : 'bg-yellow-50 border border-yellow-200 text-yellow-900'
-        }`}>
-          {fuentePrincipal === 'real' ? (
-            <>✅ Cálculo basado en pagos reales registrados en el sistema</>
-          ) : (
-            <>⚠️ Cálculo basado en proyección de salarios actuales. 
-            El valor final puede variar según los pagos reales del año.</>
-          )}
+        <div style={{
+          background: fuentePrincipal === 'real' ? 'rgba(29, 158, 117, 0.15)' : 'rgba(239, 159, 39, 0.15)',
+          border: fuentePrincipal === 'real' ? '1px solid rgba(29, 158, 117, 0.35)' : '1px solid rgba(239, 159, 39, 0.35)',
+          borderRadius: '10px', padding: '10px 14px',
+          fontSize: '12px',
+          color: fuentePrincipal === 'real' ? '#1D9E75' : '#EF9F27',
+        }}>
+          {fuentePrincipal === 'real'
+            ? '✅ Cálculo basado en pagos reales registrados en el sistema'
+            : '⚠️ Cálculo basado en proyección de salarios actuales. El valor final puede variar según los pagos reales del año.'}
         </div>
       </div>
 
       {/* DETALLE POR EMPLEADO */}
-      <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-        <p className="text-xs text-gray-500 font-semibold tracking-wider mb-4">
-          👥 EMPLEADOS Y SU REGALÍA ESTIMADA
-        </p>
+      <div style={{
+        position: 'relative', zIndex: 1, marginBottom: '20px',
+        opacity: 0, animation: 'vrFadeUp 0.5s ease 0.25s forwards',
+      }}>
+        <div style={sectionTitle}>👥 EMPLEADOS Y SU REGALÍA ESTIMADA</div>
 
         {calculosPorEmpleado.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
+          <div style={{ ...panel, textAlign: 'center', color: 'var(--color-text-muted)' }}>
             No hay empleados activos con sueldo configurado
           </div>
         ) : (
-          <div className="space-y-2">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {calculosPorEmpleado.map(c => (
-              <div 
-                key={c.empleado.id}
-                className={`border rounded-xl p-4 ${
-                  c.elegible 
-                    ? 'border-gray-200 bg-white' 
-                    : 'border-yellow-200 bg-yellow-50'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
-                  <div className="flex items-center gap-3 flex-1">
-                    <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-2xl flex-shrink-0">
+              <div key={c.empleado.id} style={{
+                background: 'var(--color-modulo-bg)',
+                border: '1px solid var(--color-modulo-border)',
+                borderLeft: c.elegible ? '4px solid #D85A30' : '4px solid #EF9F27',
+                borderRadius: '12px', padding: '14px 16px',
+                boxShadow: 'var(--modulo-sombra)',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{
+                      width: '44px', height: '44px', borderRadius: '12px',
+                      background: c.elegible ? 'rgba(216, 90, 48, 0.18)' : 'rgba(239, 159, 39, 0.18)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '22px',
+                    }}>
                       {c.empleado.sexo === 'hombre' ? '👨' : c.empleado.sexo === 'mujer' ? '👩' : '👤'}
                     </div>
                     <div>
-                      <p className="font-bold text-gray-900">{c.empleado.nombre}</p>
-                      <p className="text-xs text-gray-600 capitalize">
-                        {c.empleado.rol?.replace('_', ' ')}
-                      </p>
+                      <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--color-text-primary)' }}>{c.empleado.nombre}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', textTransform: 'capitalize' }}>{c.empleado.rol?.replace('_', ' ')}</div>
                     </div>
                   </div>
 
                   {c.elegible ? (
-                    <div className="text-right">
-                      <p className="text-xs text-gray-500">Regalía estimada</p>
-                      <p className="text-2xl font-bold text-red-700">
-                        RD$ {formatearMoneda(c.regalia)}
-                      </p>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Regalía estimada</div>
+                      <div style={{ fontSize: '20px', fontWeight: 600, color: '#D85A30' }}>RD$ {formatearMoneda(c.regalia)}</div>
                     </div>
                   ) : (
-                    <div className="bg-yellow-100 text-yellow-900 px-3 py-1 rounded-full text-xs font-bold">
+                    <div style={{
+                      padding: '5px 12px',
+                      background: 'rgba(239, 159, 39, 0.18)',
+                      border: '1px solid rgba(239, 159, 39, 0.4)',
+                      borderRadius: '14px',
+                      fontSize: '11px', fontWeight: 600, color: '#EF9F27',
+                    }}>
                       ⚠️ No elegible aún ({c.mesesTrabajados.toFixed(1)} meses)
                     </div>
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs pt-2 border-t border-gray-100">
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px', fontSize: '11px', paddingTop: '8px', borderTop: '1px solid var(--color-border-subtle)' }}>
                   <div>
-                    <p className="text-gray-500">Salario mensual</p>
-                    <p className="font-semibold">RD$ {formatearMoneda(salarioMensualEmpleado(c.empleado))}</p>
+                    <div style={{ color: 'var(--color-text-muted)' }}>Salario mensual</div>
+                    <div style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>RD$ {formatearMoneda(salarioMensualEmpleado(c.empleado))}</div>
                   </div>
                   <div>
-                    <p className="text-gray-500">Salarios año</p>
-                    <p className="font-semibold">RD$ {formatearMoneda(c.salariosAcumulados)}</p>
+                    <div style={{ color: 'var(--color-text-muted)' }}>Salarios año</div>
+                    <div style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>RD$ {formatearMoneda(c.salariosAcumulados)}</div>
                   </div>
                   <div>
-                    <p className="text-gray-500">Meses trabajados</p>
-                    <p className="font-semibold">{c.mesesTrabajados.toFixed(1)} meses</p>
+                    <div style={{ color: 'var(--color-text-muted)' }}>Meses trabajados</div>
+                    <div style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>{c.mesesTrabajados.toFixed(1)} meses</div>
                   </div>
                 </div>
               </div>
@@ -522,59 +546,74 @@ function VistaRegaliaPascual({ empresaId, usuarioActual, onVolver }) {
       </div>
 
       {/* INFORMACIÓN LEGAL */}
-      <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 mb-6">
-        <p className="text-xs text-blue-800 font-semibold tracking-wider mb-3">
+      <div style={{
+        position: 'relative', zIndex: 1, marginBottom: '20px',
+        background: 'rgba(55, 138, 221, 0.12)',
+        border: '1px solid rgba(55, 138, 221, 0.35)',
+        borderLeft: '4px solid #378ADD',
+        borderRadius: '14px', padding: '20px',
+        opacity: 0, animation: 'vrFadeUp 0.5s ease 0.3s forwards',
+      }}>
+        <div style={{ fontSize: '11px', color: '#378ADD', letterSpacing: '1.5px', fontWeight: 600, marginBottom: '12px' }}>
           📚 ¿QUÉ DICE LA LEY?
-        </p>
-        <div className="space-y-2 text-sm text-blue-900">
-          <p>
-            ⚖️ <strong>Art. 219 Código de Trabajo RD:</strong> La Regalía Pascual 
-            (también conocida como "Salario 13") es OBLIGATORIA.
-          </p>
-          <p>
-            📅 <strong>Plazo:</strong> Debe pagarse antes del 20 de diciembre.
-          </p>
-          <p>
-            🧮 <strong>Fórmula:</strong> Suma de salarios ordinarios del año / 12.
-          </p>
-          <p>
-            ⏰ <strong>Tiempo mínimo:</strong> Empleados con menos de 3 meses 
-            reciben proporcional. Si tiene 3 meses o más, recibe completo.
-          </p>
-          <p>
-            💰 <strong>Tope máximo:</strong> No puede exceder 5 salarios mínimos del sector.
-          </p>
-          <p>
-            ❌ <strong>NO incluye:</strong> Bonificaciones extras, horas extra, comisiones. 
-            Solo salarios ordinarios.
-          </p>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+          <div>⚖️ <strong style={{ color: 'var(--color-text-primary)' }}>Art. 219 Código de Trabajo RD:</strong> La Regalía Pascual (Salario 13) es OBLIGATORIA.</div>
+          <div>📅 <strong style={{ color: 'var(--color-text-primary)' }}>Plazo:</strong> Debe pagarse antes del 20 de diciembre.</div>
+          <div>🧮 <strong style={{ color: 'var(--color-text-primary)' }}>Fórmula:</strong> Suma de salarios ordinarios del año / 12.</div>
+          <div>⏰ <strong style={{ color: 'var(--color-text-primary)' }}>Tiempo mínimo:</strong> Empleados con menos de 3 meses reciben proporcional. Si tiene 3 meses o más, recibe completo.</div>
+          <div>💰 <strong style={{ color: 'var(--color-text-primary)' }}>Tope máximo:</strong> No puede exceder 5 salarios mínimos del sector.</div>
+          <div>❌ <strong style={{ color: 'var(--color-text-primary)' }}>NO incluye:</strong> Bonificaciones extras, horas extra, comisiones. Solo salarios ordinarios.</div>
         </div>
       </div>
 
       {/* BOTÓN PROCESAR */}
       {empleadosElegibles > 0 && (
-        <div className="bg-gradient-to-br from-red-500 to-red-700 rounded-2xl shadow-xl p-6 text-center text-white">
-          <p className="text-red-100 text-xs font-semibold tracking-wider mb-2">
+        <div style={{
+          position: 'relative', zIndex: 1, marginBottom: '20px',
+          background: 'linear-gradient(135deg, #D85A30 0%, #993C1D 100%)',
+          borderRadius: '14px', padding: '20px',
+          color: 'white', textAlign: 'center',
+          opacity: 0, animation: 'vrFadeUp 0.5s ease 0.35s forwards',
+        }}>
+          <div style={{ fontSize: '10px', opacity: 0.9, letterSpacing: '1.5px', fontWeight: 600, marginBottom: '6px' }}>
             ¿LISTO PARA PROCESAR?
-          </p>
-          <p className="text-2xl font-bold mb-3">
-            🎄 Pagar regalía a {empleadosElegibles} empleado{empleadosElegibles !== 1 ? 's' : ''}
-          </p>
-          <p className="text-3xl font-bold mb-4">
+          </div>
+          <div style={{ fontSize: '17px', fontWeight: 500, marginBottom: '10px' }}>
+            🎄 Pagar regalía a {empleadosElegibles} empleado(s)
+          </div>
+          <div style={{ fontSize: '26px', fontWeight: 600, marginBottom: '14px' }}>
             RD$ {formatearMoneda(totalRegalia)}
-          </p>
-          <button
-            onClick={() => setModalConfirmar(true)}
-            className="bg-white text-red-700 hover:bg-red-50 font-bold px-8 py-3 rounded-xl shadow-lg"
-          >
-            💰 Procesar pago de regalía
-          </button>
-          <p className="text-xs text-red-100 mt-3">
+          </div>
+          <button onClick={() => setModalConfirmar(true)} style={{
+            background: 'white', color: '#993C1D',
+            border: 'none', borderRadius: '10px',
+            padding: '12px 28px',
+            fontSize: '13px', fontWeight: 600,
+            cursor: 'pointer', fontFamily: 'inherit',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+          }}>💰 Procesar pago de regalía</button>
+          <div style={{ fontSize: '10px', opacity: 0.85, marginTop: '10px' }}>
             Quedará registrado en Bonificaciones como tipo "navideño"
-          </p>
+          </div>
         </div>
       )}
+    </div>
+  )
+}
 
+function KpiCard({ label, valor, sub, color }) {
+  return (
+    <div style={{
+      background: 'var(--color-modulo-bg)',
+      border: '1px solid var(--color-modulo-border)',
+      borderLeft: `4px solid ${color}`,
+      borderRadius: '12px', padding: '14px',
+      boxShadow: 'var(--modulo-sombra)',
+    }}>
+      <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', letterSpacing: '0.5px' }}>{label}</div>
+      <div style={{ fontSize: '20px', fontWeight: 600, color: color, marginTop: '6px' }}>{valor}</div>
+      {sub && <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '4px' }}>{sub}</div>}
     </div>
   )
 }
