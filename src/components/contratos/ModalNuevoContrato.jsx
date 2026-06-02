@@ -1,13 +1,9 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 
-function ModalNuevoContrato({ 
-  empresaId, 
-  usuarioActual, 
-  empleadoPreseleccionado, 
-  empresa,
-  onCerrar, 
-  onContratoCreado 
+function ModalNuevoContrato({
+  empresaId, usuarioActual, empleadoPreseleccionado, empresa,
+  onCerrar, onContratoCreado
 }) {
   const [paso, setPaso] = useState(empleadoPreseleccionado ? 2 : 1)
   const [empleados, setEmpleados] = useState([])
@@ -16,7 +12,6 @@ function ModalNuevoContrato({
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
 
-  // Datos del contrato
   const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState(empleadoPreseleccionado || null)
   const [tipoContrato, setTipoContrato] = useState('obra_servicio')
   const [datosContrato, setDatosContrato] = useState({
@@ -33,13 +28,17 @@ function ModalNuevoContrato({
     notas: '',
   })
 
+  // Tema dual (mismo patrón del Dashboard)
+  const [tema, setTema] = useState(() => localStorage.getItem('cocina_pae_tema') || 'oscuro')
   useEffect(() => {
-    if (paso === 1) cargarEmpleados()
-  }, [paso])
+    document.documentElement.setAttribute('data-tema', tema)
+    localStorage.setItem('cocina_pae_tema', tema)
+  }, [tema])
+
+  useEffect(() => { if (paso === 1) cargarEmpleados() }, [paso])
 
   useEffect(() => {
     if (empleadoSeleccionado && paso === 3) {
-      // Pre-llenar datos basados en el empleado
       setDatosContrato(prev => ({
         ...prev,
         puesto: prev.puesto || formatearPuesto(empleadoSeleccionado.rol),
@@ -56,79 +55,55 @@ function ModalNuevoContrato({
     const { data } = await supabase
       .from('usuarios')
       .select('id, nombre, rol, sexo, foto_url, cedula, sueldo, frecuencia_pago, fecha_contratacion, gestion_contrato')
-      .eq('empresa_id', empresaId)
-      .eq('activo', true)
-      .neq('rol', 'propietario')
-      .order('nombre')
-    
-    // Excluir los que YA tienen contrato
+      .eq('empresa_id', empresaId).eq('activo', true).neq('rol', 'propietario').order('nombre')
+
     const { data: contratosExistentes } = await supabase
-      .from('contratos_empleados')
-      .select('usuario_id')
-      .eq('empresa_id', empresaId)
-    
+      .from('contratos_empleados').select('usuario_id').eq('empresa_id', empresaId)
+
     const idsConContrato = (contratosExistentes || []).map(c => c.usuario_id)
     const empleadosDisponibles = (data || []).filter(e => !idsConContrato.includes(e.id))
-    
     setEmpleados(empleadosDisponibles)
     setCargando(false)
   }
 
   function formatearPuesto(rol) {
     const mapa = {
-      'administrador': 'Administrador',
-      'contador': 'Contador',
-      'secretaria': 'Secretaria',
-      'jefa_cocina': 'Jefa de Cocina',
-      'ayudante': 'Ayudante de Cocina',
-      'despachador': 'Despachador',
+      administrador: 'Administrador', contador: 'Contador', secretaria: 'Secretaria',
+      jefa_cocina: 'Jefa de Cocina', ayudante: 'Ayudante de Cocina', despachador: 'Despachador',
     }
     return mapa[rol] || rol
   }
-
   function mapearFrecuencia(freq) {
     if (freq === 'semana') return 'semanal'
     if (freq === 'quincena') return 'quincenal'
     if (freq === 'mes') return 'mensual'
     return 'quincenal'
   }
-
   function actualizarCampo(campo, valor) {
     setDatosContrato(prev => ({ ...prev, [campo]: valor }))
     if (error) setError('')
   }
-
-  // Calcular salario bruto (5.74% TSS+AFP)
   function calcularBruto(neto) {
     if (!neto || isNaN(neto)) return 0
     return Math.round((parseFloat(neto) / 0.9426) * 100) / 100
   }
 
   function validarPaso3() {
-    if (!datosContrato.fecha_inicio) {
-      setError('La fecha de inicio es obligatoria')
-      return false
-    }
+    if (!datosContrato.fecha_inicio) { setError('La fecha de inicio es obligatoria'); return false }
     if (tipoContrato !== 'indefinido' && !datosContrato.fecha_fin) {
       setError('La fecha de fin es obligatoria para contratos por obra/servicio o estacionales')
       return false
     }
-    if (!datosContrato.puesto.trim()) {
-      setError('El puesto es obligatorio')
-      return false
-    }
+    if (!datosContrato.puesto.trim()) { setError('El puesto es obligatorio'); return false }
     if (!datosContrato.salario_neto || parseFloat(datosContrato.salario_neto) <= 0) {
-      setError('El salario neto debe ser mayor a 0')
-      return false
+      setError('El salario neto debe ser mayor a 0'); return false
     }
     return true
   }
 
   async function crearContrato() {
     if (!validarPaso3()) return
-
-    setGuardando(true)
-    setError('')
+    setGuardando(true); setError('')
 
     const salarioNeto = parseFloat(datosContrato.salario_neto)
     const salarioBruto = calcularBruto(salarioNeto)
@@ -154,162 +129,267 @@ function ModalNuevoContrato({
     }
 
     const { data, error: errorInsert } = await supabase
-      .from('contratos_empleados')
-      .insert([nuevoContrato])
-      .select()
-      .single()
+      .from('contratos_empleados').insert([nuevoContrato]).select().single()
 
     if (errorInsert) {
       console.error('Error creando contrato:', errorInsert)
       setError('Error al crear contrato: ' + errorInsert.message)
-      setGuardando(false)
-      return
+      setGuardando(false); return
     }
 
     setGuardando(false)
-    
-    // Notificar al padre que se creó el contrato
-    if (onContratoCreado) {
-      onContratoCreado(data)
-    }
+    if (onContratoCreado) onContratoCreado(data)
   }
 
-  // Filtrar empleados por búsqueda
   const empleadosFiltrados = empleados.filter(e => {
     if (!busqueda.trim()) return true
     return e.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
            e.rol.toLowerCase().includes(busqueda.toLowerCase())
   })
 
-  // Helpers
   function obtenerAvatar(empleado) {
     if (empleado.foto_url) return null
     if (empleado.sexo === 'hombre') return '👨'
     if (empleado.sexo === 'mujer') return '👩'
     return empleado.nombre?.charAt(0)?.toUpperCase() || '?'
   }
-
   function obtenerLabelFrecuencia(freq) {
-    const mapa = {
-      'dia': 'por día',
-      'semana': 'por semana',
-      'quincena': 'por quincena',
-      'mes': 'por mes',
-    }
+    const mapa = { dia: 'por día', semana: 'por semana', quincena: 'por quincena', mes: 'por mes' }
     return mapa[freq] || freq
   }
 
   const salarioBrutoCalculado = calcularBruto(datosContrato.salario_neto)
 
+  // ─── ESTILOS ───
+  const inputStyle = {
+    width: '100%', boxSizing: 'border-box',
+    background: 'var(--color-bg-input)',
+    border: '1px solid var(--color-border-subtle)',
+    borderRadius: '10px', padding: '10px 12px',
+    color: 'var(--color-text-primary)',
+    fontSize: '13px', fontFamily: 'inherit', outline: 'none',
+  }
+  const labelStyle = {
+    display: 'block', fontSize: '10px', fontWeight: 500,
+    color: 'var(--color-text-muted)', marginBottom: '6px',
+    letterSpacing: '0.5px', textTransform: 'uppercase',
+  }
+  const sectionTitleStyle = {
+    fontSize: '11px', color: 'var(--color-text-muted)',
+    letterSpacing: '1.5px', fontWeight: 600,
+    marginBottom: '10px',
+  }
+  const radioCardStyle = (selected, color) => ({
+    display: 'block', padding: '16px',
+    background: selected ? `rgba(${color}, 0.12)` : 'var(--color-bg-input)',
+    border: selected ? `1px solid rgba(${color}, 0.45)` : '1px solid var(--color-border-subtle)',
+    borderLeft: selected ? `4px solid rgb(${color})` : '1px solid var(--color-border-subtle)',
+    borderRadius: '12px', cursor: 'pointer',
+    transition: 'all 0.15s ease',
+  })
+
+  const tituloPaso = {
+    1: '👤 Selecciona el empleado',
+    2: '📋 Tipo de contrato',
+    3: '📝 Datos del contrato',
+    4: '✅ Confirmar y crear',
+  }[paso]
+
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-        
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 90,
+      background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
+      display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+      padding: '20px', overflowY: 'auto',
+    }}>
+      <div style={{
+        background: 'var(--color-bg-primary)',
+        border: '1px solid var(--color-border-accent)',
+        borderRadius: '16px',
+        maxWidth: '820px', width: '100%',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+        display: 'flex', flexDirection: 'column',
+        maxHeight: '95vh', overflow: 'hidden',
+      }}>
+
         {/* HEADER */}
-        <div className="bg-gradient-to-r from-purple-600 to-indigo-700 text-white p-6">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <p className="text-xs opacity-80 tracking-wider">NUEVO CONTRATO LABORAL</p>
-              <h2 className="text-2xl font-bold mt-1">
-                {paso === 1 && '👤 Selecciona el empleado'}
-                {paso === 2 && '📋 Tipo de contrato'}
-                {paso === 3 && '📝 Datos del contrato'}
-                {paso === 4 && '✅ Confirmar y crear'}
-              </h2>
+        <div style={{
+          padding: '20px 24px',
+          borderBottom: '1px solid var(--color-border-subtle)',
+          display: 'flex', flexDirection: 'column', gap: '14px',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <div style={{
+                width: '44px', height: '44px', borderRadius: '12px',
+                background: 'rgba(127, 119, 221, 0.18)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '22px',
+              }}>📄</div>
+              <div>
+                <div style={{ fontSize: '10px', color: '#7F77DD', letterSpacing: '1.5px', fontWeight: 600 }}>
+                  NUEVO CONTRATO LABORAL
+                </div>
+                <div style={{ fontSize: '18px', fontWeight: 500, color: 'var(--color-text-primary)', marginTop: '2px' }}>
+                  {tituloPaso}
+                </div>
+              </div>
             </div>
-            <button
-              onClick={onCerrar}
-              className="text-2xl opacity-70 hover:opacity-100"
-              disabled={guardando}
-            >
-              ✕
-            </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{
+                display: 'flex', alignItems: 'center',
+                background: 'var(--color-bg-elevated)',
+                border: '1px solid var(--color-border-subtle)',
+                borderRadius: '20px', padding: '3px', gap: '2px',
+              }}>
+                <button type="button" onClick={() => setTema('oscuro')} style={{
+                  background: tema === 'oscuro' ? 'var(--gradient-toggle-active)' : 'transparent',
+                  border: 'none', borderRadius: '16px', padding: '6px 10px',
+                  display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer',
+                }}>
+                  <span style={{ fontSize: '11px' }}>🌙</span>
+                  <span style={{ fontSize: '10px', fontWeight: 500, color: tema === 'oscuro' ? 'white' : 'var(--color-text-muted)' }}>Oscuro</span>
+                </button>
+                <button type="button" onClick={() => setTema('tropical')} style={{
+                  background: tema === 'tropical' ? 'var(--gradient-toggle-active)' : 'transparent',
+                  border: 'none', borderRadius: '16px', padding: '6px 10px',
+                  display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer',
+                }}>
+                  <span style={{ fontSize: '11px' }}>☀️</span>
+                  <span style={{ fontSize: '10px', fontWeight: 500, color: tema === 'tropical' ? 'white' : 'var(--color-text-muted)' }}>Claro</span>
+                </button>
+              </div>
+              <button onClick={onCerrar} disabled={guardando} style={{
+                background: 'var(--color-bg-elevated)',
+                border: '1px solid var(--color-border-subtle)',
+                borderRadius: '20px', padding: '7px 14px',
+                color: 'var(--color-text-secondary)', fontSize: '12px',
+                cursor: guardando ? 'not-allowed' : 'pointer',
+                opacity: guardando ? 0.6 : 1, fontFamily: 'inherit',
+              }}>✖ Cerrar</button>
+            </div>
           </div>
 
           {/* Progress steps */}
-          <div className="flex items-center gap-2">
-            {[1, 2, 3, 4].map((n, i) => (
-              <div key={n} className="flex items-center gap-2 flex-1">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                  n === paso ? 'bg-white text-purple-700' :
-                  n < paso ? 'bg-green-400 text-white' :
-                  'bg-purple-800 text-purple-300'
-                }`}>
-                  {n < paso ? '✓' : n}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              {[1, 2, 3, 4].map((n, i) => (
+                <div key={n} style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1 }}>
+                  <div style={{
+                    width: '28px', height: '28px', borderRadius: '50%',
+                    background: n === paso
+                      ? 'linear-gradient(135deg, #7F77DD 0%, #534AB7 100%)'
+                      : n < paso
+                        ? 'linear-gradient(135deg, #1D9E75 0%, #0F6E56 100%)'
+                        : 'var(--color-bg-input)',
+                    border: n > paso ? '1px solid var(--color-border-subtle)' : 'none',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '12px', fontWeight: 700,
+                    color: n > paso ? 'var(--color-text-muted)' : 'white',
+                  }}>{n < paso ? '✓' : n}</div>
+                  {i < 3 && (
+                    <div style={{
+                      flex: 1, height: '3px', borderRadius: '2px',
+                      background: n < paso
+                        ? 'linear-gradient(135deg, #1D9E75 0%, #0F6E56 100%)'
+                        : 'var(--color-bg-input)',
+                    }} />
+                  )}
                 </div>
-                {i < 3 && (
-                  <div className={`flex-1 h-1 rounded ${n < paso ? 'bg-green-400' : 'bg-purple-800'}`} />
-                )}
-              </div>
-            ))}
+              ))}
+            </div>
+            <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '6px' }}>
+              Paso {paso} de 4
+            </div>
           </div>
-          <p className="text-xs text-purple-200 mt-2">Paso {paso} de 4</p>
         </div>
 
-        {/* CONTENIDO */}
-        <div className="flex-1 overflow-y-auto p-6">
+        {/* BODY */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
 
-          {/* ─── PASO 1: SELECCIONAR EMPLEADO ─────────────────── */}
+          {/* PASO 1: SELECCIONAR EMPLEADO */}
           {paso === 1 && (
             <div>
-              <p className="text-sm text-gray-600 mb-4">
+              <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginBottom: '14px' }}>
                 Solo se muestran empleados que aún NO tienen contrato creado.
-              </p>
+              </div>
 
-              <input
-                type="text"
-                value={busqueda}
+              <input type="text" value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
                 placeholder="🔍 Buscar empleado por nombre o rol..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-purple-500"
-              />
+                style={{ ...inputStyle, marginBottom: '14px' }} />
 
               {cargando ? (
-                <p className="text-center py-8 text-gray-500">⏳ Cargando empleados...</p>
+                <div style={{ textAlign: 'center', padding: '32px', color: 'var(--color-text-muted)', fontSize: '13px' }}>
+                  ⏳ Cargando empleados...
+                </div>
               ) : empleadosFiltrados.length === 0 ? (
-                <div className="text-center py-8 bg-gray-50 rounded-xl">
-                  <p className="text-4xl mb-2">👥</p>
-                  <p className="font-bold text-gray-900">
-                    {empleados.length === 0 
-                      ? 'No hay empleados disponibles' 
+                <div style={{
+                  textAlign: 'center', padding: '32px',
+                  background: 'var(--color-bg-input)',
+                  border: '1px dashed var(--color-border-subtle)',
+                  borderRadius: '12px',
+                }}>
+                  <div style={{ fontSize: '36px', marginBottom: '6px' }}>👥</div>
+                  <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                    {empleados.length === 0
+                      ? 'No hay empleados disponibles'
                       : 'No se encontraron empleados con esa búsqueda'}
-                  </p>
-                  <p className="text-sm text-gray-600 mt-2">
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '6px' }}>
                     {empleados.length === 0 && 'Todos los empleados activos ya tienen contrato creado'}
-                  </p>
+                  </div>
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {empleadosFiltrados.map(emp => (
-                    <button
-                      key={emp.id}
-                      onClick={() => {
-                        setEmpleadoSeleccionado(emp)
-                        setPaso(2)
+                    <button key={emp.id}
+                      onClick={() => { setEmpleadoSeleccionado(emp); setPaso(2) }}
+                      style={{
+                        textAlign: 'left',
+                        background: 'var(--color-bg-input)',
+                        border: '1px solid var(--color-border-subtle)',
+                        borderRadius: '12px', padding: '14px',
+                        cursor: 'pointer', fontFamily: 'inherit',
+                        transition: 'all 0.15s ease',
                       }}
-                      className="w-full text-left bg-white border-2 border-gray-200 hover:border-purple-400 hover:bg-purple-50 rounded-xl p-4 transition-colors"
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(127, 119, 221, 0.10)'
+                        e.currentTarget.style.borderColor = 'rgba(127, 119, 221, 0.4)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'var(--color-bg-input)'
+                        e.currentTarget.style.borderColor = 'var(--color-border-subtle)'
+                      }}
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center text-xl flex-shrink-0">
-                          {emp.foto_url ? (
-                            <img src={emp.foto_url} alt="" className="w-12 h-12 rounded-full object-cover" />
-                          ) : (
-                            obtenerAvatar(emp)
-                          )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{
+                          width: '44px', height: '44px', borderRadius: '12px',
+                          background: 'rgba(127, 119, 221, 0.18)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: '22px', flexShrink: 0,
+                          overflow: 'hidden',
+                        }}>
+                          {emp.foto_url
+                            ? <img src={emp.foto_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            : obtenerAvatar(emp)}
                         </div>
-                        <div className="flex-1">
-                          <p className="font-bold text-gray-900">{emp.nombre}</p>
-                          <p className="text-xs text-gray-600">
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                            {emp.nombre}
+                          </div>
+                          <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
                             {formatearPuesto(emp.rol)}
                             {emp.sueldo && ` · RD$ ${Number(emp.sueldo).toLocaleString('es-DO')} ${obtenerLabelFrecuencia(emp.frecuencia_pago)}`}
-                          </p>
+                          </div>
                           {emp.gestion_contrato === 'contrato_digital' && (
-                            <p className="text-xs text-yellow-700 mt-1 font-semibold">
+                            <div style={{ fontSize: '10px', color: '#EF9F27', fontWeight: 600, marginTop: '4px' }}>
                               ⚠️ Marcado para contrato digital
-                            </p>
+                            </div>
                           )}
                         </div>
-                        <span className="text-purple-600">→</span>
+                        <span style={{ color: '#7F77DD', fontSize: '16px' }}>→</span>
                       </div>
                     </button>
                   ))}
@@ -318,101 +398,88 @@ function ModalNuevoContrato({
             </div>
           )}
 
-          {/* ─── PASO 2: TIPO DE CONTRATO ─────────────────────── */}
+          {/* PASO 2: TIPO DE CONTRATO */}
           {paso === 2 && empleadoSeleccionado && (
             <div>
-              <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 mb-6">
-                <p className="text-xs text-purple-700 font-semibold tracking-wider mb-1">
+              <div style={{
+                background: 'rgba(127, 119, 221, 0.12)',
+                border: '1px solid rgba(127, 119, 221, 0.35)',
+                borderLeft: '4px solid #7F77DD',
+                borderRadius: '12px', padding: '14px',
+                marginBottom: '18px',
+              }}>
+                <div style={{ fontSize: '10px', color: '#7F77DD', fontWeight: 600, letterSpacing: '1.5px' }}>
                   EMPLEADO SELECCIONADO
-                </p>
-                <p className="font-bold text-gray-900">{empleadoSeleccionado.nombre}</p>
-                <p className="text-sm text-gray-600">{formatearPuesto(empleadoSeleccionado.rol)}</p>
+                </div>
+                <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-text-primary)', marginTop: '4px' }}>
+                  {empleadoSeleccionado.nombre}
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                  {formatearPuesto(empleadoSeleccionado.rol)}
+                </div>
               </div>
 
-              <p className="text-sm text-gray-600 mb-4">
+              <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginBottom: '14px' }}>
                 Selecciona el tipo de contrato que mejor se ajuste a la relación laboral:
-              </p>
+              </div>
 
-              <div className="space-y-3">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {/* Opción 1: Obra/Servicio */}
-                <label
-                  className={`block p-5 border-2 rounded-xl cursor-pointer transition-colors ${
-                    tipoContrato === 'obra_servicio'
-                      ? 'border-green-500 bg-green-50'
-                      : 'border-gray-200 hover:border-gray-400'
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <input
-                      type="radio"
-                      name="tipo_contrato"
-                      value="obra_servicio"
+                <label style={radioCardStyle(tipoContrato === 'obra_servicio', '29, 158, 117')}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                    <input type="radio" name="tipo_contrato" value="obra_servicio"
                       checked={tipoContrato === 'obra_servicio'}
                       onChange={(e) => setTipoContrato(e.target.value)}
-                      className="mt-1"
-                    />
-                    <div className="flex-1">
-                      <div className="font-bold text-gray-900 flex items-center gap-2">
+                      style={{ marginTop: '4px', cursor: 'pointer' }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                         📑 Obra o Servicio Determinado (PAE)
-                        <span className="bg-green-200 text-green-800 text-xs font-bold px-2 py-0.5 rounded-full">
-                          RECOMENDADO
-                        </span>
+                        <span style={{
+                          fontSize: '9px', padding: '2px 8px',
+                          background: 'rgba(29, 158, 117, 0.25)',
+                          color: '#1D9E75',
+                          borderRadius: '10px', fontWeight: 700, letterSpacing: '0.5px',
+                        }}>RECOMENDADO</span>
                       </div>
-                      <p className="text-sm text-gray-600 mt-1">
+                      <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '4px', lineHeight: 1.5 }}>
                         Contrato amarrado al año escolar y al contrato con INABIE. Termina automáticamente al finalizar el servicio. <strong>Mejor protección para el empleador.</strong>
-                      </p>
+                      </div>
                     </div>
                   </div>
                 </label>
 
                 {/* Opción 2: Estacional */}
-                <label
-                  className={`block p-5 border-2 rounded-xl cursor-pointer transition-colors ${
-                    tipoContrato === 'estacional'
-                      ? 'border-yellow-500 bg-yellow-50'
-                      : 'border-gray-200 hover:border-gray-400'
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <input
-                      type="radio"
-                      name="tipo_contrato"
-                      value="estacional"
+                <label style={radioCardStyle(tipoContrato === 'estacional', '239, 159, 39')}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                    <input type="radio" name="tipo_contrato" value="estacional"
                       checked={tipoContrato === 'estacional'}
                       onChange={(e) => setTipoContrato(e.target.value)}
-                      className="mt-1"
-                    />
-                    <div className="flex-1">
-                      <div className="font-bold text-gray-900">🌾 Estacional</div>
-                      <p className="text-sm text-gray-600 mt-1">
+                      style={{ marginTop: '4px', cursor: 'pointer' }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                        🌾 Estacional
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '4px', lineHeight: 1.5 }}>
                         Reconoce la naturaleza estacional del trabajo PAE. Si dura más de 4 meses, aplica asistencia económica.
-                      </p>
+                      </div>
                     </div>
                   </div>
                 </label>
 
                 {/* Opción 3: Indefinido */}
-                <label
-                  className={`block p-5 border-2 rounded-xl cursor-pointer transition-colors ${
-                    tipoContrato === 'indefinido'
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-400'
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <input
-                      type="radio"
-                      name="tipo_contrato"
-                      value="indefinido"
+                <label style={radioCardStyle(tipoContrato === 'indefinido', '55, 138, 221')}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                    <input type="radio" name="tipo_contrato" value="indefinido"
                       checked={tipoContrato === 'indefinido'}
                       onChange={(e) => setTipoContrato(e.target.value)}
-                      className="mt-1"
-                    />
-                    <div className="flex-1">
-                      <div className="font-bold text-gray-900">♾️ Tiempo Indefinido</div>
-                      <p className="text-sm text-gray-600 mt-1">
+                      style={{ marginTop: '4px', cursor: 'pointer' }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                        ♾️ Tiempo Indefinido
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '4px', lineHeight: 1.5 }}>
                         Para personal permanente que trabaja todo el año (ej: secretaria administrativa). Aplican todas las prestaciones.
-                      </p>
+                      </div>
                     </div>
                   </div>
                 </label>
@@ -420,139 +487,135 @@ function ModalNuevoContrato({
             </div>
           )}
 
-          {/* ─── PASO 3: DATOS DEL CONTRATO ───────────────────── */}
+          {/* PASO 3: DATOS DEL CONTRATO */}
           {paso === 3 && empleadoSeleccionado && (
-            <div className="space-y-5">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
 
-              {/* Datos auto-llenados (no editables) */}
-              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-                <p className="text-xs text-gray-500 font-semibold tracking-wider mb-3">
-                  📋 DATOS AUTO-LLENADOS DESDE LA CONFIGURACIÓN
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+              {/* Auto-llenados */}
+              <div style={{
+                background: 'var(--color-bg-input)',
+                border: '1px solid var(--color-border-subtle)',
+                borderRadius: '12px', padding: '14px',
+              }}>
+                <div style={sectionTitleStyle}>📋 DATOS AUTO-LLENADOS DESDE LA CONFIGURACIÓN</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', fontSize: '12px' }}>
                   <div>
-                    <p className="text-xs text-gray-500">Empleador</p>
-                    <p className="font-bold">{empresa?.nombre_propietario || 'Sin nombre'}</p>
-                    <p className="text-xs text-gray-600">CC: {empresa?.cedula_propietario || '(sin cédula)'}</p>
+                    <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Empleador</div>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                      {empresa?.nombre_propietario || 'Sin nombre'}
+                    </div>
+                    <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
+                      CC: {empresa?.cedula_propietario || '(sin cédula)'}
+                    </div>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">Trabajador</p>
-                    <p className="font-bold">{empleadoSeleccionado.nombre}</p>
-                    <p className="text-xs text-gray-600">CC: {empleadoSeleccionado.cedula || '(sin cédula)'}</p>
+                    <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Trabajador</div>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                      {empleadoSeleccionado.nombre}
+                    </div>
+                    <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
+                      CC: {empleadoSeleccionado.cedula || '(sin cédula)'}
+                    </div>
                   </div>
                 </div>
                 {(!empresa?.cedula_propietario || !empleadoSeleccionado.cedula) && (
-                  <p className="text-xs text-orange-700 mt-3 bg-orange-50 border border-orange-200 rounded p-2">
+                  <div style={{
+                    marginTop: '12px',
+                    background: 'rgba(239, 159, 39, 0.12)',
+                    border: '1px solid rgba(239, 159, 39, 0.35)',
+                    borderRadius: '8px', padding: '8px 10px',
+                    fontSize: '11px', color: '#EF9F27',
+                  }}>
                     ⚠️ Faltan cédulas. Edita los datos en Configuración o en el perfil del empleado para que aparezcan en el contrato.
-                  </p>
+                  </div>
                 )}
               </div>
 
-              {/* Año escolar (solo obra_servicio) */}
               {tipoContrato === 'obra_servicio' && (
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">
-                    Año escolar INABIE *
+                  <label style={labelStyle}>
+                    Año escolar INABIE <span style={{ color: '#E24B4A' }}>*</span>
                   </label>
-                  <input
-                    type="text"
-                    value={datosContrato.año_escolar_inabie}
+                  <input type="text" value={datosContrato.año_escolar_inabie}
                     onChange={(e) => actualizarCampo('año_escolar_inabie', e.target.value)}
-                    placeholder="2026-2027"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  />
+                    placeholder="2026-2027" style={inputStyle} />
                 </div>
               )}
 
-              {/* Fechas */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">
-                    Fecha de inicio *
+                  <label style={labelStyle}>
+                    Fecha de inicio <span style={{ color: '#E24B4A' }}>*</span>
                   </label>
-                  <input
-                    type="date"
-                    value={datosContrato.fecha_inicio}
+                  <input type="date" value={datosContrato.fecha_inicio}
                     onChange={(e) => actualizarCampo('fecha_inicio', e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  />
+                    style={inputStyle} />
                 </div>
                 {tipoContrato !== 'indefinido' && (
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">
-                      Fecha de fin *
+                    <label style={labelStyle}>
+                      Fecha de fin <span style={{ color: '#E24B4A' }}>*</span>
                     </label>
-                    <input
-                      type="date"
-                      value={datosContrato.fecha_fin}
+                    <input type="date" value={datosContrato.fecha_fin}
                       onChange={(e) => actualizarCampo('fecha_fin', e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    />
+                      style={inputStyle} />
                   </div>
                 )}
               </div>
 
-              {/* Puesto */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Puesto *
+                <label style={labelStyle}>
+                  Puesto <span style={{ color: '#E24B4A' }}>*</span>
                 </label>
-                <input
-                  type="text"
-                  value={datosContrato.puesto}
+                <input type="text" value={datosContrato.puesto}
                   onChange={(e) => actualizarCampo('puesto', e.target.value)}
                   placeholder="Ej: Cocinero, Ayudante de Cocina, Despachador"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                />
+                  style={inputStyle} />
               </div>
 
-              {/* Descripción de funciones */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Descripción de funciones (opcional)
-                </label>
-                <textarea
-                  value={datosContrato.descripcion_funciones}
+                <label style={labelStyle}>Descripción de funciones (opcional)</label>
+                <textarea value={datosContrato.descripcion_funciones}
                   onChange={(e) => actualizarCampo('descripcion_funciones', e.target.value)}
                   placeholder="Ej: Preparar alimentos según menú INABIE, mantener limpieza del área..."
                   rows={3}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
-                />
+                  style={{ ...inputStyle, resize: 'none' }} />
               </div>
 
-              {/* Salario */}
-              <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-                <p className="text-xs text-green-800 font-semibold tracking-wider mb-3">
+              {/* Compensación */}
+              <div style={{
+                background: 'rgba(29, 158, 117, 0.12)',
+                border: '1px solid rgba(29, 158, 117, 0.35)',
+                borderLeft: '4px solid #1D9E75',
+                borderRadius: '12px', padding: '14px',
+                display: 'flex', flexDirection: 'column', gap: '12px',
+              }}>
+                <div style={{ fontSize: '11px', color: '#1D9E75', letterSpacing: '1.5px', fontWeight: 600 }}>
                   💰 COMPENSACIÓN
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">
-                      Salario neto (RD$) *
+                    <label style={labelStyle}>
+                      Salario neto (RD$) <span style={{ color: '#E24B4A' }}>*</span>
                     </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
+                    <input type="number" step="0.01" min="0"
                       value={datosContrato.salario_neto}
                       onChange={(e) => actualizarCampo('salario_neto', e.target.value)}
                       placeholder="0.00"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    />
-                    <p className="text-xs text-gray-600 mt-1">
+                      style={{ ...inputStyle, fontFamily: 'monospace' }} />
+                    <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '6px' }}>
                       Lo que el empleado recibe limpio
-                    </p>
+                    </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">
-                      Frecuencia *
+                    <label style={labelStyle}>
+                      Frecuencia <span style={{ color: '#E24B4A' }}>*</span>
                     </label>
-                    <select
-                      value={datosContrato.frecuencia_pago}
+                    <select value={datosContrato.frecuencia_pago}
                       onChange={(e) => actualizarCampo('frecuencia_pago', e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    >
+                      style={inputStyle}>
                       <option value="semanal">Semanal</option>
                       <option value="quincenal">Quincenal</option>
                       <option value="mensual">Mensual</option>
@@ -561,26 +624,32 @@ function ModalNuevoContrato({
                 </div>
 
                 {datosContrato.salario_neto && parseFloat(datosContrato.salario_neto) > 0 && (
-                  <div className="mt-3 bg-white border border-green-300 rounded-lg p-3">
-                    <p className="text-xs text-gray-600 font-semibold mb-1">CÁLCULO TRANSPARENTE:</p>
-                    <div className="grid grid-cols-3 gap-3 text-sm">
+                  <div style={{
+                    background: 'var(--color-bg-input)',
+                    border: '1px solid var(--color-border-subtle)',
+                    borderRadius: '10px', padding: '12px',
+                  }}>
+                    <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', fontWeight: 600, marginBottom: '8px', letterSpacing: '0.5px' }}>
+                      CÁLCULO TRANSPARENTE:
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
                       <div>
-                        <p className="text-xs text-gray-500">Salario neto</p>
-                        <p className="font-bold text-green-700">
+                        <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Salario neto</div>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#1D9E75', fontFamily: 'monospace' }}>
                           RD$ {Number(datosContrato.salario_neto).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                        </p>
+                        </div>
                       </div>
                       <div>
-                        <p className="text-xs text-gray-500">+ TSS+AFP (5.74%)</p>
-                        <p className="font-bold text-gray-700">
+                        <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>+ TSS+AFP (5.74%)</div>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-secondary)', fontFamily: 'monospace' }}>
                           RD$ {(salarioBrutoCalculado - parseFloat(datosContrato.salario_neto)).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                        </p>
+                        </div>
                       </div>
                       <div>
-                        <p className="text-xs text-gray-500">= Salario bruto</p>
-                        <p className="font-bold text-blue-700">
+                        <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>= Salario bruto</div>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#378ADD', fontFamily: 'monospace' }}>
                           RD$ {salarioBrutoCalculado.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                        </p>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -588,196 +657,189 @@ function ModalNuevoContrato({
               </div>
 
               {/* Logística */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">
-                    Horario de trabajo
-                  </label>
-                  <input
-                    type="text"
-                    value={datosContrato.horario_trabajo}
+                  <label style={labelStyle}>Horario de trabajo</label>
+                  <input type="text" value={datosContrato.horario_trabajo}
                     onChange={(e) => actualizarCampo('horario_trabajo', e.target.value)}
-                    placeholder="Ej: 5:00 AM - 1:00 PM"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  />
+                    placeholder="Ej: 5:00 AM - 1:00 PM" style={inputStyle} />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">
-                    Días laborales
-                  </label>
-                  <input
-                    type="text"
-                    value={datosContrato.dias_laborales}
+                  <label style={labelStyle}>Días laborales</label>
+                  <input type="text" value={datosContrato.dias_laborales}
                     onChange={(e) => actualizarCampo('dias_laborales', e.target.value)}
-                    placeholder="Ej: Lunes a Viernes"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  />
+                    placeholder="Ej: Lunes a Viernes" style={inputStyle} />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Lugar de trabajo
-                </label>
-                <input
-                  type="text"
-                  value={datosContrato.lugar_trabajo}
+                <label style={labelStyle}>Lugar de trabajo</label>
+                <input type="text" value={datosContrato.lugar_trabajo}
                   onChange={(e) => actualizarCampo('lugar_trabajo', e.target.value)}
-                  placeholder="Dirección de la cocina"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                />
+                  placeholder="Dirección de la cocina" style={inputStyle} />
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Notas adicionales (opcional)
-                </label>
-                <textarea
-                  value={datosContrato.notas}
+                <label style={labelStyle}>Notas adicionales (opcional)</label>
+                <textarea value={datosContrato.notas}
                   onChange={(e) => actualizarCampo('notas', e.target.value)}
                   rows={2}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
-                />
+                  style={{ ...inputStyle, resize: 'none' }} />
               </div>
 
               {error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
-                  ⚠️ {error}
-                </div>
+                <div style={{
+                  background: 'rgba(244, 67, 54, 0.12)',
+                  border: '1px solid rgba(244, 67, 54, 0.35)',
+                  borderRadius: '10px', padding: '12px',
+                  fontSize: '12px', color: '#F4C0D1',
+                }}>⚠️ {error}</div>
               )}
             </div>
           )}
 
-          {/* ─── PASO 4: CONFIRMAR Y CREAR ─────────────────────── */}
+          {/* PASO 4: CONFIRMAR */}
           {paso === 4 && empleadoSeleccionado && (
-            <div className="space-y-4">
-              <div className="bg-purple-50 border border-purple-200 rounded-xl p-5">
-                <p className="text-xs text-purple-700 font-semibold tracking-wider mb-3">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{
+                background: 'rgba(127, 119, 221, 0.12)',
+                border: '1px solid rgba(127, 119, 221, 0.35)',
+                borderLeft: '4px solid #7F77DD',
+                borderRadius: '12px', padding: '16px',
+              }}>
+                <div style={{ fontSize: '11px', color: '#7F77DD', letterSpacing: '1.5px', fontWeight: 600, marginBottom: '12px' }}>
                   ✅ RESUMEN DEL CONTRATO
-                </p>
+                </div>
 
-                <div className="space-y-3 text-sm">
-                  <div className="flex justify-between border-b border-purple-200 pb-2">
-                    <span className="text-gray-600">Empleado:</span>
-                    <span className="font-bold">{empleadoSeleccionado.nombre}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-purple-200 pb-2">
-                    <span className="text-gray-600">Tipo:</span>
-                    <span className="font-bold">
-                      {tipoContrato === 'obra_servicio' && '📑 Obra/Servicio PAE'}
-                      {tipoContrato === 'estacional' && '🌾 Estacional'}
-                      {tipoContrato === 'indefinido' && '♾️ Indefinido'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between border-b border-purple-200 pb-2">
-                    <span className="text-gray-600">Puesto:</span>
-                    <span className="font-bold">{datosContrato.puesto}</span>
-                  </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
+                  <FilaResumen label="Empleado" valor={empleadoSeleccionado.nombre} />
+                  <FilaResumen label="Tipo" valor={
+                    tipoContrato === 'obra_servicio' ? '📑 Obra/Servicio PAE' :
+                    tipoContrato === 'estacional' ? '🌾 Estacional' :
+                    '♾️ Indefinido'
+                  } />
+                  <FilaResumen label="Puesto" valor={datosContrato.puesto} />
                   {tipoContrato === 'obra_servicio' && (
-                    <div className="flex justify-between border-b border-purple-200 pb-2">
-                      <span className="text-gray-600">Año escolar:</span>
-                      <span className="font-bold">{datosContrato.año_escolar_inabie}</span>
-                    </div>
+                    <FilaResumen label="Año escolar" valor={datosContrato.año_escolar_inabie} />
                   )}
-                  <div className="flex justify-between border-b border-purple-200 pb-2">
-                    <span className="text-gray-600">Fecha inicio:</span>
-                    <span className="font-bold">{datosContrato.fecha_inicio}</span>
-                  </div>
+                  <FilaResumen label="Fecha inicio" valor={datosContrato.fecha_inicio} />
                   {tipoContrato !== 'indefinido' && (
-                    <div className="flex justify-between border-b border-purple-200 pb-2">
-                      <span className="text-gray-600">Fecha fin:</span>
-                      <span className="font-bold">{datosContrato.fecha_fin}</span>
-                    </div>
+                    <FilaResumen label="Fecha fin" valor={datosContrato.fecha_fin} />
                   )}
-                  <div className="flex justify-between border-b border-purple-200 pb-2">
-                    <span className="text-gray-600">Salario neto:</span>
-                    <span className="font-bold text-green-700">
-                      RD$ {Number(datosContrato.salario_neto).toLocaleString('es-DO', { minimumFractionDigits: 2 })} {datosContrato.frecuencia_pago}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Salario bruto:</span>
-                    <span className="font-bold text-blue-700">
-                      RD$ {salarioBrutoCalculado.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
+                  <FilaResumen
+                    label="Salario neto"
+                    valor={`RD$ ${Number(datosContrato.salario_neto).toLocaleString('es-DO', { minimumFractionDigits: 2 })} ${datosContrato.frecuencia_pago}`}
+                    valorColor="#1D9E75"
+                  />
+                  <FilaResumen
+                    label="Salario bruto"
+                    valor={`RD$ ${salarioBrutoCalculado.toLocaleString('es-DO', { minimumFractionDigits: 2 })}`}
+                    valorColor="#378ADD"
+                    sinBorde
+                  />
                 </div>
               </div>
 
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-900">
-                <p className="font-bold mb-1">📌 Después de crear:</p>
-                <p>
-                  El contrato quedará como <strong>borrador</strong>. Podrás continuar con la firma presencial (empleador + empleado) desde la vista de contratos.
-                </p>
+              <div style={{
+                background: 'rgba(55, 138, 221, 0.12)',
+                border: '1px solid rgba(55, 138, 221, 0.35)',
+                borderLeft: '4px solid #378ADD',
+                borderRadius: '10px', padding: '12px',
+                fontSize: '12px', color: 'var(--color-text-secondary)',
+              }}>
+                <div style={{ fontWeight: 600, color: '#378ADD', marginBottom: '4px' }}>📌 Después de crear:</div>
+                El contrato quedará como <strong style={{ color: 'var(--color-text-primary)' }}>borrador</strong>. Podrás continuar con la firma presencial (empleador + empleado) desde la vista de contratos.
               </div>
 
               {error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
-                  ⚠️ {error}
-                </div>
+                <div style={{
+                  background: 'rgba(244, 67, 54, 0.12)',
+                  border: '1px solid rgba(244, 67, 54, 0.35)',
+                  borderRadius: '10px', padding: '12px',
+                  fontSize: '12px', color: '#F4C0D1',
+                }}>⚠️ {error}</div>
               )}
             </div>
           )}
-
         </div>
 
-        {/* FOOTER con navegación */}
-        <div className="bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-between items-center">
-          <button
-            onClick={() => {
-              if (paso === 1) {
-                onCerrar()
-              } else if (paso === 2 && empleadoPreseleccionado) {
-                onCerrar()
-              } else {
-                setPaso(paso - 1)
-                setError('')
-              }
-            }}
-            disabled={guardando}
-            className="px-5 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-100 transition disabled:opacity-50"
-          >
+        {/* FOOTER navegación */}
+        <div style={{
+          padding: '14px 24px',
+          borderTop: '1px solid var(--color-border-subtle)',
+          background: 'var(--color-bg-elevated)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          gap: '10px', flexWrap: 'wrap',
+        }}>
+          <button onClick={() => {
+            if (paso === 1) { onCerrar() }
+            else if (paso === 2 && empleadoPreseleccionado) { onCerrar() }
+            else { setPaso(paso - 1); setError('') }
+          }} disabled={guardando} style={{
+            padding: '12px 18px',
+            background: 'var(--color-bg-input)',
+            border: '1px solid var(--color-border-subtle)',
+            borderRadius: '10px',
+            color: 'var(--color-text-secondary)',
+            fontSize: '13px', fontWeight: 500,
+            cursor: guardando ? 'not-allowed' : 'pointer',
+            opacity: guardando ? 0.6 : 1, fontFamily: 'inherit',
+          }}>
             {paso === 1 ? 'Cancelar' : '← Atrás'}
           </button>
 
           {paso < 4 && (
-            <button
-              onClick={() => {
-                if (paso === 1 && !empleadoSeleccionado) {
-                  setError('Selecciona un empleado para continuar')
-                  return
-                }
-                if (paso === 3 && !validarPaso3()) {
-                  return
-                }
-                setPaso(paso + 1)
-                setError('')
-              }}
-              disabled={paso === 1 && !empleadoSeleccionado}
-              className="px-5 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white rounded-lg font-bold transition"
-            >
-              Siguiente →
-            </button>
+            <button onClick={() => {
+              if (paso === 1 && !empleadoSeleccionado) { setError('Selecciona un empleado para continuar'); return }
+              if (paso === 3 && !validarPaso3()) return
+              setPaso(paso + 1); setError('')
+            }} disabled={paso === 1 && !empleadoSeleccionado} style={{
+              padding: '12px 22px',
+              background: paso === 1 && !empleadoSeleccionado
+                ? 'var(--color-bg-input)'
+                : 'linear-gradient(135deg, #7F77DD 0%, #534AB7 100%)',
+              border: paso === 1 && !empleadoSeleccionado ? '1px solid var(--color-border-subtle)' : 'none',
+              borderRadius: '10px',
+              color: paso === 1 && !empleadoSeleccionado ? 'var(--color-text-muted)' : 'white',
+              fontSize: '13px', fontWeight: 600,
+              cursor: (paso === 1 && !empleadoSeleccionado) ? 'not-allowed' : 'pointer',
+              fontFamily: 'inherit',
+            }}>Siguiente →</button>
           )}
 
           {paso === 4 && (
-            <button
-              onClick={crearContrato}
-              disabled={guardando}
-              className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold transition disabled:opacity-50 flex items-center gap-2"
-            >
-              {guardando ? (
-                <>
-                  <span className="animate-spin">⏳</span> Creando contrato...
-                </>
-              ) : (
-                '✅ Crear contrato'
-              )}
+            <button onClick={crearContrato} disabled={guardando} style={{
+              padding: '12px 22px',
+              background: 'linear-gradient(135deg, #1D9E75 0%, #0F6E56 100%)',
+              border: 'none', borderRadius: '10px',
+              color: 'white', fontSize: '13px', fontWeight: 600,
+              cursor: guardando ? 'not-allowed' : 'pointer',
+              opacity: guardando ? 0.6 : 1, fontFamily: 'inherit',
+            }}>
+              {guardando ? '⏳ Creando contrato...' : '✅ Crear contrato'}
             </button>
           )}
         </div>
-
       </div>
+    </div>
+  )
+}
+
+// Helper para filas del resumen
+function FilaResumen({ label, valor, valorColor, sinBorde }) {
+  return (
+    <div style={{
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      paddingBottom: sinBorde ? 0 : '8px',
+      borderBottom: sinBorde ? 'none' : '1px solid rgba(127, 119, 221, 0.2)',
+      gap: '12px', flexWrap: 'wrap',
+    }}>
+      <span style={{ color: 'var(--color-text-muted)', fontSize: '12px' }}>{label}:</span>
+      <span style={{
+        fontWeight: 600,
+        color: valorColor || 'var(--color-text-primary)',
+        fontSize: '13px', textAlign: 'right',
+      }}>{valor}</span>
     </div>
   )
 }

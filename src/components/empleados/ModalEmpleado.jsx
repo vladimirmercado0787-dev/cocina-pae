@@ -5,24 +5,22 @@ function ModalEmpleado({ empresaId, empleadoExistente, onCerrar, onGuardado, onI
   const modoEdicion = !!empleadoExistente
 
   const [form, setForm] = useState({
-    nombre: '',
-    sexo: '',
-    cedula: '',
-    rol: '',
-    pin: '',
-    telefono: '',
-    email: '',
-    direccion: '',
+    nombre: '', sexo: '', cedula: '', rol: '', pin: '',
+    telefono: '', email: '', direccion: '',
     fecha_contratacion: new Date().toISOString().split('T')[0],
-    sueldo: '',
-    frecuencia_pago: '',
-    foto_url: '',
-    notas: '',
+    sueldo: '', frecuencia_pago: '', foto_url: '', notas: '',
     gestion_contrato: 'sin_contrato',
   })
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
   const [confirmandoBaja, setConfirmandoBaja] = useState(false)
+
+  // Tema dual (mismo patrón del Dashboard)
+  const [tema, setTema] = useState(() => localStorage.getItem('cocina_pae_tema') || 'oscuro')
+  useEffect(() => {
+    document.documentElement.setAttribute('data-tema', tema)
+    localStorage.setItem('cocina_pae_tema', tema)
+  }, [tema])
 
   useEffect(() => {
     if (modoEdicion && empleadoExistente) {
@@ -51,30 +49,20 @@ function ModalEmpleado({ empresaId, empleadoExistente, onCerrar, onGuardado, onI
   }
 
   function validar() {
-    if (!form.nombre.trim()) {
-      setError('El nombre es obligatorio')
-      return false
-    }
-    if (!form.rol) {
-      setError('Debes seleccionar un rol')
-      return false
-    }
+    if (!form.nombre.trim()) { setError('El nombre es obligatorio'); return false }
+    if (!form.rol) { setError('Debes seleccionar un rol'); return false }
     if (form.pin && (form.pin.length !== 4 || !/^\d+$/.test(form.pin))) {
-      setError('El PIN debe ser de 4 dígitos numéricos')
-      return false
+      setError('El PIN debe ser de 4 dígitos numéricos'); return false
     }
     if (form.sueldo && !form.frecuencia_pago) {
-      setError('Si pones sueldo, debes elegir la frecuencia de pago')
-      return false
+      setError('Si pones sueldo, debes elegir la frecuencia de pago'); return false
     }
     return true
   }
 
   async function guardar() {
     if (!validar()) return
-    
-    setGuardando(true)
-    setError('')
+    setGuardando(true); setError('')
 
     const datos = {
       nombre: form.nombre.trim().toUpperCase(),
@@ -93,87 +81,40 @@ function ModalEmpleado({ empresaId, empleadoExistente, onCerrar, onGuardado, onI
       gestion_contrato: form.gestion_contrato || 'sin_contrato',
     }
 
-    let errorSupa = null
-
-    if (modoEdicion) {
-      const { error: errUpdate } = await supabase
-        .from('usuarios')
-        .update(datos)
-        .eq('id', empleadoExistente.id)
-      errorSupa = errUpdate
-    } else {
-      const { error: errInsert } = await supabase
-        .from('usuarios')
-        .insert([{ ...datos, empresa_id: empresaId, activo: true }])
-      errorSupa = errInsert
-    }
+    const { error: errorSupa } = modoEdicion
+      ? await supabase.from('usuarios').update(datos).eq('id', empleadoExistente.id)
+      : await supabase.from('usuarios').insert([{ ...datos, empresa_id: empresaId, activo: true }])
 
     if (errorSupa) {
       console.error('Error al guardar:', errorSupa)
       setError('Error al guardar: ' + errorSupa.message)
-      setGuardando(false)
-      return
+      setGuardando(false); return
     }
 
-    setGuardando(false)
-    onGuardado()
-    onCerrar()
+    setGuardando(false); onGuardado(); onCerrar()
   }
 
-  // ═══════════════════════════════════════════════════
-  // INT-005: IR A CALCULADORA DE LIQUIDACIÓN
-  // ═══════════════════════════════════════════════════
   function irACalculadoraLiquidacion() {
     if (onIrALiquidacion && empleadoExistente) {
-      onCerrar()
-      onIrALiquidacion(empleadoExistente)
+      onCerrar(); onIrALiquidacion(empleadoExistente)
     }
   }
 
-  // ═══════════════════════════════════════════════════
-  // DESACTIVAR SIN LIQUIDAR (cuando ya pagó por fuera)
-  // ═══════════════════════════════════════════════════
   async function desactivarSinLiquidar() {
-    setGuardando(true)
-    setError('')
-
+    setGuardando(true); setError('')
     const { error: errUpdate } = await supabase
       .from('usuarios')
-      .update({ 
-        activo: false,
-        fecha_salida: new Date().toISOString().split('T')[0],
-      })
+      .update({ activo: false, fecha_salida: new Date().toISOString().split('T')[0] })
       .eq('id', empleadoExistente.id)
-
-    if (errUpdate) {
-      setError('Error al desactivar: ' + errUpdate.message)
-      setGuardando(false)
-      return
-    }
-
-    setGuardando(false)
-    onGuardado()
-    onCerrar()
+    if (errUpdate) { setError('Error al desactivar: ' + errUpdate.message); setGuardando(false); return }
+    setGuardando(false); onGuardado(); onCerrar()
   }
 
   async function reactivar() {
-    setGuardando(true)
-    setError('')
-
-    const { error: errUpdate } = await supabase
-      .from('usuarios')
-      .update({ activo: true })
-      .eq('id', empleadoExistente.id)
-
-    if (errUpdate) {
-      setError('Error al reactivar: ' + errUpdate.message)
-      setGuardando(false)
-      return
-    }
-
-    setGuardando(false)
-    onGuardado()
-    onCerrar()
+    setGuardando(true); setError('')
+    const { error: errUpdate } = await supabase.from('usuarios').update({ activo: true }).eq('id', empleadoExistente.id)
+    if (errUpdate) { setError('Error al reactivar: ' + errUpdate.message); setGuardando(false); return }
+    setGuardando(false); onGuardado(); onCerrar()
   }
 
   function obtenerAvatarPreview() {
@@ -187,122 +128,184 @@ function ModalEmpleado({ empresaId, empleadoExistente, onCerrar, onGuardado, onI
   const textoBotonGuardar = modoEdicion ? '💾 Guardar cambios' : '💾 Guardar empleado'
   const empleadoInactivo = modoEdicion && empleadoExistente.activo === false
 
+  // ─── ESTILOS ───
+  const inputStyle = {
+    width: '100%', boxSizing: 'border-box',
+    background: 'var(--color-bg-input)',
+    border: '1px solid var(--color-border-subtle)',
+    borderRadius: '10px', padding: '10px 12px',
+    color: 'var(--color-text-primary)',
+    fontSize: '13px', fontFamily: 'inherit', outline: 'none',
+  }
+  const labelStyle = {
+    display: 'block', fontSize: '10px', fontWeight: 500,
+    color: 'var(--color-text-muted)', marginBottom: '6px',
+    letterSpacing: '0.5px', textTransform: 'uppercase',
+  }
+  const sectionTitleStyle = {
+    fontSize: '11px', color: 'var(--color-text-muted)',
+    letterSpacing: '1.5px', fontWeight: 600,
+    marginBottom: '12px',
+  }
+  const radioCardStyle = (selected, color) => ({
+    display: 'flex', alignItems: 'flex-start', gap: '12px',
+    padding: '12px',
+    background: selected ? `rgba(${color}, 0.12)` : 'var(--color-bg-input)',
+    border: selected ? `1px solid rgba(${color}, 0.45)` : '1px solid var(--color-border-subtle)',
+    borderLeft: selected ? `4px solid rgb(${color})` : '1px solid var(--color-border-subtle)',
+    borderRadius: '10px', cursor: 'pointer',
+    transition: 'all 0.15s ease',
+  })
+
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-        
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 90,
+      background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
+      display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+      padding: '20px', overflowY: 'auto',
+    }}>
+      <div style={{
+        background: 'var(--color-bg-primary)',
+        border: '1px solid var(--color-border-accent)',
+        borderRadius: '16px',
+        maxWidth: '820px', width: '100%',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+        display: 'flex', flexDirection: 'column',
+        maxHeight: '95vh', overflow: 'hidden',
+      }}>
+
         {/* HEADER */}
-        <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-6">
-          <div className="flex justify-between items-start">
-            <div className="flex items-center gap-4">
-              {form.foto_url ? (
-                <img
-                  src={form.foto_url}
-                  alt="preview"
-                  className="w-16 h-16 rounded-full object-cover border-2 border-white/30"
-                />
-              ) : (
-                <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center text-3xl">
-                  {obtenerAvatarPreview()}
-                </div>
-              )}
-              <div>
-                <p className="text-xs opacity-80 tracking-wider">{tituloHeader}</p>
-                <h2 className="text-2xl font-bold mt-1">
-                  {form.nombre.trim() || 'Sin nombre'}
-                </h2>
-                <p className="text-sm opacity-90 mt-1">
-                  {form.rol ? `Rol: ${form.rol}` : 'Selecciona un rol abajo'}
-                  {empleadoInactivo && ' · ⚠️ INACTIVO'}
-                </p>
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '20px 24px',
+          borderBottom: '1px solid var(--color-border-subtle)',
+          flexWrap: 'wrap', gap: '12px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            {form.foto_url ? (
+              <img src={form.foto_url} alt="preview" style={{
+                width: '52px', height: '52px', borderRadius: '14px',
+                objectFit: 'cover',
+                border: '2px solid var(--color-border-accent)',
+              }} />
+            ) : (
+              <div style={{
+                width: '52px', height: '52px', borderRadius: '14px',
+                background: 'rgba(127, 119, 221, 0.18)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '26px',
+              }}>{obtenerAvatarPreview()}</div>
+            )}
+            <div>
+              <div style={{ fontSize: '10px', color: '#7F77DD', letterSpacing: '1.5px', fontWeight: 600 }}>
+                {tituloHeader}
+              </div>
+              <div style={{ fontSize: '18px', fontWeight: 500, color: 'var(--color-text-primary)', marginTop: '2px' }}>
+                {form.nombre.trim() || 'Sin nombre'}
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
+                {form.rol ? `Rol: ${form.rol}` : 'Selecciona un rol abajo'}
+                {empleadoInactivo && <span style={{ color: '#EF9F27', marginLeft: '6px', fontWeight: 600 }}>· ⚠️ INACTIVO</span>}
               </div>
             </div>
-            <button
-              onClick={onCerrar}
-              className="text-2xl opacity-70 hover:opacity-100"
-              disabled={guardando}
-            >
-              ✕
-            </button>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center',
+              background: 'var(--color-bg-elevated)',
+              border: '1px solid var(--color-border-subtle)',
+              borderRadius: '20px', padding: '3px', gap: '2px',
+            }}>
+              <button type="button" onClick={() => setTema('oscuro')} style={{
+                background: tema === 'oscuro' ? 'var(--gradient-toggle-active)' : 'transparent',
+                border: 'none', borderRadius: '16px', padding: '6px 10px',
+                display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer',
+              }}>
+                <span style={{ fontSize: '11px' }}>🌙</span>
+                <span style={{ fontSize: '10px', fontWeight: 500, color: tema === 'oscuro' ? 'white' : 'var(--color-text-muted)' }}>Oscuro</span>
+              </button>
+              <button type="button" onClick={() => setTema('tropical')} style={{
+                background: tema === 'tropical' ? 'var(--gradient-toggle-active)' : 'transparent',
+                border: 'none', borderRadius: '16px', padding: '6px 10px',
+                display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer',
+              }}>
+                <span style={{ fontSize: '11px' }}>☀️</span>
+                <span style={{ fontSize: '10px', fontWeight: 500, color: tema === 'tropical' ? 'white' : 'var(--color-text-muted)' }}>Claro</span>
+              </button>
+            </div>
+            <button onClick={onCerrar} disabled={guardando} style={{
+              background: 'var(--color-bg-elevated)',
+              border: '1px solid var(--color-border-subtle)',
+              borderRadius: '20px', padding: '7px 14px',
+              color: 'var(--color-text-secondary)', fontSize: '12px',
+              cursor: guardando ? 'not-allowed' : 'pointer',
+              opacity: guardando ? 0.6 : 1, fontFamily: 'inherit',
+            }}>✖ Cerrar</button>
           </div>
         </div>
 
-        {/* AVISO si el empleado está inactivo */}
+        {/* AVISO INACTIVO */}
         {empleadoInactivo && (
-          <div className="bg-yellow-50 border-b border-yellow-200 px-6 py-3 text-sm text-yellow-800">
+          <div style={{
+            padding: '12px 24px',
+            background: 'rgba(239, 159, 39, 0.12)',
+            borderBottom: '1px solid rgba(239, 159, 39, 0.3)',
+            fontSize: '12px', color: '#EF9F27',
+          }}>
             ⚠️ Este empleado está dado de baja. Puedes reactivarlo desde el botón abajo.
           </div>
         )}
 
-        {/* FORMULARIO */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          
+        {/* BODY */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+
+          {/* IDENTIDAD BÁSICA */}
           <div>
-            <p className="text-xs text-gray-500 font-semibold tracking-wider mb-3">
-              👤 IDENTIDAD BÁSICA
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              
-              <div className="md:col-span-2">
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Nombre completo <span className="text-red-500">*</span>
+            <div style={sectionTitleStyle}>👤 IDENTIDAD BÁSICA</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={labelStyle}>
+                  Nombre completo <span style={{ color: '#E24B4A' }}>*</span>
                 </label>
-                <input
-                  type="text"
-                  value={form.nombre}
+                <input type="text" value={form.nombre}
                   onChange={(e) => actualizarCampo('nombre', e.target.value)}
-                  placeholder="Ej: Yudelkis Pérez"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                />
+                  placeholder="Ej: Yudelkis Pérez" style={inputStyle} />
               </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Sexo
-                </label>
-                <select
-                  value={form.sexo}
-                  onChange={(e) => actualizarCampo('sexo', e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                >
-                  <option value="">No especificado</option>
-                  <option value="hombre">👨 Hombre</option>
-                  <option value="mujer">👩 Mujer</option>
-                  <option value="otro">👤 Otro</option>
-                </select>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+                <div>
+                  <label style={labelStyle}>Sexo</label>
+                  <select value={form.sexo}
+                    onChange={(e) => actualizarCampo('sexo', e.target.value)}
+                    style={inputStyle}>
+                    <option value="">No especificado</option>
+                    <option value="hombre">👨 Hombre</option>
+                    <option value="mujer">👩 Mujer</option>
+                    <option value="otro">👤 Otro</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Cédula</label>
+                  <input type="text" value={form.cedula}
+                    onChange={(e) => actualizarCampo('cedula', e.target.value)}
+                    placeholder="Ej: 402-1234567-8"
+                    style={{ ...inputStyle, fontFamily: 'monospace' }} />
+                </div>
               </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Cédula
-                </label>
-                <input
-                  type="text"
-                  value={form.cedula}
-                  onChange={(e) => actualizarCampo('cedula', e.target.value)}
-                  placeholder="Ej: 402-1234567-8"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                />
-              </div>
-
             </div>
           </div>
 
+          {/* ROL Y ACCESO */}
           <div>
-            <p className="text-xs text-gray-500 font-semibold tracking-wider mb-3">
-              💼 ROL Y ACCESO
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              
+            <div style={sectionTitleStyle}>💼 ROL Y ACCESO</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Rol <span className="text-red-500">*</span>
+                <label style={labelStyle}>
+                  Rol <span style={{ color: '#E24B4A' }}>*</span>
                 </label>
-                <select
-                  value={form.rol}
+                <select value={form.rol}
                   onChange={(e) => actualizarCampo('rol', e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                >
+                  style={inputStyle}>
                   <option value="">Selecciona un rol...</option>
                   <option value="propietario">👑 Propietario</option>
                   <option value="administrador">💼 Administrador</option>
@@ -312,116 +315,70 @@ function ModalEmpleado({ empresaId, empleadoExistente, onCerrar, onGuardado, onI
                   <option value="ayudante">👨‍🍳 Ayudante</option>
                 </select>
               </div>
-
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  PIN de acceso (4 dígitos)
-                </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={4}
+                <label style={labelStyle}>PIN de acceso (4 dígitos)</label>
+                <input type="text" inputMode="numeric" maxLength={4}
                   value={form.pin}
                   onChange={(e) => actualizarCampo('pin', e.target.value.replace(/\D/g, ''))}
                   placeholder="Ej: 1234"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                />
-                <p className="text-xs text-gray-500 mt-1">Opcional. Para iniciar sesión en la app.</p>
+                  style={{ ...inputStyle, fontFamily: 'monospace', letterSpacing: '2px' }} />
+                <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '6px' }}>
+                  Opcional. Para iniciar sesión en la app.
+                </div>
               </div>
-
             </div>
           </div>
 
+          {/* CONTACTO */}
           <div>
-            <p className="text-xs text-gray-500 font-semibold tracking-wider mb-3">
-              📞 CONTACTO
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Teléfono
-                </label>
-                <input
-                  type="tel"
-                  value={form.telefono}
-                  onChange={(e) => actualizarCampo('telefono', e.target.value)}
-                  placeholder="Ej: 809-555-1234"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                />
+            <div style={sectionTitleStyle}>📞 CONTACTO</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+                <div>
+                  <label style={labelStyle}>Teléfono</label>
+                  <input type="tel" value={form.telefono}
+                    onChange={(e) => actualizarCampo('telefono', e.target.value)}
+                    placeholder="Ej: 809-555-1234" style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Email</label>
+                  <input type="email" value={form.email}
+                    onChange={(e) => actualizarCampo('email', e.target.value)}
+                    placeholder="Ej: yudelkis@empresa.com" style={inputStyle} />
+                </div>
               </div>
-
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => actualizarCampo('email', e.target.value)}
-                  placeholder="Ej: yudelkis@empresa.com"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Dirección
-                </label>
-                <input
-                  type="text"
-                  value={form.direccion}
+                <label style={labelStyle}>Dirección</label>
+                <input type="text" value={form.direccion}
                   onChange={(e) => actualizarCampo('direccion', e.target.value)}
                   placeholder="Ej: Calle Principal #45, Esperanza, Valverde"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                />
+                  style={inputStyle} />
               </div>
-
             </div>
           </div>
 
+          {/* COMPENSACIÓN */}
           <div>
-            <p className="text-xs text-gray-500 font-semibold tracking-wider mb-3">
-              💰 COMPENSACIÓN
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              
+            <div style={sectionTitleStyle}>💰 COMPENSACIÓN</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Fecha de contratación
-                </label>
-                <input
-                  type="date"
-                  value={form.fecha_contratacion}
+                <label style={labelStyle}>Fecha de contratación</label>
+                <input type="date" value={form.fecha_contratacion}
                   onChange={(e) => actualizarCampo('fecha_contratacion', e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                />
+                  style={inputStyle} />
               </div>
-
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Sueldo (RD$)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.sueldo}
+                <label style={labelStyle}>Sueldo (RD$)</label>
+                <input type="number" step="0.01" min="0" value={form.sueldo}
                   onChange={(e) => actualizarCampo('sueldo', e.target.value)}
                   placeholder="0.00"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                />
+                  style={{ ...inputStyle, fontFamily: 'monospace' }} />
               </div>
-
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Frecuencia de pago
-                </label>
-                <select
-                  value={form.frecuencia_pago}
+                <label style={labelStyle}>Frecuencia de pago</label>
+                <select value={form.frecuencia_pago}
                   onChange={(e) => actualizarCampo('frecuencia_pago', e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                >
+                  style={inputStyle}>
                   <option value="">No especificada</option>
                   <option value="dia">Por día</option>
                   <option value="semana">Semanal</option>
@@ -429,12 +386,18 @@ function ModalEmpleado({ empresaId, empleadoExistente, onCerrar, onGuardado, onI
                   <option value="mes">Mensual</option>
                 </select>
               </div>
-
             </div>
-            
+
             {form.sueldo && form.frecuencia_pago && (
-              <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
-                💡 Este empleado recibirá <strong>RD$ {Number(form.sueldo).toLocaleString('es-DO', { minimumFractionDigits: 2 })}</strong> {' '}
+              <div style={{
+                marginTop: '12px',
+                background: 'rgba(29, 158, 117, 0.12)',
+                border: '1px solid rgba(29, 158, 117, 0.35)',
+                borderLeft: '4px solid #1D9E75',
+                borderRadius: '10px', padding: '10px 12px',
+                fontSize: '11px', color: '#1D9E75',
+              }}>
+                💡 Este empleado recibirá <strong>RD$ {Number(form.sueldo).toLocaleString('es-DO', { minimumFractionDigits: 2 })}</strong>{' '}
                 {form.frecuencia_pago === 'dia' && 'por cada día trabajado'}
                 {form.frecuencia_pago === 'semana' && 'cada semana'}
                 {form.frecuencia_pago === 'quincena' && 'cada quincena (15 y 30 del mes)'}
@@ -443,281 +406,278 @@ function ModalEmpleado({ empresaId, empleadoExistente, onCerrar, onGuardado, onI
             )}
           </div>
 
-          {/* GESTIÓN DEL CONTRATO LABORAL */}
+          {/* GESTIÓN CONTRATO */}
           <div>
-            <p className="text-xs text-gray-500 font-semibold tracking-wider mb-3">
-              📄 GESTIÓN DEL CONTRATO LABORAL
-            </p>
-            <p className="text-xs text-gray-600 mb-3">
+            <div style={sectionTitleStyle}>📄 GESTIÓN DEL CONTRATO LABORAL</div>
+            <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginBottom: '10px' }}>
               ¿Cómo manejarás el contrato de este empleado?
-            </p>
-            <div className="space-y-2">
-              
-              <label
-                className={`flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition-colors ${
-                  form.gestion_contrato === 'sin_contrato'
-                    ? 'border-yellow-400 bg-yellow-50'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="gestion_contrato"
-                  value="sin_contrato"
-                  checked={form.gestion_contrato === 'sin_contrato'}
-                  onChange={(e) => actualizarCampo('gestion_contrato', e.target.value)}
-                  className="mt-1"
-                />
-                <div className="flex-1">
-                  <div className="font-semibold text-sm text-gray-900">
-                    🟡 Sin gestión de contrato
-                  </div>
-                  <p className="text-xs text-gray-600 mt-1">
-                    Lo manejo por fuera de la app (recomendado si ya tienes tu propio proceso)
-                  </p>
-                </div>
-              </label>
-
-              <label
-                className={`flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition-colors ${
-                  form.gestion_contrato === 'contrato_digital'
-                    ? 'border-green-500 bg-green-50'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="gestion_contrato"
-                  value="contrato_digital"
-                  checked={form.gestion_contrato === 'contrato_digital'}
-                  onChange={(e) => actualizarCampo('gestion_contrato', e.target.value)}
-                  className="mt-1"
-                />
-                <div className="flex-1">
-                  <div className="font-semibold text-sm text-gray-900">
-                    🟢 Generar contrato digital
-                  </div>
-                  <p className="text-xs text-gray-600 mt-1">
-                    La app crea el contrato laboral y se firma digitalmente. Imprimible para archivo físico.
-                  </p>
-                </div>
-              </label>
-
-              <label
-                className={`flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition-colors ${
-                  form.gestion_contrato === 'contrato_externo'
-                    ? 'border-blue-500 bg-blue-50'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="gestion_contrato"
-                  value="contrato_externo"
-                  checked={form.gestion_contrato === 'contrato_externo'}
-                  onChange={(e) => actualizarCampo('gestion_contrato', e.target.value)}
-                  className="mt-1"
-                />
-                <div className="flex-1">
-                  <div className="font-semibold text-sm text-gray-900">
-                    🔵 Contrato físico ya firmado
-                  </div>
-                  <p className="text-xs text-gray-600 mt-1">
-                    Solo registro al empleado, sin generar contrato en la app
-                  </p>
-                </div>
-              </label>
-
             </div>
 
-            {form.gestion_contrato === 'contrato_digital' && !modoEdicion && (
-              <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-3 text-xs text-green-800">
-                💡 Después de guardar al empleado, podrás crear su contrato laboral desde la vista de empleados.
-              </div>
-            )}
-            {form.gestion_contrato === 'contrato_digital' && modoEdicion && (
-              <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-3 text-xs text-green-800">
-                💡 Podrás generar el contrato desde la vista de empleados o desde la sección "Contratos".
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label style={radioCardStyle(form.gestion_contrato === 'sin_contrato', '239, 159, 39')}>
+                <input type="radio" name="gestion_contrato" value="sin_contrato"
+                  checked={form.gestion_contrato === 'sin_contrato'}
+                  onChange={(e) => actualizarCampo('gestion_contrato', e.target.value)}
+                  style={{ marginTop: '2px', cursor: 'pointer' }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                    🟡 Sin gestión de contrato
+                  </div>
+                  <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '3px' }}>
+                    Lo manejo por fuera de la app (recomendado si ya tienes tu propio proceso)
+                  </div>
+                </div>
+              </label>
+
+              <label style={radioCardStyle(form.gestion_contrato === 'contrato_digital', '29, 158, 117')}>
+                <input type="radio" name="gestion_contrato" value="contrato_digital"
+                  checked={form.gestion_contrato === 'contrato_digital'}
+                  onChange={(e) => actualizarCampo('gestion_contrato', e.target.value)}
+                  style={{ marginTop: '2px', cursor: 'pointer' }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                    🟢 Generar contrato digital
+                  </div>
+                  <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '3px' }}>
+                    La app crea el contrato laboral y se firma digitalmente. Imprimible para archivo físico.
+                  </div>
+                </div>
+              </label>
+
+              <label style={radioCardStyle(form.gestion_contrato === 'contrato_externo', '55, 138, 221')}>
+                <input type="radio" name="gestion_contrato" value="contrato_externo"
+                  checked={form.gestion_contrato === 'contrato_externo'}
+                  onChange={(e) => actualizarCampo('gestion_contrato', e.target.value)}
+                  style={{ marginTop: '2px', cursor: 'pointer' }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                    🔵 Contrato físico ya firmado
+                  </div>
+                  <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '3px' }}>
+                    Solo registro al empleado, sin generar contrato en la app
+                  </div>
+                </div>
+              </label>
+            </div>
+
+            {form.gestion_contrato === 'contrato_digital' && (
+              <div style={{
+                marginTop: '10px',
+                background: 'rgba(29, 158, 117, 0.12)',
+                border: '1px solid rgba(29, 158, 117, 0.3)',
+                borderRadius: '8px', padding: '8px 10px',
+                fontSize: '11px', color: '#1D9E75',
+              }}>
+                💡 {modoEdicion
+                  ? 'Podrás generar el contrato desde la vista de empleados o desde la sección "Contratos".'
+                  : 'Después de guardar al empleado, podrás crear su contrato laboral desde la vista de empleados.'}
               </div>
             )}
           </div>
 
+          {/* OPCIONAL */}
           <div>
-            <p className="text-xs text-gray-500 font-semibold tracking-wider mb-3">
-              📝 OPCIONAL
-            </p>
-            <div className="space-y-4">
-              
+            <div style={sectionTitleStyle}>📝 OPCIONAL</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  URL de foto (opcional)
-                </label>
-                <input
-                  type="url"
-                  value={form.foto_url}
+                <label style={labelStyle}>URL de foto (opcional)</label>
+                <input type="url" value={form.foto_url}
                   onChange={(e) => actualizarCampo('foto_url', e.target.value)}
-                  placeholder="https://..."
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                />
-                <p className="text-xs text-gray-500 mt-1">
+                  placeholder="https://..." style={inputStyle} />
+                <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '6px' }}>
                   Si no pones foto, se usará el emoji según el sexo elegido.
-                </p>
+                </div>
               </div>
-
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Notas
-                </label>
-                <textarea
-                  value={form.notas}
+                <label style={labelStyle}>Notas</label>
+                <textarea value={form.notas}
                   onChange={(e) => actualizarCampo('notas', e.target.value)}
                   placeholder="Cualquier información adicional sobre este empleado..."
                   rows={3}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
-                />
+                  style={{ ...inputStyle, resize: 'none' }} />
               </div>
-
             </div>
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
-              ⚠️ {error}
-            </div>
+            <div style={{
+              background: 'rgba(244, 67, 54, 0.12)',
+              border: '1px solid rgba(244, 67, 54, 0.35)',
+              borderRadius: '10px', padding: '12px',
+              fontSize: '12px', color: '#F4C0D1',
+            }}>⚠️ {error}</div>
           )}
 
-          {/* ════════════════════════════════════════════════ */}
-          {/* INT-005: ZONA PELIGROSA REFACTORIZADA             */}
-          {/* Ahora con cumplimiento legal Art. 75-95           */}
-          {/* ════════════════════════════════════════════════ */}
+          {/* ZONA PELIGROSA con cumplimiento legal */}
           {modoEdicion && !empleadoInactivo && (
-            <div className="border-t-2 border-red-200 pt-4 mt-4">
-              <p className="text-xs text-red-600 font-semibold tracking-wider mb-2">
-                ⚠️ ZONA PELIGROSA
-              </p>
-              
+            <div style={{
+              paddingTop: '20px', marginTop: '4px',
+              borderTop: '1px solid rgba(244, 67, 54, 0.25)',
+            }}>
+              <div style={{
+                fontSize: '10px', color: '#E24B4A',
+                letterSpacing: '1.5px', fontWeight: 600,
+                marginBottom: '10px',
+              }}>⚠️ ZONA PELIGROSA</div>
+
               {!confirmandoBaja ? (
-                <button
-                  onClick={() => setConfirmandoBaja(true)}
-                  disabled={guardando}
-                  className="w-full px-4 py-3 border-2 border-red-300 hover:border-red-500 hover:bg-red-50 text-red-700 rounded-lg font-medium transition disabled:opacity-50"
-                >
-                  🚫 Dar de baja este empleado
-                </button>
+                <button onClick={() => setConfirmandoBaja(true)} disabled={guardando} style={{
+                  width: '100%', padding: '12px',
+                  background: 'transparent',
+                  border: '1px solid rgba(244, 67, 54, 0.4)',
+                  borderRadius: '10px',
+                  color: '#F4C0D1', fontSize: '12px', fontWeight: 500,
+                  cursor: guardando ? 'not-allowed' : 'pointer',
+                  opacity: guardando ? 0.6 : 1, fontFamily: 'inherit',
+                }}>🚫 Dar de baja este empleado</button>
               ) : (
-                <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4">
-                  <p className="text-sm font-bold text-red-900 mb-2">
+                <div style={{
+                  background: 'rgba(244, 67, 54, 0.10)',
+                  border: '1px solid rgba(244, 67, 54, 0.35)',
+                  borderLeft: '4px solid #E24B4A',
+                  borderRadius: '12px', padding: '16px',
+                  display: 'flex', flexDirection: 'column', gap: '12px',
+                }}>
+                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#F4C0D1' }}>
                     ¿Dar de baja a {form.nombre}?
-                  </p>
-                  
+                  </div>
+
                   {/* AVISO LEGAL */}
-                  <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-3 mb-3">
-                    <p className="text-xs font-bold text-yellow-900 mb-1">
+                  <div style={{
+                    background: 'rgba(239, 159, 39, 0.12)',
+                    border: '1px solid rgba(239, 159, 39, 0.35)',
+                    borderLeft: '4px solid #EF9F27',
+                    borderRadius: '10px', padding: '12px',
+                  }}>
+                    <div style={{ fontSize: '11px', color: '#EF9F27', fontWeight: 700, marginBottom: '4px', letterSpacing: '0.5px' }}>
                       ⚖️ AVISO LEGAL — Código de Trabajo Dominicano
-                    </p>
-                    <p className="text-xs text-yellow-800">
-                      Según los Artículos 75, 76, 80, 87 y 95, todo empleado tiene derecho 
-                      a una liquidación que incluya preaviso, cesantía, vacaciones, regalía 
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+                      Según los Artículos 75, 76, 80, 87 y 95, todo empleado tiene derecho
+                      a una liquidación que incluya preaviso, cesantía, vacaciones, regalía
                       y salarios pendientes según corresponda.
-                    </p>
+                    </div>
                   </div>
 
-                  <p className="text-xs text-gray-700 mb-3">
+                  <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
                     Elige cómo proceder:
-                  </p>
+                  </div>
 
-                  <div className="space-y-2 mb-3">
-                    {/* OPCIÓN 1: IR A CALCULADORA (RECOMENDADA) */}
-                    <button
-                      onClick={irACalculadoraLiquidacion}
-                      disabled={guardando}
-                      className="w-full p-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-sm transition disabled:opacity-50 text-left"
-                    >
-                      <div className="flex items-start gap-3">
-                        <span className="text-2xl">⚖️</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {/* OPCIÓN 1: CALCULADORA */}
+                    <button onClick={irACalculadoraLiquidacion} disabled={guardando} style={{
+                      width: '100%', padding: '14px',
+                      background: 'linear-gradient(135deg, #7F77DD 0%, #534AB7 100%)',
+                      border: 'none', borderRadius: '10px',
+                      color: 'white', fontSize: '13px',
+                      cursor: guardando ? 'not-allowed' : 'pointer',
+                      opacity: guardando ? 0.6 : 1, fontFamily: 'inherit',
+                      textAlign: 'left',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                        <span style={{ fontSize: '22px' }}>⚖️</span>
                         <div>
-                          <p className="font-bold">Ir a Calculadora de Liquidación</p>
-                          <p className="text-xs font-normal text-purple-100 mt-1">
+                          <div style={{ fontWeight: 700 }}>Ir a Calculadora de Liquidación</div>
+                          <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.85)', marginTop: '3px', fontWeight: 400 }}>
                             Recomendado · Calcula automáticamente todo lo que la ley exige pagar
-                          </p>
+                          </div>
                         </div>
                       </div>
                     </button>
 
-                    {/* OPCIÓN 2: SOLO DESACTIVAR (RIESGOSA) */}
-                    <button
-                      onClick={desactivarSinLiquidar}
-                      disabled={guardando}
-                      className="w-full p-3 bg-white border-2 border-red-300 hover:border-red-500 hover:bg-red-50 text-red-700 rounded-lg text-sm transition disabled:opacity-50 text-left"
-                    >
-                      <div className="flex items-start gap-3">
-                        <span className="text-2xl">⚠️</span>
+                    {/* OPCIÓN 2: SOLO DESACTIVAR */}
+                    <button onClick={desactivarSinLiquidar} disabled={guardando} style={{
+                      width: '100%', padding: '14px',
+                      background: 'transparent',
+                      border: '1px solid rgba(244, 67, 54, 0.4)',
+                      borderRadius: '10px',
+                      color: '#F4C0D1', fontSize: '13px',
+                      cursor: guardando ? 'not-allowed' : 'pointer',
+                      opacity: guardando ? 0.6 : 1, fontFamily: 'inherit',
+                      textAlign: 'left',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                        <span style={{ fontSize: '22px' }}>⚠️</span>
                         <div>
-                          <p className="font-bold">Solo desactivar sin liquidar</p>
-                          <p className="text-xs font-normal text-red-600 mt-1">
+                          <div style={{ fontWeight: 700 }}>Solo desactivar sin liquidar</div>
+                          <div style={{ fontSize: '10px', color: 'rgba(244, 192, 209, 0.8)', marginTop: '3px', fontWeight: 400 }}>
                             Solo si ya pagaste la liquidación por fuera. Tú asumes el riesgo legal.
-                          </p>
+                          </div>
                         </div>
                       </div>
                     </button>
                   </div>
 
-                  {/* BOTÓN CANCELAR */}
-                  <button
-                    onClick={() => setConfirmandoBaja(false)}
-                    disabled={guardando}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-700 text-sm font-medium hover:bg-gray-100 disabled:opacity-50"
-                  >
-                    Cancelar
-                  </button>
+                  <button onClick={() => setConfirmandoBaja(false)} disabled={guardando} style={{
+                    width: '100%', padding: '9px',
+                    background: 'var(--color-bg-input)',
+                    border: '1px solid var(--color-border-subtle)',
+                    borderRadius: '8px',
+                    color: 'var(--color-text-secondary)',
+                    fontSize: '12px', fontWeight: 500,
+                    cursor: 'pointer', fontFamily: 'inherit',
+                  }}>Cancelar</button>
                 </div>
               )}
             </div>
           )}
 
-          {/* Si el empleado está inactivo, botón de reactivar */}
+          {/* REACTIVAR */}
           {modoEdicion && empleadoInactivo && (
-            <div className="border-t-2 border-green-200 pt-4 mt-4">
-              <button
-                onClick={reactivar}
-                disabled={guardando}
-                className="w-full px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold transition disabled:opacity-50"
-              >
+            <div style={{
+              paddingTop: '20px', marginTop: '4px',
+              borderTop: '1px solid rgba(29, 158, 117, 0.25)',
+            }}>
+              <button onClick={reactivar} disabled={guardando} style={{
+                width: '100%', padding: '12px',
+                background: 'linear-gradient(135deg, #1D9E75 0%, #0F6E56 100%)',
+                border: 'none', borderRadius: '10px',
+                color: 'white', fontSize: '13px', fontWeight: 600,
+                cursor: guardando ? 'not-allowed' : 'pointer',
+                opacity: guardando ? 0.6 : 1, fontFamily: 'inherit',
+              }}>
                 {guardando ? '⏳ Procesando...' : '↺ Reactivar empleado'}
               </button>
             </div>
           )}
-
         </div>
 
-        <div className="bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-between items-center">
-          <p className="text-xs text-gray-500">
-            <span className="text-red-500">*</span> Campos obligatorios
-          </p>
-          <div className="flex gap-3">
-            <button
-              onClick={onCerrar}
-              disabled={guardando}
-              className="px-5 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-100 transition disabled:opacity-50"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={guardar}
-              disabled={guardando || empleadoInactivo}
-              className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition disabled:opacity-50 flex items-center gap-2"
-            >
-              {guardando ? (
-                <>
-                  <span className="animate-spin">⏳</span> Guardando...
-                </>
-              ) : (
-                textoBotonGuardar
-              )}
+        {/* FOOTER */}
+        <div style={{
+          padding: '14px 24px',
+          borderTop: '1px solid var(--color-border-subtle)',
+          background: 'var(--color-bg-elevated)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          gap: '12px', flexWrap: 'wrap',
+        }}>
+          <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
+            <span style={{ color: '#E24B4A' }}>*</span> Campos obligatorios
+          </div>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button onClick={onCerrar} disabled={guardando} style={{
+              padding: '12px 18px',
+              background: 'var(--color-bg-input)',
+              border: '1px solid var(--color-border-subtle)',
+              borderRadius: '10px',
+              color: 'var(--color-text-secondary)',
+              fontSize: '13px', fontWeight: 500,
+              cursor: guardando ? 'not-allowed' : 'pointer',
+              opacity: guardando ? 0.6 : 1, fontFamily: 'inherit',
+            }}>Cancelar</button>
+
+            <button onClick={guardar} disabled={guardando || empleadoInactivo} style={{
+              padding: '12px 22px',
+              background: 'linear-gradient(135deg, #7F77DD 0%, #534AB7 100%)',
+              border: 'none', borderRadius: '10px',
+              color: 'white', fontSize: '13px', fontWeight: 600,
+              cursor: (guardando || empleadoInactivo) ? 'not-allowed' : 'pointer',
+              opacity: (guardando || empleadoInactivo) ? 0.6 : 1,
+              fontFamily: 'inherit',
+            }}>
+              {guardando ? '⏳ Guardando...' : textoBotonGuardar}
             </button>
           </div>
         </div>
-
       </div>
     </div>
   )

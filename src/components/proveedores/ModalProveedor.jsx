@@ -5,16 +5,19 @@ function ModalProveedor({ empresaId, proveedorExistente, onCerrar, onGuardado })
   const modoEdicion = !!proveedorExistente
 
   const [form, setForm] = useState({
-    nombre: '',
-    rnc: '',
-    contacto_nombre: '',
-    contacto_telefono: '',
-    direccion: '',
-    notas: '',
+    nombre: '', rnc: '', contacto_nombre: '', contacto_telefono: '',
+    direccion: '', notas: '',
   })
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
   const [confirmandoBaja, setConfirmandoBaja] = useState(false)
+
+  // Tema dual (mismo patrón del Dashboard)
+  const [tema, setTema] = useState(() => localStorage.getItem('cocina_pae_tema') || 'oscuro')
+  useEffect(() => {
+    document.documentElement.setAttribute('data-tema', tema)
+    localStorage.setItem('cocina_pae_tema', tema)
+  }, [tema])
 
   useEffect(() => {
     if (modoEdicion && proveedorExistente) {
@@ -35,18 +38,13 @@ function ModalProveedor({ empresaId, proveedorExistente, onCerrar, onGuardado })
   }
 
   function validar() {
-    if (!form.nombre.trim()) {
-      setError('El nombre del proveedor es obligatorio')
-      return false
-    }
+    if (!form.nombre.trim()) { setError('El nombre del proveedor es obligatorio'); return false }
     return true
   }
 
   async function guardar() {
     if (!validar()) return
-    
-    setGuardando(true)
-    setError('')
+    setGuardando(true); setError('')
 
     const datos = {
       nombre: form.nombre.trim(),
@@ -57,259 +55,282 @@ function ModalProveedor({ empresaId, proveedorExistente, onCerrar, onGuardado })
       notas: form.notas.trim() || null,
     }
 
-    let errorSupa = null
-
-    if (modoEdicion) {
-      const { error: errUpdate } = await supabase
-        .from('proveedores')
-        .update(datos)
-        .eq('id', proveedorExistente.id)
-      errorSupa = errUpdate
-    } else {
-      const { error: errInsert } = await supabase
-        .from('proveedores')
-        .insert([{ ...datos, empresa_id: empresaId, activo: true }])
-      errorSupa = errInsert
-    }
+    const { error: errorSupa } = modoEdicion
+      ? await supabase.from('proveedores').update(datos).eq('id', proveedorExistente.id)
+      : await supabase.from('proveedores').insert([{ ...datos, empresa_id: empresaId, activo: true }])
 
     if (errorSupa) {
       console.error('Error al guardar:', errorSupa)
       setError('Error al guardar: ' + errorSupa.message)
-      setGuardando(false)
-      return
+      setGuardando(false); return
     }
 
-    setGuardando(false)
-    onGuardado()
-    onCerrar()
+    setGuardando(false); onGuardado(); onCerrar()
   }
 
   async function darDeBaja() {
-    setGuardando(true)
-    setError('')
-
-    const { error: errUpdate } = await supabase
-      .from('proveedores')
-      .update({ activo: false })
-      .eq('id', proveedorExistente.id)
-
-    if (errUpdate) {
-      setError('Error al dar de baja: ' + errUpdate.message)
-      setGuardando(false)
-      return
-    }
-
-    setGuardando(false)
-    onGuardado()
-    onCerrar()
+    setGuardando(true); setError('')
+    const { error: errUpdate } = await supabase.from('proveedores').update({ activo: false }).eq('id', proveedorExistente.id)
+    if (errUpdate) { setError('Error al dar de baja: ' + errUpdate.message); setGuardando(false); return }
+    setGuardando(false); onGuardado(); onCerrar()
   }
 
   async function reactivar() {
-    setGuardando(true)
-    setError('')
-
-    const { error: errUpdate } = await supabase
-      .from('proveedores')
-      .update({ activo: true })
-      .eq('id', proveedorExistente.id)
-
-    if (errUpdate) {
-      setError('Error al reactivar: ' + errUpdate.message)
-      setGuardando(false)
-      return
-    }
-
-    setGuardando(false)
-    onGuardado()
-    onCerrar()
+    setGuardando(true); setError('')
+    const { error: errUpdate } = await supabase.from('proveedores').update({ activo: true }).eq('id', proveedorExistente.id)
+    if (errUpdate) { setError('Error al reactivar: ' + errUpdate.message); setGuardando(false); return }
+    setGuardando(false); onGuardado(); onCerrar()
   }
 
   const tituloHeader = modoEdicion ? 'EDITAR PROVEEDOR' : 'NUEVO PROVEEDOR'
   const textoBotonGuardar = modoEdicion ? '💾 Guardar cambios' : '💾 Guardar proveedor'
   const proveedorInactivo = modoEdicion && proveedorExistente.activo === false
 
+  // ─── ESTILOS ───
+  const inputStyle = {
+    width: '100%', boxSizing: 'border-box',
+    background: 'var(--color-bg-input)',
+    border: '1px solid var(--color-border-subtle)',
+    borderRadius: '10px', padding: '10px 12px',
+    color: 'var(--color-text-primary)',
+    fontSize: '13px', fontFamily: 'inherit', outline: 'none',
+  }
+  const labelStyle = {
+    display: 'block', fontSize: '10px', fontWeight: 500,
+    color: 'var(--color-text-muted)', marginBottom: '6px',
+    letterSpacing: '0.5px', textTransform: 'uppercase',
+  }
+  const sectionTitleStyle = {
+    fontSize: '11px', color: 'var(--color-text-muted)',
+    letterSpacing: '1.5px', fontWeight: 600,
+    marginBottom: '12px',
+  }
+
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-        
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 90,
+      background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
+      display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+      padding: '20px', overflowY: 'auto',
+    }}>
+      <div style={{
+        background: 'var(--color-bg-primary)',
+        border: '1px solid var(--color-border-accent)',
+        borderRadius: '16px',
+        maxWidth: '720px', width: '100%',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+        display: 'flex', flexDirection: 'column',
+        maxHeight: '95vh', overflow: 'hidden',
+      }}>
+
         {/* HEADER */}
-        <div className="bg-gradient-to-r from-amber-600 to-orange-600 text-white p-6">
-          <div className="flex justify-between items-start">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-xl bg-white/20 flex items-center justify-center text-3xl">
-                🏭
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '20px 24px',
+          borderBottom: '1px solid var(--color-border-subtle)',
+          flexWrap: 'wrap', gap: '12px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{
+              width: '48px', height: '48px', borderRadius: '12px',
+              background: 'rgba(239, 159, 39, 0.18)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '24px',
+            }}>🏭</div>
+            <div>
+              <div style={{ fontSize: '10px', color: '#EF9F27', letterSpacing: '1.5px', fontWeight: 600 }}>
+                {tituloHeader}
               </div>
-              <div>
-                <p className="text-xs opacity-80 tracking-wider">{tituloHeader}</p>
-                <h2 className="text-2xl font-bold mt-1">
-                  {form.nombre.trim() || 'Sin nombre'}
-                </h2>
-                <p className="text-sm opacity-90 mt-1">
-                  {form.rnc ? `RNC: ${form.rnc}` : 'Sin RNC registrado'}
-                  {proveedorInactivo && ' · ⚠️ INACTIVO'}
-                </p>
+              <div style={{ fontSize: '18px', fontWeight: 500, color: 'var(--color-text-primary)', marginTop: '2px' }}>
+                {form.nombre.trim() || 'Sin nombre'}
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
+                {form.rnc ? `RNC: ${form.rnc}` : 'Sin RNC registrado'}
+                {proveedorInactivo && <span style={{ color: '#EF9F27', marginLeft: '6px', fontWeight: 600 }}>· ⚠️ INACTIVO</span>}
               </div>
             </div>
-            <button
-              onClick={onCerrar}
-              className="text-2xl opacity-70 hover:opacity-100"
-              disabled={guardando}
-            >
-              ✕
-            </button>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center',
+              background: 'var(--color-bg-elevated)',
+              border: '1px solid var(--color-border-subtle)',
+              borderRadius: '20px', padding: '3px', gap: '2px',
+            }}>
+              <button type="button" onClick={() => setTema('oscuro')} style={{
+                background: tema === 'oscuro' ? 'var(--gradient-toggle-active)' : 'transparent',
+                border: 'none', borderRadius: '16px', padding: '6px 10px',
+                display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer',
+              }}>
+                <span style={{ fontSize: '11px' }}>🌙</span>
+                <span style={{ fontSize: '10px', fontWeight: 500, color: tema === 'oscuro' ? 'white' : 'var(--color-text-muted)' }}>Oscuro</span>
+              </button>
+              <button type="button" onClick={() => setTema('tropical')} style={{
+                background: tema === 'tropical' ? 'var(--gradient-toggle-active)' : 'transparent',
+                border: 'none', borderRadius: '16px', padding: '6px 10px',
+                display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer',
+              }}>
+                <span style={{ fontSize: '11px' }}>☀️</span>
+                <span style={{ fontSize: '10px', fontWeight: 500, color: tema === 'tropical' ? 'white' : 'var(--color-text-muted)' }}>Claro</span>
+              </button>
+            </div>
+            <button onClick={onCerrar} disabled={guardando} style={{
+              background: 'var(--color-bg-elevated)',
+              border: '1px solid var(--color-border-subtle)',
+              borderRadius: '20px', padding: '7px 14px',
+              color: 'var(--color-text-secondary)', fontSize: '12px',
+              cursor: guardando ? 'not-allowed' : 'pointer',
+              opacity: guardando ? 0.6 : 1, fontFamily: 'inherit',
+            }}>✖ Cerrar</button>
           </div>
         </div>
 
         {/* AVISO si está inactivo */}
         {proveedorInactivo && (
-          <div className="bg-yellow-50 border-b border-yellow-200 px-6 py-3 text-sm text-yellow-800">
+          <div style={{
+            padding: '12px 24px',
+            background: 'rgba(239, 159, 39, 0.12)',
+            borderBottom: '1px solid rgba(239, 159, 39, 0.3)',
+            fontSize: '12px', color: '#EF9F27',
+          }}>
             ⚠️ Este proveedor está dado de baja. Puedes reactivarlo desde el botón abajo.
           </div>
         )}
 
-        {/* FORMULARIO */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          
+        {/* BODY */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+
+          {/* IDENTIDAD */}
           <div>
-            <p className="text-xs text-gray-500 font-semibold tracking-wider mb-3">
-              🏭 IDENTIDAD DEL PROVEEDOR
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              
-              <div className="md:col-span-2">
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Nombre / Razón social <span className="text-red-500">*</span>
+            <div style={sectionTitleStyle}>🏭 IDENTIDAD DEL PROVEEDOR</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={labelStyle}>
+                  Nombre / Razón social <span style={{ color: '#E24B4A' }}>*</span>
                 </label>
-                <input
-                  type="text"
-                  value={form.nombre}
+                <input type="text" value={form.nombre}
                   onChange={(e) => actualizarCampo('nombre', e.target.value)}
                   placeholder="Ej: Colmado El Recreo, Carnicería Don José..."
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                />
+                  style={inputStyle} />
               </div>
 
-              <div className="md:col-span-2">
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  RNC
-                </label>
-                <input
-                  type="text"
-                  value={form.rnc}
+              <div>
+                <label style={labelStyle}>RNC</label>
+                <input type="text" value={form.rnc}
                   onChange={(e) => actualizarCampo('rnc', e.target.value)}
                   placeholder="Ej: 1-23-45678-9"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono"
-                />
-                <p className="text-xs text-gray-500 mt-1">
+                  style={{ ...inputStyle, fontFamily: 'monospace' }} />
+                <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '6px' }}>
                   Importante para reportes DGII 606. Opcional pero recomendado.
-                </p>
+                </div>
               </div>
-
             </div>
           </div>
 
+          {/* CONTACTO */}
           <div>
-            <p className="text-xs text-gray-500 font-semibold tracking-wider mb-3">
-              📞 CONTACTO
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Nombre del contacto
-                </label>
-                <input
-                  type="text"
-                  value={form.contacto_nombre}
-                  onChange={(e) => actualizarCampo('contacto_nombre', e.target.value)}
-                  placeholder="Ej: Don José Pérez"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                />
+            <div style={sectionTitleStyle}>📞 CONTACTO</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+                <div>
+                  <label style={labelStyle}>Nombre del contacto</label>
+                  <input type="text" value={form.contacto_nombre}
+                    onChange={(e) => actualizarCampo('contacto_nombre', e.target.value)}
+                    placeholder="Ej: Don José Pérez"
+                    style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Teléfono</label>
+                  <input type="tel" value={form.contacto_telefono}
+                    onChange={(e) => actualizarCampo('contacto_telefono', e.target.value)}
+                    placeholder="Ej: 809-555-1234"
+                    style={inputStyle} />
+                </div>
               </div>
-
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Teléfono
-                </label>
-                <input
-                  type="tel"
-                  value={form.contacto_telefono}
-                  onChange={(e) => actualizarCampo('contacto_telefono', e.target.value)}
-                  placeholder="Ej: 809-555-1234"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Dirección
-                </label>
-                <input
-                  type="text"
-                  value={form.direccion}
+                <label style={labelStyle}>Dirección</label>
+                <input type="text" value={form.direccion}
                   onChange={(e) => actualizarCampo('direccion', e.target.value)}
                   placeholder="Ej: Calle Duarte #45, Esperanza, Valverde"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                />
+                  style={inputStyle} />
               </div>
-
             </div>
           </div>
 
+          {/* NOTAS */}
           <div>
-            <p className="text-xs text-gray-500 font-semibold tracking-wider mb-3">
-              📝 NOTAS
-            </p>
-            <textarea
-              value={form.notas}
+            <div style={sectionTitleStyle}>📝 NOTAS</div>
+            <textarea value={form.notas}
               onChange={(e) => actualizarCampo('notas', e.target.value)}
               placeholder="Días de visita, productos que vende, formas de pago, etc."
               rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
-            />
+              style={{ ...inputStyle, resize: 'none' }} />
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
-              ⚠️ {error}
-            </div>
+            <div style={{
+              background: 'rgba(244, 67, 54, 0.12)',
+              border: '1px solid rgba(244, 67, 54, 0.35)',
+              borderRadius: '10px', padding: '12px',
+              fontSize: '12px', color: '#F4C0D1',
+            }}>⚠️ {error}</div>
           )}
 
           {/* ZONA PELIGROSA */}
           {modoEdicion && !proveedorInactivo && (
-            <div className="border-t-2 border-red-200 pt-4 mt-4">
-              <p className="text-xs text-red-600 font-semibold tracking-wider mb-2">
-                ⚠️ ZONA PELIGROSA
-              </p>
+            <div style={{
+              paddingTop: '20px', marginTop: '4px',
+              borderTop: '1px solid rgba(244, 67, 54, 0.25)',
+            }}>
+              <div style={{
+                fontSize: '10px', color: '#E24B4A',
+                letterSpacing: '1.5px', fontWeight: 600,
+                marginBottom: '10px',
+              }}>⚠️ ZONA PELIGROSA</div>
+
               {!confirmandoBaja ? (
-                <button
-                  onClick={() => setConfirmandoBaja(true)}
-                  disabled={guardando}
-                  className="w-full px-4 py-3 border-2 border-red-300 hover:border-red-500 hover:bg-red-50 text-red-700 rounded-lg font-medium transition disabled:opacity-50"
-                >
-                  🚫 Dar de baja este proveedor
-                </button>
+                <button onClick={() => setConfirmandoBaja(true)} disabled={guardando} style={{
+                  width: '100%', padding: '12px',
+                  background: 'transparent',
+                  border: '1px solid rgba(244, 67, 54, 0.4)',
+                  borderRadius: '10px',
+                  color: '#F4C0D1', fontSize: '12px', fontWeight: 500,
+                  cursor: guardando ? 'not-allowed' : 'pointer',
+                  opacity: guardando ? 0.6 : 1, fontFamily: 'inherit',
+                }}>🚫 Dar de baja este proveedor</button>
               ) : (
-                <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4">
-                  <p className="text-sm font-bold text-red-900 mb-2">
+                <div style={{
+                  background: 'rgba(244, 67, 54, 0.10)',
+                  border: '1px solid rgba(244, 67, 54, 0.35)',
+                  borderLeft: '4px solid #E24B4A',
+                  borderRadius: '12px', padding: '14px',
+                  display: 'flex', flexDirection: 'column', gap: '10px',
+                }}>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#F4C0D1' }}>
                     ¿Seguro que quieres dar de baja a {form.nombre}?
-                  </p>
-                  <p className="text-xs text-red-700 mb-3">
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
                     El proveedor no será borrado. Quedará marcado como inactivo y su histórico se conservará. Puedes reactivarlo en cualquier momento.
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setConfirmandoBaja(false)}
-                      disabled={guardando}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 text-sm font-medium hover:bg-gray-100"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={darDeBaja}
-                      disabled={guardando}
-                      className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-bold transition disabled:opacity-50"
-                    >
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button onClick={() => setConfirmandoBaja(false)} disabled={guardando} style={{
+                      flex: 1, padding: '9px',
+                      background: 'var(--color-bg-input)',
+                      border: '1px solid var(--color-border-subtle)',
+                      borderRadius: '8px',
+                      color: 'var(--color-text-secondary)',
+                      fontSize: '12px', fontWeight: 500,
+                      cursor: 'pointer', fontFamily: 'inherit',
+                    }}>Cancelar</button>
+                    <button onClick={darDeBaja} disabled={guardando} style={{
+                      flex: 1, padding: '9px',
+                      background: 'linear-gradient(135deg, #E24B4A 0%, #B83232 100%)',
+                      border: 'none', borderRadius: '8px',
+                      color: 'white', fontSize: '12px', fontWeight: 600,
+                      cursor: guardando ? 'not-allowed' : 'pointer',
+                      opacity: guardando ? 0.6 : 1, fontFamily: 'inherit',
+                    }}>
                       {guardando ? '⏳ Procesando...' : '🚫 Sí, dar de baja'}
                     </button>
                   </div>
@@ -318,48 +339,62 @@ function ModalProveedor({ empresaId, proveedorExistente, onCerrar, onGuardado })
             </div>
           )}
 
+          {/* REACTIVAR */}
           {modoEdicion && proveedorInactivo && (
-            <div className="border-t-2 border-green-200 pt-4 mt-4">
-              <button
-                onClick={reactivar}
-                disabled={guardando}
-                className="w-full px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold transition disabled:opacity-50"
-              >
+            <div style={{
+              paddingTop: '20px', marginTop: '4px',
+              borderTop: '1px solid rgba(29, 158, 117, 0.25)',
+            }}>
+              <button onClick={reactivar} disabled={guardando} style={{
+                width: '100%', padding: '12px',
+                background: 'linear-gradient(135deg, #1D9E75 0%, #0F6E56 100%)',
+                border: 'none', borderRadius: '10px',
+                color: 'white', fontSize: '13px', fontWeight: 600,
+                cursor: guardando ? 'not-allowed' : 'pointer',
+                opacity: guardando ? 0.6 : 1, fontFamily: 'inherit',
+              }}>
                 {guardando ? '⏳ Procesando...' : '↺ Reactivar proveedor'}
               </button>
             </div>
           )}
-
         </div>
 
-        <div className="bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-between items-center">
-          <p className="text-xs text-gray-500">
-            <span className="text-red-500">*</span> Campos obligatorios
-          </p>
-          <div className="flex gap-3">
-            <button
-              onClick={onCerrar}
-              disabled={guardando}
-              className="px-5 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-100 transition disabled:opacity-50"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={guardar}
-              disabled={guardando || proveedorInactivo}
-              className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium transition disabled:opacity-50 flex items-center gap-2"
-            >
-              {guardando ? (
-                <>
-                  <span className="animate-spin">⏳</span> Guardando...
-                </>
-              ) : (
-                textoBotonGuardar
-              )}
+        {/* FOOTER */}
+        <div style={{
+          padding: '14px 24px',
+          borderTop: '1px solid var(--color-border-subtle)',
+          background: 'var(--color-bg-elevated)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          gap: '12px', flexWrap: 'wrap',
+        }}>
+          <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
+            <span style={{ color: '#E24B4A' }}>*</span> Campos obligatorios
+          </div>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button onClick={onCerrar} disabled={guardando} style={{
+              padding: '12px 18px',
+              background: 'var(--color-bg-input)',
+              border: '1px solid var(--color-border-subtle)',
+              borderRadius: '10px',
+              color: 'var(--color-text-secondary)',
+              fontSize: '13px', fontWeight: 500,
+              cursor: guardando ? 'not-allowed' : 'pointer',
+              opacity: guardando ? 0.6 : 1, fontFamily: 'inherit',
+            }}>Cancelar</button>
+
+            <button onClick={guardar} disabled={guardando || proveedorInactivo} style={{
+              padding: '12px 22px',
+              background: 'linear-gradient(135deg, #EF9F27 0%, #C77C13 100%)',
+              border: 'none', borderRadius: '10px',
+              color: 'white', fontSize: '13px', fontWeight: 600,
+              cursor: (guardando || proveedorInactivo) ? 'not-allowed' : 'pointer',
+              opacity: (guardando || proveedorInactivo) ? 0.6 : 1,
+              fontFamily: 'inherit',
+            }}>
+              {guardando ? '⏳ Guardando...' : textoBotonGuardar}
             </button>
           </div>
         </div>
-
       </div>
     </div>
   )

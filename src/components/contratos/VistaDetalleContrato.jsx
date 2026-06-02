@@ -7,243 +7,300 @@ function VistaDetalleContrato({ contratoId, onVolver }) {
   const [cargando, setCargando] = useState(true)
   const contenidoRef = useRef(null)
 
+  // Tema dual (mismo patrón del Dashboard)
+  const [tema, setTema] = useState(() => localStorage.getItem('cocina_pae_tema') || 'oscuro')
   useEffect(() => {
-    if (contratoId) cargarContrato()
-  }, [contratoId])
+    document.documentElement.setAttribute('data-tema', tema)
+    localStorage.setItem('cocina_pae_tema', tema)
+  }, [tema])
+
+  useEffect(() => { if (contratoId) cargarContrato() }, [contratoId])
 
   async function cargarContrato() {
     setCargando(true)
-
     const { data: contratoData, error } = await supabase
       .from('contratos_empleados')
-      .select(`
-        *,
-        usuario:usuarios(id, nombre, rol, sexo, foto_url, cedula, direccion, telefono)
-      `)
-      .eq('id', contratoId)
-      .single()
+      .select(`*, usuario:usuarios(id, nombre, rol, sexo, foto_url, cedula, direccion, telefono)`)
+      .eq('id', contratoId).single()
 
-    if (error) {
-      console.error('Error cargando contrato:', error)
-      setCargando(false)
-      return
-    }
-
+    if (error) { console.error('Error cargando contrato:', error); setCargando(false); return }
     setContrato(contratoData)
 
     if (contratoData?.empresa_id) {
-      const { data: empresaData } = await supabase
-        .from('empresas')
-        .select('*')
-        .eq('id', contratoData.empresa_id)
-        .single()
+      const { data: empresaData } = await supabase.from('empresas').select('*').eq('id', contratoData.empresa_id).single()
       setEmpresa(empresaData)
     }
-
     setCargando(false)
   }
 
-  function imprimir() {
-    window.print()
-  }
+  function imprimir() { window.print() }
 
   function formatearFecha(fechaStr) {
     if (!fechaStr) return '_______________'
     const fecha = new Date(fechaStr + 'T00:00:00')
-    return fecha.toLocaleDateString('es-DO', { 
-      day: 'numeric', 
-      month: 'long', 
-      year: 'numeric' 
-    })
+    return fecha.toLocaleDateString('es-DO', { day: 'numeric', month: 'long', year: 'numeric' })
   }
 
   function formatearFechaCorta(fechaStr) {
     if (!fechaStr) return '_______________'
     const fecha = new Date(fechaStr)
-    return fecha.toLocaleDateString('es-DO', { 
-      day: 'numeric', 
-      month: 'short', 
-      year: 'numeric' 
-    })
+    return fecha.toLocaleDateString('es-DO', { day: 'numeric', month: 'short', year: 'numeric' })
   }
 
   if (cargando) {
     return (
-      <div className="w-full max-w-5xl">
-        <div className="text-center py-12 text-gray-500">⏳ Cargando contrato...</div>
+      <div style={{
+        minHeight: '100vh', background: 'var(--color-bg-primary)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '20px',
+      }}>
+        <div style={{ textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '14px' }}>
+          ⏳ Cargando contrato...
+        </div>
       </div>
     )
   }
 
   if (!contrato) {
     return (
-      <div className="w-full max-w-5xl">
-        <div className="bg-red-50 border border-red-200 rounded-2xl p-8 text-center">
-          <p className="text-4xl mb-3">❌</p>
-          <h2 className="text-2xl font-bold text-red-900 mb-2">Contrato no encontrado</h2>
-          <button
-            onClick={onVolver}
-            className="bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-2 rounded-lg mt-4"
-          >
-            ← Volver
-          </button>
+      <div style={{
+        minHeight: '100vh', background: 'var(--color-bg-primary)',
+        padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <div style={{
+          maxWidth: '400px',
+          background: 'rgba(244, 67, 54, 0.12)',
+          border: '1px solid rgba(244, 67, 54, 0.4)',
+          borderRadius: '14px', padding: '32px', textAlign: 'center',
+        }}>
+          <div style={{ fontSize: '40px', marginBottom: '10px' }}>❌</div>
+          <div style={{ fontSize: '18px', fontWeight: 600, color: '#F4C0D1', marginBottom: '14px' }}>
+            Contrato no encontrado
+          </div>
+          <button onClick={onVolver} style={{
+            padding: '10px 22px',
+            background: 'linear-gradient(135deg, #E24B4A 0%, #B83232 100%)',
+            border: 'none', borderRadius: '10px',
+            color: 'white', fontSize: '13px', fontWeight: 600,
+            cursor: 'pointer', fontFamily: 'inherit',
+          }}>← Volver</button>
         </div>
       </div>
     )
   }
 
   const empleado = contrato.usuario
-  const direccionPropietario = empresa?.direccion_propietario_misma 
-    ? empresa?.direccion 
+  const direccionPropietario = empresa?.direccion_propietario_misma
+    ? empresa?.direccion
     : empresa?.direccion_propietario
 
+  // ─── PASTILLA DE ESTADO ───
+  const estadosUI = {
+    activo:            { label: '🟢 ACTIVO',              color: '29, 158, 117' },
+    borrador:          { label: '🟡 BORRADOR',            color: '239, 159, 39' },
+    pendiente_firma:   { label: '🟠 PENDIENTE DE FIRMA',  color: '239, 159, 39' },
+    terminado:         { label: '⚪ TERMINADO',            color: '156, 163, 175' },
+  }
+  const estadoActual = estadosUI[contrato.estado] || estadosUI.borrador
+
   return (
-    <div className="w-full max-w-5xl">
-      
-      {/* Estilos para impresión */}
-      <style>{`
-        @media print {
-          body * {
-            visibility: hidden;
-          }
-          .print-area, .print-area * {
-            visibility: visible;
-          }
-          .print-area {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            padding: 20mm;
-          }
-          .no-print {
-            display: none !important;
-          }
-          @page {
-            size: letter;
-            margin: 0;
-          }
-        }
-      `}</style>
+    <div className="detalle-contrato" style={{
+      minHeight: '100vh',
+      background: 'var(--color-bg-primary)',
+      padding: '20px',
+      position: 'relative',
+    }}>
+      {/* Glow ambiental */}
+      <div className="no-print" style={{
+        position: 'fixed', inset: 0,
+        backgroundImage: 'var(--glow-verde), var(--glow-ambar)',
+        pointerEvents: 'none', zIndex: 0,
+      }} />
 
-      {/* HEADER (no se imprime) */}
-      <div className="no-print bg-gradient-to-br from-purple-600 to-indigo-700 rounded-2xl p-6 mb-6 text-white">
-        <div className="flex justify-between items-start flex-wrap gap-3">
+      {/* HEADER de chrome (no se imprime) */}
+      <div className="no-print" style={{
+        position: 'relative', zIndex: 1,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        marginBottom: '16px', flexWrap: 'wrap', gap: '12px',
+        maxWidth: '1100px', margin: '0 auto 16px',
+      }}>
+        <button onClick={onVolver} style={{
+          background: 'var(--color-bg-elevated)',
+          border: '1px solid var(--color-border-subtle)',
+          borderRadius: '20px', padding: '7px 14px',
+          color: 'var(--color-text-secondary)', fontSize: '12px',
+          cursor: 'pointer', fontFamily: 'inherit',
+        }}>← Volver</button>
+
+        <div style={{
+          display: 'flex', alignItems: 'center',
+          background: 'var(--color-bg-elevated)',
+          border: '1px solid var(--color-border-subtle)',
+          borderRadius: '20px', padding: '3px', gap: '2px',
+        }}>
+          <button type="button" onClick={() => setTema('oscuro')} style={{
+            background: tema === 'oscuro' ? 'var(--gradient-toggle-active)' : 'transparent',
+            border: 'none', borderRadius: '16px', padding: '6px 10px',
+            display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer',
+          }}>
+            <span style={{ fontSize: '11px' }}>🌙</span>
+            <span style={{ fontSize: '10px', fontWeight: 500, color: tema === 'oscuro' ? 'white' : 'var(--color-text-muted)' }}>Oscuro</span>
+          </button>
+          <button type="button" onClick={() => setTema('tropical')} style={{
+            background: tema === 'tropical' ? 'var(--gradient-toggle-active)' : 'transparent',
+            border: 'none', borderRadius: '16px', padding: '6px 10px',
+            display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer',
+          }}>
+            <span style={{ fontSize: '11px' }}>☀️</span>
+            <span style={{ fontSize: '10px', fontWeight: 500, color: tema === 'tropical' ? 'white' : 'var(--color-text-muted)' }}>Claro</span>
+          </button>
+        </div>
+      </div>
+
+      {/* TÍTULO + ACCIONES (no se imprime) */}
+      <div className="no-print" style={{
+        position: 'relative', zIndex: 1,
+        maxWidth: '1100px', margin: '0 auto 16px',
+        background: 'var(--color-modulo-bg)',
+        border: '1px solid var(--color-modulo-border)',
+        borderLeft: '4px solid #7F77DD',
+        borderRadius: '14px', padding: '18px 22px',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        gap: '14px', flexWrap: 'wrap',
+        boxShadow: 'var(--modulo-sombra)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <div style={{
+            width: '46px', height: '46px', borderRadius: '12px',
+            background: 'rgba(127, 119, 221, 0.18)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '22px',
+          }}>📄</div>
           <div>
-            <p className="text-purple-100 text-xs font-semibold tracking-wider">CONTRATO LABORAL</p>
-            <h2 className="text-2xl font-bold mt-1">{empleado?.nombre}</h2>
-            <p className="text-purple-200 text-sm mt-1">{contrato.puesto}</p>
+            <div style={{ fontSize: '10px', color: '#7F77DD', letterSpacing: '1.5px', fontWeight: 600 }}>
+              CONTRATO LABORAL
+            </div>
+            <div style={{ fontSize: '18px', fontWeight: 500, color: 'var(--color-text-primary)', marginTop: '2px' }}>
+              {empleado?.nombre}
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
+              {contrato.puesto}
+            </div>
           </div>
-          <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={imprimir}
-              className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-4 py-2 rounded-lg"
-            >
-              🖨️ Imprimir contrato
-            </button>
-            <button
-              onClick={onVolver}
-              className="bg-purple-800 hover:bg-purple-900 text-white text-sm px-4 py-2 rounded-lg"
-            >
-              ← Volver
-            </button>
-          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button onClick={imprimir} style={{
+            padding: '10px 16px',
+            background: 'linear-gradient(135deg, #378ADD 0%, #1F5FA8 100%)',
+            border: 'none', borderRadius: '10px',
+            color: 'white', fontSize: '12px', fontWeight: 600,
+            cursor: 'pointer', fontFamily: 'inherit',
+          }}>🖨️ Imprimir contrato</button>
         </div>
       </div>
 
-      {/* ESTADO DEL CONTRATO (no se imprime) */}
-      <div className="no-print bg-white rounded-2xl shadow-xl p-4 mb-6">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-3">
-            {contrato.estado === 'activo' && (
-              <span className="bg-green-100 text-green-800 font-bold px-4 py-2 rounded-full">
-                🟢 ACTIVO
-              </span>
-            )}
-            {contrato.estado === 'borrador' && (
-              <span className="bg-yellow-100 text-yellow-800 font-bold px-4 py-2 rounded-full">
-                🟡 BORRADOR
-              </span>
-            )}
-            {contrato.estado === 'pendiente_firma' && (
-              <span className="bg-orange-100 text-orange-800 font-bold px-4 py-2 rounded-full">
-                🟠 PENDIENTE DE FIRMA
-              </span>
-            )}
-            {contrato.estado === 'terminado' && (
-              <span className="bg-gray-200 text-gray-700 font-bold px-4 py-2 rounded-full">
-                ⚪ TERMINADO
-              </span>
-            )}
-            
-            {contrato.firma_propietario_at && (
-              <span className="text-xs text-gray-600">
-                ✅ Firmado el {formatearFechaCorta(contrato.firma_propietario_at)}
-              </span>
-            )}
-          </div>
+      {/* ESTADO (no se imprime) */}
+      <div className="no-print" style={{
+        position: 'relative', zIndex: 1,
+        maxWidth: '1100px', margin: '0 auto 16px',
+        background: 'var(--color-modulo-bg)',
+        border: '1px solid var(--color-modulo-border)',
+        borderRadius: '14px', padding: '14px 18px',
+        boxShadow: 'var(--modulo-sombra)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        flexWrap: 'wrap', gap: '12px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <span style={{
+            fontSize: '12px', fontWeight: 700, padding: '6px 14px',
+            background: `rgba(${estadoActual.color}, 0.18)`,
+            border: `1px solid rgba(${estadoActual.color}, 0.4)`,
+            borderRadius: '16px',
+            color: `rgb(${estadoActual.color})`,
+            letterSpacing: '0.5px',
+          }}>{estadoActual.label}</span>
+
+          {contrato.firma_propietario_at && (
+            <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+              ✅ Firmado el {formatearFechaCorta(contrato.firma_propietario_at)}
+            </span>
+          )}
         </div>
       </div>
 
-      {/* CONTENIDO DEL CONTRATO (se imprime) */}
-      <div className="print-area bg-white rounded-2xl shadow-xl p-8 md:p-12" ref={contenidoRef}>
-        
+      {/* ─── CONTENIDO DEL CONTRATO (área imprimible) ─── */}
+      {/* Esta área SIEMPRE va blanca, con tipografía serif legal */}
+      <div className="print-area" ref={contenidoRef} style={{
+        position: 'relative', zIndex: 1,
+        maxWidth: '1100px', margin: '0 auto',
+        background: 'white',
+        color: '#1a1a1a',
+        borderRadius: '14px',
+        padding: '48px 56px',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+        fontFamily: '"Times New Roman", Georgia, serif',
+        fontSize: '14px',
+        lineHeight: 1.6,
+      }}>
+
         {/* TÍTULO */}
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            CONTRATO DE TRABAJO
-          </h1>
+        <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+          <h1 style={{
+            fontSize: '22px', fontWeight: 700, color: '#000',
+            margin: 0, letterSpacing: '0.5px',
+          }}>CONTRATO DE TRABAJO</h1>
           {contrato.tipo_contrato === 'obra_servicio' && (
-            <p className="text-sm text-gray-700 italic">
+            <div style={{ fontSize: '13px', fontStyle: 'italic', color: '#333', marginTop: '6px' }}>
               POR OBRA O SERVICIO DETERMINADO<br />
               (Servicio de Alimentación Escolar — PAE / INABIE)
-            </p>
+            </div>
           )}
           {contrato.tipo_contrato === 'estacional' && (
-            <p className="text-sm text-gray-700 italic">
+            <div style={{ fontSize: '13px', fontStyle: 'italic', color: '#333', marginTop: '6px' }}>
               CONTRATO DE TRABAJO ESTACIONAL
-            </p>
+            </div>
           )}
           {contrato.tipo_contrato === 'indefinido' && (
-            <p className="text-sm text-gray-700 italic">
+            <div style={{ fontSize: '13px', fontStyle: 'italic', color: '#333', marginTop: '6px' }}>
               CONTRATO DE TRABAJO POR TIEMPO INDEFINIDO
-            </p>
+            </div>
           )}
         </div>
 
         {/* INTRODUCCIÓN */}
-        <p className="text-sm text-justify mb-4 leading-relaxed">
-          En la ciudad de <strong>{empresa?.direccion?.split(',').pop()?.trim() || '_______________'}</strong>, 
-          República Dominicana, a los <strong>{new Date(contrato.fecha_inicio + 'T00:00:00').getDate()}</strong> días 
-          del mes de <strong>{new Date(contrato.fecha_inicio + 'T00:00:00').toLocaleDateString('es-DO', { month: 'long' })}</strong> del 
+        <p style={{ textAlign: 'justify', marginBottom: '14px' }}>
+          En la ciudad de <strong>{empresa?.direccion?.split(',').pop()?.trim() || '_______________'}</strong>,
+          República Dominicana, a los <strong>{new Date(contrato.fecha_inicio + 'T00:00:00').getDate()}</strong> días
+          del mes de <strong>{new Date(contrato.fecha_inicio + 'T00:00:00').toLocaleDateString('es-DO', { month: 'long' })}</strong> del
           año <strong>{new Date(contrato.fecha_inicio + 'T00:00:00').getFullYear()}</strong>, comparecen libre y voluntariamente:
         </p>
 
         {/* PARTES */}
-        <div className="mb-4">
-          <p className="text-sm font-bold mb-2">DE UNA PARTE:</p>
-          <p className="text-sm text-justify leading-relaxed">
-            <strong>{empresa?.nombre_propietario || '___________________'}</strong>, dominicano(a), mayor de edad, 
-            portador(a) de la Cédula de Identidad y Electoral No. <strong>{empresa?.cedula_propietario || '_______________'}</strong>, 
-            domiciliado(a) en <strong>{direccionPropietario || '_______________'}</strong>, 
+        <div style={{ marginBottom: '14px' }}>
+          <p style={{ fontWeight: 700, marginBottom: '6px' }}>DE UNA PARTE:</p>
+          <p style={{ textAlign: 'justify' }}>
+            <strong>{empresa?.nombre_propietario || '___________________'}</strong>, dominicano(a), mayor de edad,
+            portador(a) de la Cédula de Identidad y Electoral No. <strong>{empresa?.cedula_propietario || '_______________'}</strong>,
+            domiciliado(a) en <strong>{direccionPropietario || '_______________'}</strong>,
             en su calidad de propietario(a) del establecimiento comercial <strong>"{empresa?.nombre || '___________'}"</strong>
-            {contrato.tipo_contrato === 'obra_servicio' && ', suplidor del Programa de Alimentación Escolar (PAE) del INABIE'}, 
+            {contrato.tipo_contrato === 'obra_servicio' && ', suplidor del Programa de Alimentación Escolar (PAE) del INABIE'},
             quien en lo adelante y para los fines del presente contrato se denominará <strong>"EL EMPLEADOR"</strong>;
           </p>
         </div>
 
-        <div className="mb-4">
-          <p className="text-sm font-bold mb-2">DE LA OTRA PARTE:</p>
-          <p className="text-sm text-justify leading-relaxed">
-            <strong>{empleado?.nombre || '___________________'}</strong>, dominicano(a), mayor de edad, 
-            portador(a) de la Cédula de Identidad y Electoral No. <strong>{empleado?.cedula || '_______________'}</strong>, 
-            domiciliado(a) en <strong>{empleado?.direccion || '_______________'}</strong>, 
+        <div style={{ marginBottom: '14px' }}>
+          <p style={{ fontWeight: 700, marginBottom: '6px' }}>DE LA OTRA PARTE:</p>
+          <p style={{ textAlign: 'justify' }}>
+            <strong>{empleado?.nombre || '___________________'}</strong>, dominicano(a), mayor de edad,
+            portador(a) de la Cédula de Identidad y Electoral No. <strong>{empleado?.cedula || '_______________'}</strong>,
+            domiciliado(a) en <strong>{empleado?.direccion || '_______________'}</strong>,
             quien en lo adelante y para los fines del presente contrato se denominará <strong>"EL TRABAJADOR"</strong>;
           </p>
         </div>
 
-        <p className="text-sm text-justify mb-6 leading-relaxed">
-          Ambas partes han convenido en celebrar el presente CONTRATO DE TRABAJO 
+        <p style={{ textAlign: 'justify', marginBottom: '22px' }}>
+          Ambas partes han convenido en celebrar el presente CONTRATO DE TRABAJO
           {contrato.tipo_contrato === 'obra_servicio' && ' PARA OBRA O SERVICIO DETERMINADO, conforme a los artículos 31, 32, 33 y 72 del Código de Trabajo de la República Dominicana (Ley No. 16-92),'}
           {contrato.tipo_contrato === 'estacional' && ' ESTACIONAL, conforme al Código de Trabajo de la República Dominicana (Ley No. 16-92),'}
           {contrato.tipo_contrato === 'indefinido' && ' POR TIEMPO INDEFINIDO, conforme al Código de Trabajo de la República Dominicana (Ley No. 16-92),'}
@@ -251,86 +308,82 @@ function VistaDetalleContrato({ contratoId, onVolver }) {
         </p>
 
         {/* CLÁUSULAS */}
-        <div className="space-y-4 text-sm">
-          
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+
           <div>
-            <p className="font-bold">PRIMERO: NATURALEZA DEL CONTRATO</p>
+            <p style={{ fontWeight: 700 }}>PRIMERO: NATURALEZA DEL CONTRATO</p>
             {contrato.tipo_contrato === 'obra_servicio' && (
-              <p className="text-justify leading-relaxed mt-1">
-                Este contrato se celebra para la prestación de un servicio determinado, 
-                consistente en las labores requeridas por EL EMPLEADOR para el cumplimiento 
-                de su contrato de suministro de raciones alimenticias bajo el Programa de 
-                Alimentación Escolar (PAE) del Instituto Nacional de Bienestar Estudiantil (INABIE), 
-                correspondiente al año escolar <strong>{contrato.año_escolar_inabie || '_______'}</strong>. 
-                Ambas partes reconocen que la naturaleza del servicio depende de la adjudicación 
+              <p style={{ textAlign: 'justify', marginTop: '4px' }}>
+                Este contrato se celebra para la prestación de un servicio determinado,
+                consistente en las labores requeridas por EL EMPLEADOR para el cumplimiento
+                de su contrato de suministro de raciones alimenticias bajo el Programa de
+                Alimentación Escolar (PAE) del Instituto Nacional de Bienestar Estudiantil (INABIE),
+                correspondiente al año escolar <strong>{contrato.año_escolar_inabie || '_______'}</strong>.
+                Ambas partes reconocen que la naturaleza del servicio depende de la adjudicación
                 y vigencia del contrato con INABIE.
               </p>
             )}
             {contrato.tipo_contrato === 'estacional' && (
-              <p className="text-justify leading-relaxed mt-1">
-                El presente contrato se celebra bajo la modalidad de trabajo estacional, 
-                en virtud de que la actividad del EMPLEADOR se realiza únicamente durante 
+              <p style={{ textAlign: 'justify', marginTop: '4px' }}>
+                El presente contrato se celebra bajo la modalidad de trabajo estacional,
+                en virtud de que la actividad del EMPLEADOR se realiza únicamente durante
                 el calendario escolar dominicano.
               </p>
             )}
             {contrato.tipo_contrato === 'indefinido' && (
-              <p className="text-justify leading-relaxed mt-1">
-                El presente contrato se celebra por tiempo indefinido, en atención a la 
+              <p style={{ textAlign: 'justify', marginTop: '4px' }}>
+                El presente contrato se celebra por tiempo indefinido, en atención a la
                 naturaleza permanente y continua de las funciones que desempeñará EL TRABAJADOR.
               </p>
             )}
           </div>
 
           <div>
-            <p className="font-bold">SEGUNDO: OBJETO Y FUNCIONES</p>
-            <p className="text-justify leading-relaxed mt-1">
-              EL TRABAJADOR se obliga a prestar sus servicios personales bajo la dirección 
+            <p style={{ fontWeight: 700 }}>SEGUNDO: OBJETO Y FUNCIONES</p>
+            <p style={{ textAlign: 'justify', marginTop: '4px' }}>
+              EL TRABAJADOR se obliga a prestar sus servicios personales bajo la dirección
               y dependencia de EL EMPLEADOR, desempeñando las funciones de <strong>{contrato.puesto}</strong>.
-              {contrato.descripcion_funciones && (
-                <span> {contrato.descripcion_funciones}</span>
-              )}
+              {contrato.descripcion_funciones && (<span> {contrato.descripcion_funciones}</span>)}
             </p>
           </div>
 
           <div>
-            <p className="font-bold">TERCERO: DURACIÓN</p>
-            <p className="text-justify leading-relaxed mt-1">
+            <p style={{ fontWeight: 700 }}>TERCERO: DURACIÓN</p>
+            <p style={{ textAlign: 'justify', marginTop: '4px' }}>
               Fecha de inicio: <strong>{formatearFecha(contrato.fecha_inicio)}</strong>.
-              {contrato.fecha_fin && (
-                <> Fecha estimada de finalización: <strong>{formatearFecha(contrato.fecha_fin)}</strong>.</>
-              )}
+              {contrato.fecha_fin && (<> Fecha estimada de finalización: <strong>{formatearFecha(contrato.fecha_fin)}</strong>.</>)}
               {contrato.tipo_contrato === 'obra_servicio' && (
-                <> El contrato terminará, sin responsabilidad para ninguna de las partes, 
+                <> El contrato terminará, sin responsabilidad para ninguna de las partes,
                 con la conclusión del servicio determinado, conforme al artículo 72 del Código de Trabajo.</>
               )}
             </p>
           </div>
 
           <div>
-            <p className="font-bold">CUARTO: SALARIO</p>
-            <p className="text-justify leading-relaxed mt-1">
-              EL EMPLEADOR pagará a EL TRABAJADOR un salario neto de 
+            <p style={{ fontWeight: 700 }}>CUARTO: SALARIO</p>
+            <p style={{ textAlign: 'justify', marginTop: '4px' }}>
+              EL EMPLEADOR pagará a EL TRABAJADOR un salario neto de
               <strong> RD$ {Number(contrato.salario_neto).toLocaleString('es-DO', { minimumFractionDigits: 2 })}</strong>,
               {contrato.frecuencia_pago === 'quincenal' && ' con pago quincenal'}
               {contrato.frecuencia_pago === 'semanal' && ' con pago semanal'}
               {contrato.frecuencia_pago === 'mensual' && ' con pago mensual'}.
               {contrato.salario_bruto && (
-                <> El salario bruto correspondiente es de RD$ {Number(contrato.salario_bruto).toLocaleString('es-DO', { minimumFractionDigits: 2 })}, 
+                <> El salario bruto correspondiente es de RD$ {Number(contrato.salario_bruto).toLocaleString('es-DO', { minimumFractionDigits: 2 })},
                 del cual se realizarán las retenciones de ley (TSS, AFP).</>
               )}
-              {' '}EL EMPLEADOR realizará los aportes patronales correspondientes a la 
-              Tesorería de la Seguridad Social (TSS), Administradora de Fondos de Pensiones (AFP) 
+              {' '}EL EMPLEADOR realizará los aportes patronales correspondientes a la
+              Tesorería de la Seguridad Social (TSS), Administradora de Fondos de Pensiones (AFP)
               y demás contribuciones obligatorias conforme a la legislación dominicana vigente.
             </p>
           </div>
 
           {(contrato.horario_trabajo || contrato.dias_laborales) && (
             <div>
-              <p className="font-bold">QUINTO: JORNADA DE TRABAJO</p>
-              <p className="text-justify leading-relaxed mt-1">
+              <p style={{ fontWeight: 700 }}>QUINTO: JORNADA DE TRABAJO</p>
+              <p style={{ textAlign: 'justify', marginTop: '4px' }}>
                 {contrato.horario_trabajo && <>Horario: <strong>{contrato.horario_trabajo}</strong>. </>}
                 {contrato.dias_laborales && <>Días laborales: <strong>{contrato.dias_laborales}</strong>. </>}
-                Se respetarán los descansos semanales, días feriados nacionales y los recesos 
+                Se respetarán los descansos semanales, días feriados nacionales y los recesos
                 del calendario escolar, conforme a la ley.
               </p>
             </div>
@@ -338,27 +391,27 @@ function VistaDetalleContrato({ contratoId, onVolver }) {
 
           {contrato.lugar_trabajo && (
             <div>
-              <p className="font-bold">SEXTO: LUGAR DE TRABAJO</p>
-              <p className="text-justify leading-relaxed mt-1">
-                El lugar principal de trabajo será: <strong>{contrato.lugar_trabajo}</strong>. 
-                EL TRABAJADOR podrá ser asignado, en función de las necesidades del servicio, 
+              <p style={{ fontWeight: 700 }}>SEXTO: LUGAR DE TRABAJO</p>
+              <p style={{ textAlign: 'justify', marginTop: '4px' }}>
+                El lugar principal de trabajo será: <strong>{contrato.lugar_trabajo}</strong>.
+                EL TRABAJADOR podrá ser asignado, en función de las necesidades del servicio,
                 a cualquiera de los centros educativos beneficiados por el contrato PAE de EL EMPLEADOR.
               </p>
             </div>
           )}
 
           <div>
-            <p className="font-bold">SÉPTIMO: REGALÍA PASCUAL</p>
-            <p className="text-justify leading-relaxed mt-1">
+            <p style={{ fontWeight: 700 }}>SÉPTIMO: REGALÍA PASCUAL</p>
+            <p style={{ textAlign: 'justify', marginTop: '4px' }}>
               {contrato.tipo_contrato === 'obra_servicio' && (
-                <>Dado que el presente contrato es por obra o servicio determinado, conforme al 
-                artículo 7 de la Ley No. 5235 y los artículos 219 al 222 del Código de Trabajo, 
-                la regalía pascual se reconocerá únicamente si al mes de diciembre el contrato 
+                <>Dado que el presente contrato es por obra o servicio determinado, conforme al
+                artículo 7 de la Ley No. 5235 y los artículos 219 al 222 del Código de Trabajo,
+                la regalía pascual se reconocerá únicamente si al mes de diciembre el contrato
                 tiene una duración igual o superior a seis (6) meses. </>
               )}
               {contrato.tipo_contrato !== 'obra_servicio' && (
-                <>EL TRABAJADOR tendrá derecho a la regalía pascual proporcional al tiempo trabajado 
-                durante el año calendario, conforme a los artículos 219 al 222 del Código de Trabajo, 
+                <>EL TRABAJADOR tendrá derecho a la regalía pascual proporcional al tiempo trabajado
+                durante el año calendario, conforme a los artículos 219 al 222 del Código de Trabajo,
                 a pagarse a más tardar el día 20 de diciembre. </>
               )}
               EL EMPLEADOR podrá, a su libre criterio, otorgar bonificaciones voluntarias adicionales.
@@ -366,117 +419,146 @@ function VistaDetalleContrato({ contratoId, onVolver }) {
           </div>
 
           <div>
-            <p className="font-bold">OCTAVO: CONFIDENCIALIDAD Y NORMAS</p>
-            <p className="text-justify leading-relaxed mt-1">
-              EL TRABAJADOR se obliga a mantener absoluta confidencialidad sobre la información 
-              comercial, financiera, recetas, costos, proveedores, clientes y procedimientos 
-              operativos de EL EMPLEADOR, así como a cumplir las normas de higiene, manipulación 
-              de alimentos y conducta establecidas por EL EMPLEADOR y las autoridades sanitarias 
+            <p style={{ fontWeight: 700 }}>OCTAVO: CONFIDENCIALIDAD Y NORMAS</p>
+            <p style={{ textAlign: 'justify', marginTop: '4px' }}>
+              EL TRABAJADOR se obliga a mantener absoluta confidencialidad sobre la información
+              comercial, financiera, recetas, costos, proveedores, clientes y procedimientos
+              operativos de EL EMPLEADOR, así como a cumplir las normas de higiene, manipulación
+              de alimentos y conducta establecidas por EL EMPLEADOR y las autoridades sanitarias
               y educativas competentes.
             </p>
           </div>
 
           <div>
-            <p className="font-bold">NOVENO: DISPOSICIONES FINALES</p>
-            <p className="text-justify leading-relaxed mt-1">
-              Todo lo no previsto en el presente contrato se regirá por el Código de Trabajo 
-              de la República Dominicana (Ley No. 16-92), su Reglamento de Aplicación No. 258-93 
+            <p style={{ fontWeight: 700 }}>NOVENO: DISPOSICIONES FINALES</p>
+            <p style={{ textAlign: 'justify', marginTop: '4px' }}>
+              Todo lo no previsto en el presente contrato se regirá por el Código de Trabajo
+              de la República Dominicana (Ley No. 16-92), su Reglamento de Aplicación No. 258-93
               y las demás disposiciones laborales vigentes.
             </p>
           </div>
 
           {contrato.notas && (
             <div>
-              <p className="font-bold">CLÁUSULA ADICIONAL</p>
-              <p className="text-justify leading-relaxed mt-1">
-                {contrato.notas}
-              </p>
+              <p style={{ fontWeight: 700 }}>CLÁUSULA ADICIONAL</p>
+              <p style={{ textAlign: 'justify', marginTop: '4px' }}>{contrato.notas}</p>
             </div>
           )}
         </div>
 
-        <p className="text-sm text-justify mt-6 mb-8 leading-relaxed">
-          Hecho y firmado en dos (2) originales del mismo tenor y valor, uno para cada parte, 
+        <p style={{ textAlign: 'justify', marginTop: '24px', marginBottom: '32px' }}>
+          Hecho y firmado en dos (2) originales del mismo tenor y valor, uno para cada parte,
           en la fecha indicada al inicio del presente contrato.
         </p>
 
-        {/* FIRMAS DIGITALES (si existen) */}
+        {/* FIRMAS DIGITALES */}
         {(contrato.firma_propietario_base64 || contrato.firma_empleado_base64) && (
-          <div className="mt-8 mb-6">
-            <p className="text-xs font-bold text-gray-600 tracking-wider mb-3 text-center">
+          <div style={{ marginTop: '32px', marginBottom: '24px' }}>
+            <div style={{
+              fontSize: '11px', fontWeight: 700, color: '#555',
+              letterSpacing: '1px', textAlign: 'center', marginBottom: '12px',
+            }}>
               FIRMAS DIGITALES (registradas en el sistema Cocina PAE)
-            </p>
-            <div className="grid grid-cols-2 gap-8">
-              <div className="text-center">
-                <div className="h-24 flex items-end justify-center border-b border-gray-400 pb-1">
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{
+                  height: '96px',
+                  display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+                  borderBottom: '1px solid #666', paddingBottom: '4px',
+                }}>
                   {contrato.firma_propietario_base64 ? (
-                    <img 
-                      src={contrato.firma_propietario_base64} 
-                      alt="Firma empleador" 
-                      className="max-h-24"
-                    />
+                    <img src={contrato.firma_propietario_base64} alt="Firma empleador" style={{ maxHeight: '96px' }} />
                   ) : (
-                    <span className="text-gray-400 text-xs">_____________________</span>
+                    <span style={{ color: '#aaa', fontSize: '11px' }}>_____________________</span>
                   )}
                 </div>
-                <p className="text-sm font-bold mt-2">EL EMPLEADOR</p>
-                <p className="text-xs text-gray-700">{empresa?.nombre_propietario || '___________'}</p>
-                <p className="text-xs text-gray-600">CC: {empresa?.cedula_propietario || '_____________'}</p>
+                <div style={{ fontSize: '13px', fontWeight: 700, marginTop: '8px' }}>EL EMPLEADOR</div>
+                <div style={{ fontSize: '11px', color: '#444' }}>{empresa?.nombre_propietario || '___________'}</div>
+                <div style={{ fontSize: '11px', color: '#666' }}>CC: {empresa?.cedula_propietario || '_____________'}</div>
                 {contrato.firma_propietario_at && (
-                  <p className="text-xs text-gray-500 mt-1">
+                  <div style={{ fontSize: '10px', color: '#888', marginTop: '4px' }}>
                     {formatearFechaCorta(contrato.firma_propietario_at)}
-                  </p>
+                  </div>
                 )}
               </div>
 
-              <div className="text-center">
-                <div className="h-24 flex items-end justify-center border-b border-gray-400 pb-1">
+              <div style={{ textAlign: 'center' }}>
+                <div style={{
+                  height: '96px',
+                  display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+                  borderBottom: '1px solid #666', paddingBottom: '4px',
+                }}>
                   {contrato.firma_empleado_base64 ? (
-                    <img 
-                      src={contrato.firma_empleado_base64} 
-                      alt="Firma empleado" 
-                      className="max-h-24"
-                    />
+                    <img src={contrato.firma_empleado_base64} alt="Firma empleado" style={{ maxHeight: '96px' }} />
                   ) : (
-                    <span className="text-gray-400 text-xs">_____________________</span>
+                    <span style={{ color: '#aaa', fontSize: '11px' }}>_____________________</span>
                   )}
                 </div>
-                <p className="text-sm font-bold mt-2">EL TRABAJADOR</p>
-                <p className="text-xs text-gray-700">{empleado?.nombre || '___________'}</p>
-                <p className="text-xs text-gray-600">CC: {empleado?.cedula || '_____________'}</p>
+                <div style={{ fontSize: '13px', fontWeight: 700, marginTop: '8px' }}>EL TRABAJADOR</div>
+                <div style={{ fontSize: '11px', color: '#444' }}>{empleado?.nombre || '___________'}</div>
+                <div style={{ fontSize: '11px', color: '#666' }}>CC: {empleado?.cedula || '_____________'}</div>
                 {contrato.firma_empleado_at && (
-                  <p className="text-xs text-gray-500 mt-1">
+                  <div style={{ fontSize: '10px', color: '#888', marginTop: '4px' }}>
                     {formatearFechaCorta(contrato.firma_empleado_at)}
-                  </p>
+                  </div>
                 )}
               </div>
             </div>
           </div>
         )}
 
-        {/* FIRMAS FÍSICAS (espacios para firmar a mano) */}
-        <div className="mt-12">
-          <p className="text-xs font-bold text-gray-600 tracking-wider mb-3 text-center">
+        {/* FIRMAS FÍSICAS */}
+        <div style={{ marginTop: '48px' }}>
+          <div style={{
+            fontSize: '11px', fontWeight: 700, color: '#555',
+            letterSpacing: '1px', textAlign: 'center', marginBottom: '12px',
+          }}>
             FIRMAS FÍSICAS (manuscritas)
-          </p>
-          <div className="grid grid-cols-2 gap-8">
-            <div className="text-center">
-              <div className="h-16 border-b border-gray-700"></div>
-              <p className="text-sm font-bold mt-2">EL EMPLEADOR</p>
-              <p className="text-xs text-gray-700">{empresa?.nombre_propietario || '___________'}</p>
-              <p className="text-xs text-gray-600 mt-1">Fecha: ___/___/______</p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ height: '64px', borderBottom: '1px solid #333' }}></div>
+              <div style={{ fontSize: '13px', fontWeight: 700, marginTop: '8px' }}>EL EMPLEADOR</div>
+              <div style={{ fontSize: '11px', color: '#444' }}>{empresa?.nombre_propietario || '___________'}</div>
+              <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>Fecha: ___/___/______</div>
             </div>
 
-            <div className="text-center">
-              <div className="h-16 border-b border-gray-700"></div>
-              <p className="text-sm font-bold mt-2">EL TRABAJADOR</p>
-              <p className="text-xs text-gray-700">{empleado?.nombre || '___________'}</p>
-              <p className="text-xs text-gray-600 mt-1">Fecha: ___/___/______</p>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ height: '64px', borderBottom: '1px solid #333' }}></div>
+              <div style={{ fontSize: '13px', fontWeight: 700, marginTop: '8px' }}>EL TRABAJADOR</div>
+              <div style={{ fontSize: '11px', color: '#444' }}>{empleado?.nombre || '___________'}</div>
+              <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>Fecha: ___/___/______</div>
             </div>
           </div>
         </div>
-
       </div>
+
+      {/* Estilos de impresión */}
+      <style>{`
+        @media print {
+          @page { size: letter; margin: 0; }
+          body * { visibility: hidden; }
+          .detalle-contrato,
+          .detalle-contrato * { visibility: visible; }
+          .detalle-contrato {
+            background: white !important;
+            padding: 0 !important;
+          }
+          .no-print { display: none !important; }
+          .print-area {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            padding: 20mm !important;
+            box-shadow: none !important;
+            border-radius: 0 !important;
+            margin: 0 !important;
+          }
+        }
+      `}</style>
     </div>
   )
 }
