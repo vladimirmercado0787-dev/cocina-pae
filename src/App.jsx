@@ -12,6 +12,7 @@ import WizardCompletado from './components/wizard/WizardCompletado'
 import LoginEmpresa from './components/auth/LoginEmpresa'
 import SeleccionOperador from './components/auth/SeleccionOperador'
 import LoginPin from './components/auth/LoginPin'
+import ResetPasswordPage from './components/auth/ResetPasswordPage'
 import DashboardDelDia from './components/dashboard/DashboardDelDia'
 import VistaDespachador from './components/despachador/VistaDespachador'
 import VistaAdministrador from './components/admin/VistaAdministrador'
@@ -32,9 +33,9 @@ import VistaContratos from './components/contratos/VistaContratos'
 import VistaMiContrato from './components/contratos/VistaMiContrato'
 import VistaNomina from './components/nomina/VistaNomina'
 import MisRecibos from './components/nomina/MisRecibos'
+import ReportesDGII from './components/dgii/ReportesDGII'
 
 function App() {
-  // 🟡 DEBUG: Intro Andamio forzada siempre. Restaurar lógica de localStorage cuando quieras.
   const [mostrarIntro, setMostrarIntro] = useState(true)
   const [mostrarIntroCocina, setMostrarIntroCocina] = useState(false)
 
@@ -47,7 +48,30 @@ function App() {
   const [tabFacturaInicial, setTabFacturaInicial] = useState('factura')
   const [cargando, setCargando] = useState(true)
 
+  // 🎯 DETECTAR si el usuario viene del email de recuperación de contraseña
+  // Supabase envía un link con #access_token=... en el hash de la URL.
+  // Si lo detectamos, forzamos la vista de reset_password.
   useEffect(() => {
+    const hash = window.location.hash
+    const pathname = window.location.pathname
+
+    // Caso 1: URL es /reset-password (ruta directa)
+    if (pathname === '/reset-password') {
+      setVistaActual('reset_password')
+      setMostrarIntro(false)  // saltarse el intro de Andamio
+      setCargando(false)
+      return
+    }
+
+    // Caso 2: hash trae access_token y type=recovery (vino del email de Supabase)
+    if (hash && hash.includes('type=recovery')) {
+      setVistaActual('reset_password')
+      setMostrarIntro(false)
+      setCargando(false)
+      return
+    }
+
+    // Caso normal: verificar sesión existente
     verificarSesionExistente()
   }, [])
 
@@ -124,6 +148,12 @@ function App() {
     setVistaActual('login_empresa')
   }
 
+  // 🎯 Al terminar reset de contraseña, llevar al login limpio
+  function resetCompletado() {
+    setVistaActual('login_empresa')
+    window.history.replaceState({}, document.title, '/')
+  }
+
   function volverASeleccion() {
     setUsuarioSeleccionado(null)
     setVistaActual('seleccion_operador')
@@ -169,6 +199,9 @@ function App() {
 
   const puedeConfigurar = usuarioLogueado && 
     (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador')
+
+  const puedeVerDGII = usuarioLogueado && 
+    (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'contador')
 
   const puedeVerCatalogo = usuarioLogueado !== null
   const puedeVerHistorial = usuarioLogueado !== null
@@ -247,6 +280,7 @@ function App() {
           onIrIngredientes={puedeGestionarIngredientes ? () => setVistaActual('ingredientes') : null}
           onIrGastos={puedeGestionarGastos ? () => setVistaActual('gastos') : null}
           onIrNomina={puedeGestionarNomina ? () => setVistaActual('nomina') : null}
+          onIrDGII={puedeVerDGII ? () => setVistaActual('dgii') : null}
           onVerComoSecretaria={usuarioLogueado.rol === 'administrador' ? () => setVistaActual('vista_secretaria_admin') : null}
           onIrCatalogo={puedeVerCatalogo ? () => setVistaActual('catalogo_recetas') : null}
           onIrHistorial={puedeVerHistorial ? () => setVistaActual('historial') : null}
@@ -276,6 +310,7 @@ function App() {
         onIrIngredientes={puedeGestionarIngredientes ? () => setVistaActual('ingredientes') : null}
         onIrGastos={puedeGestionarGastos ? () => setVistaActual('gastos') : null}
         onIrNomina={puedeGestionarNomina ? () => setVistaActual('nomina') : null}
+        onIrDGII={puedeVerDGII ? () => setVistaActual('dgii') : null}
         onVerComoSecretaria={usuarioLogueado.rol === 'propietario' ? () => setVistaActual('vista_secretaria_admin') : null}
         onIrCatalogo={puedeVerCatalogo ? () => setVistaActual('catalogo_recetas') : null}
         onIrHistorial={puedeVerHistorial ? () => setVistaActual('historial') : null}
@@ -284,14 +319,21 @@ function App() {
   }
 
   // ═══════════════════════════════════════════════════
-  // INTRO ANDAMIO - Se muestra primero (al abrir la app)
+  // 🎯 RESET PASSWORD - antes de cualquier intro
+  // ═══════════════════════════════════════════════════
+  if (vistaActual === 'reset_password') {
+    return <ResetPasswordPage onTerminado={resetCompletado} />
+  }
+
+  // ═══════════════════════════════════════════════════
+  // INTRO ANDAMIO
   // ═══════════════════════════════════════════════════
   if (mostrarIntro) {
     return <IntroAndamio onTerminada={terminarIntro} />
   }
 
   // ═══════════════════════════════════════════════════
-  // INTRO COCINA PAE - Tras poner el PIN, antes del dashboard
+  // INTRO COCINA PAE
   // ═══════════════════════════════════════════════════
   if (mostrarIntroCocina && usuarioLogueado) {
     return <IntroCocinaPAE onTerminada={terminarIntroCocina} />
@@ -498,6 +540,14 @@ function App() {
       
       {pasoActual === 7 && vistaActual === 'mis_recibos' && usuarioLogueado && puedeVerMisRecibos && (
         <MisRecibos 
+          usuario={usuarioLogueado}
+          empresaId={empresaActual?.id}
+          onVolver={() => setVistaActual('dashboard')}
+        />
+      )}
+      
+      {pasoActual === 7 && vistaActual === 'dgii' && usuarioLogueado && puedeVerDGII && (
+        <ReportesDGII 
           usuario={usuarioLogueado}
           empresaId={empresaActual?.id}
           onVolver={() => setVistaActual('dashboard')}

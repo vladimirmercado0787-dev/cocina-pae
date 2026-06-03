@@ -64,6 +64,7 @@ function DashboardDelDia({
   onIrIngredientes,
   onIrGastos,
   onIrNomina,
+  onIrDGII,
   onIrCatalogo,
   onIrHistorial,
   onIrFactura,
@@ -1001,7 +1002,7 @@ function DashboardDelDia({
           <Modulo emoji="🧾" label="Factura INABIE"   sublabel="Facturas mensuales" cat={CATEGORIAS.finanzas} tema={tema} onClick={onIrFactura ? () => onIrFactura() : () => mostrarProximamente('Factura INABIE')} />
           <Modulo emoji="🚚" label="Conduces"         sublabel="Mes en curso"       cat={CATEGORIAS.finanzas} tema={tema} onClick={onIrConduces ? () => onIrConduces() : () => mostrarProximamente('Conduces')} />
           <Modulo emoji="💸" label="Gastos"           sublabel="Categorías + RNC"   cat={CATEGORIAS.finanzas} tema={tema} onClick={onIrGastos ? onIrGastos : () => mostrarProximamente('Gastos')} />
-          <Modulo emoji="📊" label="Reportes DGII"    sublabel="606 · 607"          cat={CATEGORIAS.finanzas} tema={tema} proximamente onClick={() => mostrarProximamente('Reportes DGII 606/607')} />
+          <Modulo emoji="📊" label="Reportes DGII"    sublabel="606 · 607"          cat={CATEGORIAS.finanzas} tema={tema} onClick={onIrDGII ? onIrDGII : () => mostrarProximamente('Reportes DGII 606/607')} />
         </CategoriaBanner>
 
         <CategoriaBanner cat={CATEGORIAS.inventario} icon="📦" count={4} tema={tema} delay={0.65}>

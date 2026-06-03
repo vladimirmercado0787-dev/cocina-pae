@@ -5,7 +5,7 @@ function ProveedorSelector({
   empresaId,
   proveedores,
   proveedorSeleccionado,
-  onSeleccionar,
+  onSeleccionarProveedor,
   onProveedorCreado,
   disabled = false
 }) {
@@ -40,14 +40,14 @@ function ProveedorSelector({
     : proveedores
 
   function seleccionarProveedor(prov) {
-    onSeleccionar(prov)
+    onSeleccionarProveedor(prov)
     setBusqueda('')
     setMostrarDropdown(false)
     setModoCrear(false)
   }
 
   function quitarSeleccion() {
-    onSeleccionar(null)
+    onSeleccionarProveedor(null)
     setBusqueda('')
     setMostrarDropdown(false)
   }
@@ -92,7 +92,7 @@ function ProveedorSelector({
     if (error) { console.error(error); setErrorCrear('Error al crear: ' + error.message); return }
 
     if (onProveedorCreado) onProveedorCreado(data)
-    onSeleccionar(data)
+    onSeleccionarProveedor(data)
     setBusqueda(''); setMostrarDropdown(false); setModoCrear(false)
     setNuevoNombre(''); setNuevoRnc(''); setNuevoTelefono(''); setNuevaCategoria('')
   }
