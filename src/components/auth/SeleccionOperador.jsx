@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
+import ModalEmpleado from '../empleados/ModalEmpleado'
 
 // ─── Información visual por rol ───
 const ROL_INFO = {
@@ -15,6 +16,12 @@ const ROL_INFO = {
 function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
   const [usuarios, setUsuarios] = useState([])
   const [cargando, setCargando] = useState(true)
+
+  // ─── Flujo agregar empleado con autorización por PIN ───
+  const [pasoAutorizacion, setPasoAutorizacion] = useState(null) // null | 'seleccionar' | 'pin' | 'crear'
+  const [autorizadorSeleccionado, setAutorizadorSeleccionado] = useState(null)
+  const [pinIngresado, setPinIngresado] = useState('')
+  const [errorPin, setErrorPin] = useState('')
 
   const [tema, setTema] = useState(() => {
     return localStorage.getItem('cocina_pae_tema') || 'oscuro'
@@ -55,9 +62,71 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
     return ROL_INFO[rol] || ROL_INFO.ayudante
   }
 
+  // ─── FLUJO AUTORIZACIÓN ───
   function manejarAgregarEmpleado() {
-    alert('🚧 Próximamente: Modal de autorización (PIN propietario/admin)')
+    setPasoAutorizacion('seleccionar')
+    setAutorizadorSeleccionado(null)
+    setPinIngresado('')
+    setErrorPin('')
   }
+
+  function seleccionarAutorizador(usuario) {
+    setAutorizadorSeleccionado(usuario)
+    setPinIngresado('')
+    setErrorPin('')
+    setPasoAutorizacion('pin')
+  }
+
+  // ─── TECLADO NUMÉRICO TOUCH ───
+  function presionarTecla(digito) {
+    if (pinIngresado.length >= 4) return
+    const nuevoPin = pinIngresado + digito
+    setPinIngresado(nuevoPin)
+    if (errorPin) setErrorPin('')
+
+    // Auto-validar cuando completa los 4 dígitos
+    if (nuevoPin.length === 4) {
+      setTimeout(() => validarPinDirecto(nuevoPin), 150)
+    }
+  }
+
+  function borrarTecla() {
+    setPinIngresado(pinIngresado.slice(0, -1))
+    if (errorPin) setErrorPin('')
+  }
+
+  function limpiarPin() {
+    setPinIngresado('')
+    if (errorPin) setErrorPin('')
+  }
+
+  function validarPinDirecto(pin) {
+    if (!autorizadorSeleccionado) return
+    if (pin !== autorizadorSeleccionado.pin) {
+      setErrorPin('PIN incorrecto. Intenta de nuevo.')
+      setPinIngresado('')
+      return
+    }
+    setErrorPin('')
+    setPasoAutorizacion('crear')
+  }
+
+  function cerrarFlujoAutorizacion() {
+    setPasoAutorizacion(null)
+    setAutorizadorSeleccionado(null)
+    setPinIngresado('')
+    setErrorPin('')
+  }
+
+  async function empleadoCreado() {
+    cerrarFlujoAutorizacion()
+    await cargarUsuarios()
+  }
+
+  // Filtrar solo Propietario y Administrador para autorización
+  const autorizadoresValidos = usuarios.filter(u =>
+    u.rol === 'propietario' || u.rol === 'administrador'
+  )
 
   return (
     <div
@@ -70,9 +139,6 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
         flexDirection: 'column',
       }}
     >
-      {/* ═══════════════════════════════════════════════════
-          KEYFRAMES DE ANIMACIÓN
-          ═══════════════════════════════════════════════════ */}
       <style>{`
         @keyframes selOpSlideFromTop {
           0% { opacity: 0; transform: translateY(-20px); }
@@ -96,9 +162,26 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
           70% { transform: scale(1.15); }
           100% { transform: scale(1); }
         }
+        @keyframes modalFadeIn {
+          0% { opacity: 0; }
+          100% { opacity: 1; }
+        }
+        @keyframes modalSlideUp {
+          0% { opacity: 0; transform: translateY(20px) scale(0.96); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes pinDotPulse {
+          0% { transform: scale(0.5); opacity: 0.5; }
+          50% { transform: scale(1.15); opacity: 1; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes pinShake {
+          0%, 100% { transform: translateX(0); }
+          25% { transform: translateX(-8px); }
+          75% { transform: translateX(8px); }
+        }
       `}</style>
 
-      {/* Resplandores radiales del fondo */}
       <div
         style={{
           position: 'absolute',
@@ -110,7 +193,7 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
         }}
       />
 
-      {/* ─── HEADER (entra desde arriba) ─── */}
+      {/* ─── HEADER ─── */}
       <div
         style={{
           position: 'relative',
@@ -124,7 +207,6 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
           animation: 'selOpSlideFromTop 0.6s ease 0.1s forwards',
         }}
       >
-        {/* Logo Andamio izquierda */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div
             style={{
@@ -156,7 +238,6 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
           </span>
         </div>
 
-        {/* Toggle de tema + botón Cambiar empresa */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div
             style={{
@@ -186,13 +267,7 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
               }}
             >
               <span style={{ fontSize: '11px' }}>🌙</span>
-              <span
-                style={{
-                  fontSize: '11px',
-                  fontWeight: 500,
-                  color: tema === 'oscuro' ? 'white' : 'var(--color-text-muted)',
-                }}
-              >
+              <span style={{ fontSize: '11px', fontWeight: 500, color: tema === 'oscuro' ? 'white' : 'var(--color-text-muted)' }}>
                 Oscuro
               </span>
             </button>
@@ -212,13 +287,7 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
               }}
             >
               <span style={{ fontSize: '11px' }}>☀️</span>
-              <span
-                style={{
-                  fontSize: '11px',
-                  fontWeight: 500,
-                  color: tema === 'tropical' ? 'white' : 'var(--color-text-muted)',
-                }}
-              >
+              <span style={{ fontSize: '11px', fontWeight: 500, color: tema === 'tropical' ? 'white' : 'var(--color-text-muted)' }}>
                 Claro
               </span>
             </button>
@@ -263,7 +332,6 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
           paddingTop: '20px',
         }}
       >
-        {/* Título (fade in + sube) */}
         <div style={{ textAlign: 'center', marginBottom: '40px', maxWidth: '600px' }}>
           <h1
             style={{
@@ -292,7 +360,6 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
           </p>
         </div>
 
-        {/* Loading */}
         {cargando && (
           <div style={{ textAlign: 'center', padding: '40px' }}>
             <p style={{ color: 'var(--color-text-muted)', fontSize: '14px' }}>
@@ -301,7 +368,6 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
           </div>
         )}
 
-        {/* Empty state */}
         {!cargando && usuarios.length === 0 && (
           <div
             style={{
@@ -316,20 +382,12 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
               animation: 'selOpFadeInUp 0.6s ease 0.7s forwards',
             }}
           >
-            <p
-              style={{
-                color: esTropical ? '#633806' : 'var(--color-text-accent)',
-                fontSize: '14px',
-                margin: 0,
-                fontWeight: 500,
-              }}
-            >
+            <p style={{ color: esTropical ? '#633806' : 'var(--color-text-accent)', fontSize: '14px', margin: 0, fontWeight: 500 }}>
               ⚠️ No hay personas registradas. Completa el Paso 5 del Wizard primero.
             </p>
           </div>
         )}
 
-        {/* ─── GRID DE TARJETAS (cascada) ─── */}
         {!cargando && usuarios.length > 0 && (
           <div
             style={{
@@ -344,7 +402,6 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
             {usuarios.map((usuario, index) => {
               const info = getInfo(usuario.rol)
               const esPropietario = usuario.rol === 'propietario'
-              // Cada tarjeta entra 120ms después de la anterior, empezando a los 0.8s
               const delayCascada = 0.8 + (index * 0.12)
               return (
                 <button
@@ -353,15 +410,15 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
                   style={{
                     position: 'relative',
                     background: esTropical
-                      ? (esPropietario 
+                      ? (esPropietario
                           ? `linear-gradient(135deg, ${info.bgClaro} 0%, var(--color-bg-elevated) 100%)`
                           : 'var(--color-bg-elevated)')
                       : (esPropietario
                           ? `linear-gradient(135deg, ${info.bgClaro} 0%, rgba(250, 199, 117, 0.05) 100%)`
                           : 'var(--color-bg-card)'),
-                    border: esTropical 
+                    border: esTropical
                       ? `1px solid ${info.color}25`
-                      : (esPropietario 
+                      : (esPropietario
                           ? `1px solid ${info.color}80`
                           : `1px solid ${info.color}40`),
                     borderLeft: `4px solid ${info.color}`,
@@ -374,9 +431,7 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
                     gap: '10px',
                     transition: 'all 0.25s ease',
                     fontFamily: 'inherit',
-                    boxShadow: esTropical 
-                      ? `0 2px 8px ${info.color}10` 
-                      : 'none',
+                    boxShadow: esTropical ? `0 2px 8px ${info.color}10` : 'none',
                     opacity: 0,
                     animation: `selOpBounceIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) ${delayCascada}s forwards`,
                   }}
@@ -389,15 +444,12 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.transform = 'translateY(0)'
-                    e.currentTarget.style.borderColor = esTropical 
+                    e.currentTarget.style.borderColor = esTropical
                       ? `${info.color}25`
                       : (esPropietario ? `${info.color}80` : `${info.color}40`)
-                    e.currentTarget.style.boxShadow = esTropical 
-                      ? `0 2px 8px ${info.color}10` 
-                      : 'none'
+                    e.currentTarget.style.boxShadow = esTropical ? `0 2px 8px ${info.color}10` : 'none'
                   }}
                 >
-                  {/* Badge DUEÑA si es propietario */}
                   {esPropietario && (
                     <div
                       style={{
@@ -418,15 +470,12 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
                     </div>
                   )}
 
-                  {/* Avatar circular con color del rol (mini pop) */}
                   <div
                     style={{
                       width: '64px',
                       height: '64px',
                       borderRadius: '50%',
-                      background: esTropical 
-                        ? `${info.color}15`
-                        : `${info.color}25`,
+                      background: esTropical ? `${info.color}15` : `${info.color}25`,
                       border: `2px solid ${info.color}40`,
                       display: 'flex',
                       alignItems: 'center',
@@ -439,7 +488,6 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
                     {info.emoji}
                   </div>
 
-                  {/* Nombre */}
                   <p
                     style={{
                       color: esTropical ? info.colorDarker : 'var(--color-text-primary)',
@@ -454,7 +502,6 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
                     {usuario.nombre}
                   </p>
 
-                  {/* Rol como badge */}
                   <span
                     style={{
                       color: esTropical ? '#ffffff' : info.color,
@@ -473,7 +520,7 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
               )
             })}
 
-            {/* Tarjeta "+ Agregar empleado" (entra al final) */}
+            {/* Tarjeta "+ Agregar empleado" */}
             <button
               onClick={manejarAgregarEmpleado}
               style={{
@@ -495,8 +542,8 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.borderColor = 'var(--color-text-accent)'
-                e.currentTarget.style.background = esTropical 
-                  ? 'rgba(15, 110, 86, 0.04)' 
+                e.currentTarget.style.background = esTropical
+                  ? 'rgba(15, 110, 86, 0.04)'
                   : 'rgba(250, 199, 117, 0.05)'
               }}
               onMouseLeave={(e) => {
@@ -522,27 +569,10 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
               >
                 +
               </div>
-              <p
-                style={{
-                  color: 'var(--color-text-secondary)',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  margin: 0,
-                  textAlign: 'center',
-                }}
-              >
+              <p style={{ color: 'var(--color-text-secondary)', fontSize: '13px', fontWeight: 600, margin: 0, textAlign: 'center' }}>
                 Agregar empleado
               </p>
-              <p
-                style={{
-                  color: 'var(--color-text-muted)',
-                  fontSize: '10px',
-                  margin: 0,
-                  textAlign: 'center',
-                  letterSpacing: '0.3px',
-                  fontWeight: 500,
-                }}
-              >
+              <p style={{ color: 'var(--color-text-muted)', fontSize: '10px', margin: 0, textAlign: 'center', letterSpacing: '0.3px', fontWeight: 500 }}>
                 🔒 Requiere autorización
               </p>
             </button>
@@ -550,7 +580,7 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
         )}
       </div>
 
-      {/* ─── FOOTER (fade-in al final) ─── */}
+      {/* ─── FOOTER ─── */}
       <div
         style={{
           position: 'relative',
@@ -564,33 +594,414 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
         }}
       >
         {!cargando && usuarios.length > 0 && (
-          <p
-            style={{
-              color: 'var(--color-text-muted)',
-              fontSize: '11px',
-              marginBottom: '8px',
-              fontWeight: 500,
-            }}
-          >
+          <p style={{ color: 'var(--color-text-muted)', fontSize: '11px', marginBottom: '8px', fontWeight: 500 }}>
             {usuarios.length} {usuarios.length === 1 ? 'persona activa' : 'personas activas'}
           </p>
         )}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '14px' }}>🇩🇴</span>
-          <span
-            style={{
-              color: 'var(--color-text-accent)',
-              opacity: 0.85,
-              fontSize: '11px',
-              fontWeight: 600,
-              letterSpacing: '0.5px',
-            }}
-          >
+          <span style={{ color: 'var(--color-text-accent)', opacity: 0.85, fontSize: '11px', fontWeight: 600, letterSpacing: '0.5px' }}>
             Hecho en República Dominicana
           </span>
         </div>
       </div>
+
+      {/* ════════════════════════════════════════════════
+          MODAL: PASO 1 — ¿QUIÉN AUTORIZA?
+          ════════════════════════════════════════════════ */}
+      {pasoAutorizacion === 'seleccionar' && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 90,
+          background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '20px',
+          animation: 'modalFadeIn 0.2s ease forwards',
+        }}>
+          <div style={{
+            background: 'var(--color-bg-primary)',
+            border: '1px solid var(--color-border-accent)',
+            borderRadius: '16px',
+            maxWidth: '520px', width: '100%',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+            display: 'flex', flexDirection: 'column',
+            overflow: 'hidden',
+            animation: 'modalSlideUp 0.3s ease forwards',
+          }}>
+            <div style={{
+              padding: '20px 24px',
+              borderBottom: '1px solid var(--color-border-subtle)',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div style={{
+                  width: '44px', height: '44px', borderRadius: '12px',
+                  background: 'rgba(127, 119, 221, 0.18)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '22px',
+                }}>🔐</div>
+                <div>
+                  <div style={{ fontSize: '10px', color: '#7F77DD', letterSpacing: '1.5px', fontWeight: 600 }}>
+                    AUTORIZACIÓN REQUERIDA
+                  </div>
+                  <div style={{ fontSize: '17px', fontWeight: 500, color: 'var(--color-text-primary)', marginTop: '2px' }}>
+                    ¿Quién autoriza?
+                  </div>
+                </div>
+              </div>
+              <button onClick={cerrarFlujoAutorizacion} style={{
+                background: 'var(--color-bg-elevated)',
+                border: '1px solid var(--color-border-subtle)',
+                borderRadius: '20px', padding: '7px 14px',
+                color: 'var(--color-text-secondary)', fontSize: '12px',
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}>✖ Cancelar</button>
+            </div>
+
+            <div style={{ padding: '20px 24px' }}>
+              <p style={{
+                fontSize: '12px', color: 'var(--color-text-secondary)',
+                margin: '0 0 16px', lineHeight: 1.5,
+              }}>
+                Para agregar un empleado nuevo se requiere autorización del Propietario o Administrador. Selecciona tu usuario para validar tu PIN.
+              </p>
+
+              {autorizadoresValidos.length === 0 ? (
+                <div style={{
+                  background: 'rgba(244, 67, 54, 0.12)',
+                  border: '1px solid rgba(244, 67, 54, 0.35)',
+                  borderRadius: '10px', padding: '12px',
+                  fontSize: '12px', color: '#F4C0D1',
+                }}>
+                  ⚠️ No hay propietario o administrador registrado para autorizar.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {autorizadoresValidos.map(u => {
+                    const info = getInfo(u.rol)
+                    return (
+                      <button
+                        key={u.id}
+                        onClick={() => seleccionarAutorizador(u)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: '14px',
+                          padding: '14px',
+                          background: 'var(--color-bg-elevated)',
+                          border: `1px solid ${info.color}40`,
+                          borderLeft: `4px solid ${info.color}`,
+                          borderRadius: '12px',
+                          cursor: 'pointer',
+                          fontFamily: 'inherit',
+                          transition: 'all 0.2s ease',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = esTropical ? info.bgClaro : `${info.color}15`
+                          e.currentTarget.style.transform = 'translateX(2px)'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'var(--color-bg-elevated)'
+                          e.currentTarget.style.transform = 'translateX(0)'
+                        }}
+                      >
+                        <div style={{
+                          width: '46px', height: '46px', borderRadius: '50%',
+                          background: `${info.color}20`,
+                          border: `2px solid ${info.color}40`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: '24px', flexShrink: 0,
+                        }}>{info.emoji}</div>
+                        <div style={{ flex: 1, textAlign: 'left' }}>
+                          <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                            {u.nombre}
+                          </div>
+                          <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
+                            {info.label}
+                          </div>
+                        </div>
+                        <div style={{ color: 'var(--color-text-muted)', fontSize: '16px' }}>→</div>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════
+          MODAL: PASO 2 — INGRESAR PIN (TECLADO TOUCH)
+          ════════════════════════════════════════════════ */}
+      {pasoAutorizacion === 'pin' && autorizadorSeleccionado && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 90,
+          background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '20px', overflowY: 'auto',
+          animation: 'modalFadeIn 0.2s ease forwards',
+        }}>
+          <div style={{
+            background: 'var(--color-bg-primary)',
+            border: '1px solid var(--color-border-accent)',
+            borderRadius: '16px',
+            maxWidth: '420px', width: '100%',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+            display: 'flex', flexDirection: 'column',
+            overflow: 'hidden',
+            animation: 'modalSlideUp 0.3s ease forwards',
+          }}>
+            {/* Header */}
+            <div style={{
+              padding: '20px 24px',
+              borderBottom: '1px solid var(--color-border-subtle)',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div style={{
+                  width: '44px', height: '44px', borderRadius: '50%',
+                  background: `${getInfo(autorizadorSeleccionado.rol).color}25`,
+                  border: `2px solid ${getInfo(autorizadorSeleccionado.rol).color}40`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '22px',
+                }}>{getInfo(autorizadorSeleccionado.rol).emoji}</div>
+                <div>
+                  <div style={{ fontSize: '10px', color: getInfo(autorizadorSeleccionado.rol).color, letterSpacing: '1.5px', fontWeight: 600 }}>
+                    PIN DE ACCESO
+                  </div>
+                  <div style={{ fontSize: '16px', fontWeight: 500, color: 'var(--color-text-primary)', marginTop: '2px' }}>
+                    {autorizadorSeleccionado.nombre}
+                  </div>
+                </div>
+              </div>
+              <button onClick={() => setPasoAutorizacion('seleccionar')} style={{
+                background: 'var(--color-bg-elevated)',
+                border: '1px solid var(--color-border-subtle)',
+                borderRadius: '20px', padding: '7px 12px',
+                color: 'var(--color-text-secondary)', fontSize: '11px',
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}>← Atrás</button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '24px' }}>
+              <p style={{
+                fontSize: '12px', color: 'var(--color-text-secondary)',
+                margin: '0 0 20px', textAlign: 'center',
+              }}>
+                Ingresa tu PIN de 4 dígitos
+              </p>
+
+              {/* ─── INDICADOR DE 4 PUNTOS (PIN MASKED) ─── */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                gap: '14px',
+                marginBottom: '20px',
+                animation: errorPin ? 'pinShake 0.4s ease' : 'none',
+              }}>
+                {[0, 1, 2, 3].map((idx) => {
+                  const lleno = pinIngresado.length > idx
+                  return (
+                    <div
+                      key={idx}
+                      style={{
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '50%',
+                        background: lleno
+                          ? (errorPin ? '#E24B4A' : 'var(--color-text-accent)')
+                          : 'transparent',
+                        border: `2px solid ${errorPin ? '#E24B4A' : (lleno ? 'var(--color-text-accent)' : 'var(--color-border-strong)')}`,
+                        transition: 'all 0.2s ease',
+                        animation: lleno ? `pinDotPulse 0.3s ease ${idx * 0.05}s` : 'none',
+                      }}
+                    />
+                  )
+                })}
+              </div>
+
+              {/* Mensaje de error */}
+              {errorPin && (
+                <div style={{
+                  background: 'rgba(244, 67, 54, 0.12)',
+                  border: '1px solid rgba(244, 67, 54, 0.35)',
+                  borderRadius: '10px', padding: '10px 12px',
+                  fontSize: '12px', color: '#F4C0D1',
+                  marginBottom: '16px', textAlign: 'center',
+                }}>⚠️ {errorPin}</div>
+              )}
+
+              {/* ─── TECLADO NUMÉRICO TOUCH ─── */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '10px',
+              }}>
+                {/* Filas 1-9 */}
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+                  <BotonTecla
+                    key={num}
+                    digito={num}
+                    onClick={() => presionarTecla(String(num))}
+                    esTropical={esTropical}
+                  />
+                ))}
+
+                {/* Fila final: limpiar - 0 - borrar */}
+                <BotonAccion
+                  onClick={limpiarPin}
+                  esTropical={esTropical}
+                  disabled={pinIngresado.length === 0}
+                >
+                  ✖
+                </BotonAccion>
+
+                <BotonTecla
+                  digito={0}
+                  onClick={() => presionarTecla('0')}
+                  esTropical={esTropical}
+                />
+
+                <BotonAccion
+                  onClick={borrarTecla}
+                  esTropical={esTropical}
+                  disabled={pinIngresado.length === 0}
+                >
+                  ⌫
+                </BotonAccion>
+              </div>
+
+              {/* Hint inferior */}
+              <p style={{
+                fontSize: '11px',
+                color: 'var(--color-text-muted)',
+                textAlign: 'center',
+                margin: '16px 0 0',
+              }}>
+                Se valida automáticamente al completar 4 dígitos
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════
+          MODAL: PASO 3 — CREAR EMPLEADO
+          ════════════════════════════════════════════════ */}
+      {pasoAutorizacion === 'crear' && (
+        <ModalEmpleado
+          empresaId={empresaId}
+          empleadoExistente={null}
+          onCerrar={cerrarFlujoAutorizacion}
+          onGuardado={empleadoCreado}
+        />
+      )}
     </div>
+  )
+}
+
+// ─── COMPONENTES DEL TECLADO TOUCH ───
+
+function BotonTecla({ digito, onClick, esTropical }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        aspectRatio: '1 / 1',
+        background: esTropical
+          ? 'var(--color-bg-elevated)'
+          : 'var(--color-bg-card)',
+        border: '1px solid var(--color-border-subtle)',
+        borderRadius: '14px',
+        color: 'var(--color-text-primary)',
+        fontSize: '28px',
+        fontWeight: 500,
+        cursor: 'pointer',
+        fontFamily: 'inherit',
+        transition: 'all 0.1s ease',
+        userSelect: 'none',
+      }}
+      onMouseDown={(e) => {
+        e.currentTarget.style.transform = 'scale(0.94)'
+        e.currentTarget.style.background = esTropical
+          ? 'rgba(15, 110, 86, 0.08)'
+          : 'rgba(250, 199, 117, 0.1)'
+      }}
+      onMouseUp={(e) => {
+        e.currentTarget.style.transform = 'scale(1)'
+        e.currentTarget.style.background = esTropical
+          ? 'var(--color-bg-elevated)'
+          : 'var(--color-bg-card)'
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = 'scale(1)'
+        e.currentTarget.style.background = esTropical
+          ? 'var(--color-bg-elevated)'
+          : 'var(--color-bg-card)'
+      }}
+      onTouchStart={(e) => {
+        e.currentTarget.style.transform = 'scale(0.94)'
+        e.currentTarget.style.background = esTropical
+          ? 'rgba(15, 110, 86, 0.08)'
+          : 'rgba(250, 199, 117, 0.1)'
+      }}
+      onTouchEnd={(e) => {
+        e.currentTarget.style.transform = 'scale(1)'
+        e.currentTarget.style.background = esTropical
+          ? 'var(--color-bg-elevated)'
+          : 'var(--color-bg-card)'
+      }}
+    >
+      {digito}
+    </button>
+  )
+}
+
+function BotonAccion({ onClick, children, esTropical, disabled }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        aspectRatio: '1 / 1',
+        background: 'transparent',
+        border: '1px solid var(--color-border-subtle)',
+        borderRadius: '14px',
+        color: disabled ? 'var(--color-text-muted)' : 'var(--color-text-secondary)',
+        fontSize: '22px',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        fontFamily: 'inherit',
+        opacity: disabled ? 0.4 : 1,
+        transition: 'all 0.1s ease',
+        userSelect: 'none',
+      }}
+      onMouseDown={(e) => {
+        if (disabled) return
+        e.currentTarget.style.transform = 'scale(0.94)'
+        e.currentTarget.style.background = 'rgba(244, 67, 54, 0.08)'
+      }}
+      onMouseUp={(e) => {
+        if (disabled) return
+        e.currentTarget.style.transform = 'scale(1)'
+        e.currentTarget.style.background = 'transparent'
+      }}
+      onMouseLeave={(e) => {
+        if (disabled) return
+        e.currentTarget.style.transform = 'scale(1)'
+        e.currentTarget.style.background = 'transparent'
+      }}
+      onTouchStart={(e) => {
+        if (disabled) return
+        e.currentTarget.style.transform = 'scale(0.94)'
+        e.currentTarget.style.background = 'rgba(244, 67, 54, 0.08)'
+      }}
+      onTouchEnd={(e) => {
+        if (disabled) return
+        e.currentTarget.style.transform = 'scale(1)'
+        e.currentTarget.style.background = 'transparent'
+      }}
+    >
+      {children}
+    </button>
   )
 }
 
