@@ -230,7 +230,6 @@ function VistaDetalleContrato({ contratoId, onVolver }) {
       </div>
 
       {/* ─── CONTENIDO DEL CONTRATO (área imprimible) ─── */}
-      {/* Esta área SIEMPRE va blanca, con tipografía serif legal */}
       <div className="print-area" ref={contenidoRef} style={{
         position: 'relative', zIndex: 1,
         maxWidth: '1100px', margin: '0 auto',
@@ -447,7 +446,9 @@ function VistaDetalleContrato({ contratoId, onVolver }) {
         </div>
 
         <p style={{ textAlign: 'justify', marginTop: '24px', marginBottom: '32px' }}>
-          Hecho y firmado en dos (2) originales del mismo tenor y valor, uno para cada parte,
+          Hecho y firmado en cuatro (4) originales del mismo tenor y valor: uno para cada una de
+          las partes y dos (2) para ser remitidos por EL EMPLEADOR al Departamento de Trabajo o a
+          la autoridad local que ejerza sus funciones, conforme al artículo 22 del Código de Trabajo,
           en la fecha indicada al inicio del presente contrato.
         </p>
 
@@ -508,30 +509,117 @@ function VistaDetalleContrato({ contratoId, onVolver }) {
           </div>
         )}
 
-        {/* FIRMAS FÍSICAS */}
+        {/* FIRMAS FÍSICAS + HUELLA + SELLO */}
         <div style={{ marginTop: '48px' }}>
           <div style={{
             fontSize: '11px', fontWeight: 700, color: '#555',
-            letterSpacing: '1px', textAlign: 'center', marginBottom: '12px',
+            letterSpacing: '1px', textAlign: 'center', marginBottom: '16px',
           }}>
             FIRMAS FÍSICAS (manuscritas)
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px', alignItems: 'flex-start' }}>
+
+            {/* EMPLEADOR + SELLO */}
             <div style={{ textAlign: 'center' }}>
               <div style={{ height: '64px', borderBottom: '1px solid #333' }}></div>
               <div style={{ fontSize: '13px', fontWeight: 700, marginTop: '8px' }}>EL EMPLEADOR</div>
               <div style={{ fontSize: '11px', color: '#444' }}>{empresa?.nombre_propietario || '___________'}</div>
               <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>Fecha: ___/___/______</div>
+              <div style={{
+                marginTop: '14px',
+                border: '1px dashed #999', borderRadius: '8px',
+                height: '90px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <span style={{ fontSize: '10px', color: '#999' }}>Sello de la empresa</span>
+              </div>
             </div>
 
+            {/* TRABAJADOR + HUELLA */}
             <div style={{ textAlign: 'center' }}>
-              <div style={{ height: '64px', borderBottom: '1px solid #333' }}></div>
-              <div style={{ fontSize: '13px', fontWeight: 700, marginTop: '8px' }}>EL TRABAJADOR</div>
-              <div style={{ fontSize: '11px', color: '#444' }}>{empleado?.nombre || '___________'}</div>
-              <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>Fecha: ___/___/______</div>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', justifyContent: 'center' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ height: '64px', borderBottom: '1px solid #333' }}></div>
+                  <div style={{ fontSize: '13px', fontWeight: 700, marginTop: '8px' }}>EL TRABAJADOR</div>
+                  <div style={{ fontSize: '11px', color: '#444' }}>{empleado?.nombre || '___________'}</div>
+                  <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>Fecha: ___/___/______</div>
+                </div>
+                <div style={{ width: '90px', flexShrink: 0 }}>
+                  <div style={{
+                    border: '1px dashed #999', borderRadius: '8px',
+                    height: '90px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    textAlign: 'center', padding: '4px',
+                  }}>
+                    <span style={{ fontSize: '9px', color: '#999', lineHeight: 1.3 }}>Huella digital<br />(si no firma)</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
+
+        {/* TESTIGOS (Art. 21 Código de Trabajo) */}
+        <div style={{ marginTop: '40px' }}>
+          <div style={{
+            fontSize: '11px', fontWeight: 700, color: '#555',
+            letterSpacing: '1px', textAlign: 'center', marginBottom: '8px',
+          }}>
+            TESTIGOS
+          </div>
+          <p style={{ fontSize: '11px', color: '#444', textAlign: 'justify', marginBottom: '20px', fontStyle: 'italic' }}>
+            Los testigos abajo firmantes certifican que el presente contrato fue leído a las partes,
+            que éstas lo aprobaron en la forma indicada y que firmaron o estamparon sus señas digitales
+            en su presencia, conforme al artículo 21 del Código de Trabajo de la República Dominicana.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ height: '56px', borderBottom: '1px solid #333' }}></div>
+              <div style={{ fontSize: '13px', fontWeight: 700, marginTop: '8px' }}>TESTIGO 1</div>
+              <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>Nombre: _______________________</div>
+              <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>CC: _______________________</div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ height: '56px', borderBottom: '1px solid #333' }}></div>
+              <div style={{ fontSize: '13px', fontWeight: 700, marginTop: '8px' }}>TESTIGO 2</div>
+              <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>Nombre: _______________________</div>
+              <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>CC: _______________________</div>
+            </div>
+          </div>
+        </div>
+
+        {/* LEGALIZACIÓN NOTARIAL */}
+        <div style={{ marginTop: '40px', paddingTop: '24px', borderTop: '1px solid #ccc' }}>
+          <div style={{
+            fontSize: '11px', fontWeight: 700, color: '#555',
+            letterSpacing: '1px', textAlign: 'center', marginBottom: '12px',
+          }}>
+            LEGALIZACIÓN NOTARIAL
+          </div>
+          <p style={{ fontSize: '12px', color: '#333', textAlign: 'justify', marginBottom: '24px' }}>
+            Yo, _______________________________________, Notario Público de los del número del municipio
+            de _______________________, debidamente matriculado(a) en el Colegio Dominicano de Notarios bajo
+            el No. ____________, CERTIFICO Y DOY FE de que las firmas y/o señas digitales que anteceden fueron
+            puestas libre y voluntariamente en mi presencia por las partes, quienes me declararon conocer el
+            contenido y alcance del presente contrato. En la ciudad de _______________________, República Dominicana,
+            a los ______ días del mes de _______________ del año ____________.
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: '16px' }}>
+            <div style={{ textAlign: 'center', width: '60%' }}>
+              <div style={{ height: '64px', borderBottom: '1px solid #333' }}></div>
+              <div style={{ fontSize: '13px', fontWeight: 700, marginTop: '8px' }}>NOTARIO PÚBLICO</div>
+              <div style={{
+                marginTop: '14px',
+                border: '1px dashed #999', borderRadius: '8px',
+                height: '90px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <span style={{ fontSize: '10px', color: '#999' }}>Sello del notario</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       {/* Estilos de impresión */}
