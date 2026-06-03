@@ -40,14 +40,29 @@ export default function ModalPesarYDespachar({ operacion, empresaId, usuario, on
       const { data: escuelaData, error: errEsc } = await supabase.from('escuelas').select('*').eq('id', operacion.escuela_id).single()
       if (errEsc) throw errEsc
       setEscuela(escuelaData)
-      const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']
-      const diaSemana = diasSemana[new Date().getDay()]
-      const { data: recetas, error: errRec } = await supabase.from('recetas').select('id, nombre, emoji, dia_semana').eq('empresa_id', empresaId).eq('activa', true)
-      if (errRec) throw errRec
-      if (!recetas || recetas.length === 0) throw new Error('No hay recetas activas configuradas')
-      let receta = recetas.find(r => r.dia_semana === diaSemana)
-      if (!receta) receta = recetas[0]
+
+      // 🎯 FIX BUG-001: Leer la receta REAL que eligió el usuario en el pesaje crudo
+      // (guardada en operaciones_dia.receta_id), NO adivinar por dia_semana.
+      // Antes: si era sábado y no había receta default, agarraba la primera al azar (ej: sardinas).
+      // Ahora: usa exactamente lo que el usuario eligió y pesó como crudo.
+      let receta = null
+
+      if (operacion.receta_id) {
+        // Caso ideal: ya se hizo el pesaje crudo y se guardó la receta elegida
+        const { data: recetaElegida, error: errRecEle } = await supabase
+          .from('recetas')
+          .select('id, nombre, emoji, dia_semana')
+          .eq('id', operacion.receta_id)
+          .single()
+        if (errRecEle) throw errRecEle
+        receta = recetaElegida
+      } else {
+        // No se ha hecho pesaje crudo todavía → error claro al usuario
+        throw new Error('⚠️ Falta hacer el pesaje crudo primero. Sin pesaje crudo no se puede despachar — el sistema no sabe qué receta se cocinó hoy.')
+      }
+
       setRecetaDelDia(receta)
+
       const { data: opsHoy, error: errOps } = await supabase.from('operaciones_dia').select('raciones_planificadas, estado').eq('empresa_id', empresaId).eq('fecha', fechaHoy).neq('estado', 'sin_clase')
       if (errOps) throw errOps
       const totalRaciones = (opsHoy || []).reduce((sum, op) => sum + (op.raciones_planificadas || 0), 0)

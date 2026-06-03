@@ -175,6 +175,21 @@ export default function ModalPesajeCrudo({
       for (const ing of ingredientesAGuardar) {
         await supabase.from('ingredientes').update({ stock_actual: ing.stock_actual - ing.cantidad_real }).eq('id', ing.ingrediente_id)
       }
+
+      // 🎯 FIX BUG-001: Guardar la receta elegida en operaciones_dia.receta_id
+      // Esto es CRÍTICO para que el modal de despacho/cocido y el sobrante
+      // sepan EXACTAMENTE qué receta se cocinó, sin adivinar por día de la semana.
+      const { error: errReceta } = await supabase
+        .from('operaciones_dia')
+        .update({ receta_id: recetaSeleccionada.id })
+        .eq('empresa_id', empresaId)
+        .eq('fecha', fechaHoy)
+        .in('estado', ['preparando', 'lista', 'despachando', 'entregada', 'cerrada'])
+      if (errReceta) {
+        console.error('⚠️ Error guardando receta_id en operaciones_dia:', errReceta)
+        // No lanzamos error porque el pesaje ya se guardó. Solo loggeamos.
+      }
+
       alert(`${modoEdicion ? '✅ Pesaje actualizado' : '✅ Pesaje aprobado'}\n\n${ingredientesAGuardar.length} ingredientes registrados\n${racionesEditables} raciones`)
       if (onAprobado) onAprobado()
     } catch (err) {
