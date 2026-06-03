@@ -38,6 +38,7 @@ function ReportesDGII({ usuario, empresaId, onVolver }) {
   const [empresa, setEmpresa] = useState(null)
   const [gastos, setGastos] = useState([])
   const [cargando, setCargando] = useState(true)
+  const [yaDescargo, setYaDescargo] = useState(false)
 
   const hoy = new Date()
   const [mes, setMes] = useState(hoy.getMonth() + 1) // 1-12
@@ -51,6 +52,9 @@ function ReportesDGII({ usuario, empresaId, onVolver }) {
   const esTropical = tema === 'tropical'
 
   useEffect(() => { if (empresaId) cargarDatos() }, [empresaId, mes, anio])
+
+  // Al cambiar de mes, resetear el estado de "ya descargó"
+  useEffect(() => { setYaDescargo(false) }, [mes, anio])
 
   async function cargarDatos() {
     setCargando(true)
@@ -87,24 +91,19 @@ function ReportesDGII({ usuario, empresaId, onVolver }) {
   // Estructura oficial DGII:
   //   Línea 1 (ENCABEZADO): 606 | RNC empresa | Periodo AAAAMM | Cantidad de registros
   //   Líneas siguientes (DETALLE): una por cada gasto con NCF.
-  // Campos del detalle (separados por |):
-  //   RNC/Cédula | TipoId | TipoBienServicio | NCF | NCFModificado |
-  //   FechaComprobante | FechaPago | MontoFacturado | ITBISFacturado | FormaPago
   function generarTXT606() {
     const rncEmpresa = soloDigitos(empresa?.rnc)
     const periodo = `${anio}${String(mes).padStart(2, '0')}` // AAAAMM
     const cantidad = gastosValidos.length
 
-    // ENCABEZADO
     const encabezado = ['606', rncEmpresa, periodo, String(cantidad)].join('|')
 
-    // DETALLE
     const lineas = gastosValidos.map(g => {
       const id = soloDigitos(g.rnc)
       const tId = tipoId(g.rnc)
-      const tipoBienServicio = '09' // 09 = Gastos de servicios/otros (genérico V1)
-      const ncf = (g.ncf || '').trim().toUpperCase() // NCF siempre en MAYÚSCULA
-      const ncfMod = '' // sin notas de crédito en V1
+      const tipoBienServicio = '09'
+      const ncf = (g.ncf || '').trim().toUpperCase()
+      const ncfMod = ''
       const fechaComp = fechaDGII(g.fecha)
       const fechaPago = g.pagado ? fechaDGII(g.fecha) : ''
       const monto = num(g.subtotal).toFixed(2)
@@ -114,11 +113,9 @@ function ReportesDGII({ usuario, empresaId, onVolver }) {
       return [id, tId, tipoBienServicio, ncf, ncfMod, fechaComp, fechaPago, monto, itbis, formaPago].join('|')
     })
 
-    // Encabezado + detalle, todo junto
     return [encabezado, ...lineas].join('\r\n')
   }
 
-  // Forma de pago DGII: 01=efectivo, 02=cheque/transferencia, 03=tarjeta, 04=crédito
   function mapearFormaPago(fp) {
     const mapa = {
       efectivo: '01',
@@ -149,9 +146,14 @@ function ReportesDGII({ usuario, empresaId, onVolver }) {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
+
+    setYaDescargo(true)
   }
 
-  // Años disponibles para el selector (año actual y 2 atrás)
+  function abrirOficinaVirtual() {
+    window.open('https://ofv.dgii.gov.do/', '_blank', 'noopener,noreferrer')
+  }
+
   const aniosDisponibles = [hoy.getFullYear(), hoy.getFullYear() - 1, hoy.getFullYear() - 2]
 
   if (cargando) {
@@ -244,17 +246,49 @@ function ReportesDGII({ usuario, empresaId, onVolver }) {
             cursor: gastosValidos.length === 0 ? 'not-allowed' : 'pointer',
             fontFamily: 'inherit',
           }}>
-            📥 Descargar reporte 606 para la DGII
+            📥 Paso 1 · Descargar reporte 606
           </button>
-
-          {/* AVISO HONESTO DE QUÉ HACER */}
-          {gastosValidos.length > 0 && (
-            <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '12px', textAlign: 'center', lineHeight: 1.5 }}>
-              💡 Después de descargar, sube este archivo en la Oficina Virtual de la DGII<br />
-              (dgii.gov.do) <strong>antes del día 15</strong> del mes siguiente.
-            </div>
-          )}
         </div>
+
+        {/* GUÍA DE ENVÍO A LA DGII */}
+        {gastosValidos.length > 0 && (
+          <div style={{
+            background: esTropical ? '#F0F7FE' : 'rgba(55, 138, 221, 0.06)',
+            border: `1px solid ${AZUL.c}40`, borderLeft: `4px solid ${AZUL.c}`,
+            borderRadius: '14px', padding: '20px 22px', marginBottom: '20px',
+          }}>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: esTropical ? AZUL.dark : AZUL.bg, marginBottom: '4px' }}>
+              📤 ¿Cómo envío este reporte a la DGII?
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', lineHeight: 1.6, marginBottom: '16px' }}>
+              El archivo se descargó a tu dispositivo. Ahora súbelo a la página de la DGII siguiendo estos pasos.
+              Recuerda: tienes hasta el <strong>día 15</strong> del mes siguiente.
+            </div>
+
+            {/* Pasos */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '18px' }}>
+              <PasoGuia n="2" texto={<>Entra a la <strong>Oficina Virtual de la DGII</strong> con tu usuario (RNC) y clave. Usa el botón de abajo para abrirla.</>} />
+              <PasoGuia n="3" texto={<>En el menú, busca <strong>"Formatos de Envío"</strong> y luego <strong>"Enviar Archivos"</strong>.</>} />
+              <PasoGuia n="4" texto={<>Selecciona el formato <strong>606</strong> y adjunta el archivo que acabas de descargar (no le cambies el nombre).</>} />
+              <PasoGuia n="5" texto={<>Dale a <strong>Enviar</strong> y guarda el <strong>acuse de recibo</strong> (es tu comprobante de que cumpliste).</>} />
+            </div>
+
+            {/* Botón ir a la DGII */}
+            <button onClick={abrirOficinaVirtual} style={{
+              width: '100%', padding: '14px',
+              background: esTropical ? AZUL.dark : `linear-gradient(135deg, ${AZUL.c} 0%, ${AZUL.dark} 100%)`,
+              border: 'none', borderRadius: '12px',
+              color: 'white', fontSize: '14px', fontWeight: 700,
+              cursor: 'pointer', fontFamily: 'inherit',
+            }}>
+              🌐 Abrir la Oficina Virtual de la DGII →
+            </button>
+            <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '10px', textAlign: 'center', lineHeight: 1.5 }}>
+              Se abrirá en una pestaña nueva (ofv.dgii.gov.do). Necesitas tu usuario y clave de la DGII.<br />
+              💡 La primera vez, puedes revisar el archivo con la herramienta de Pre-Validación de la DGII.
+            </div>
+          </div>
+        )}
 
         {/* AVISO DE GASTOS SIN NCF */}
         {gastosSinNCF.length > 0 && (
@@ -321,6 +355,22 @@ function ReportesDGII({ usuario, empresaId, onVolver }) {
           </div>
         )}
 
+      </div>
+    </div>
+  )
+}
+
+function PasoGuia({ n, texto }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+      <div style={{
+        flexShrink: 0, width: '24px', height: '24px', borderRadius: '50%',
+        background: `${AZUL.c}25`, border: `1px solid ${AZUL.c}60`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: '12px', fontWeight: 700, color: AZUL.bg,
+      }}>{n}</div>
+      <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', lineHeight: 1.5, paddingTop: '2px' }}>
+        {texto}
       </div>
     </div>
   )
