@@ -6,11 +6,22 @@ const COLOR_OP_BG = '#AFA9EC'
 const COLOR_OP_DARKER = '#3C3489'
 const COLOR_OP_CLARO = '#EEEDFE'
 
+function num(v) {
+  const n = parseFloat(v)
+  return isNaN(n) ? 0 : n
+}
+function pick(obj, nombres, fallback = undefined) {
+  if (!obj) return fallback
+  for (const n of nombres) {
+    if (obj[n] !== undefined && obj[n] !== null) return obj[n]
+  }
+  return fallback
+}
+
 function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
   const [empresa, setEmpresa] = useState(null)
   const [finanzas, setFinanzas] = useState(null)
-  const [pesajesDia, setPesajesDia] = useState([])
-  const [pesajesIngs, setPesajesIngs] = useState([])
+  const [movimientosConsumo, setMovimientosConsumo] = useState([])
   const [pesajesOperacion, setPesajesOperacion] = useState([])
   const [operaciones, setOperaciones] = useState([])
   const [escuelas, setEscuelas] = useState([])
@@ -44,13 +55,17 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
     setRecetas(recetasData || [])
     const { data: opsData } = await supabase.from('operaciones_dia').select('*').eq('empresa_id', empresaId).gte('fecha', hace30Str)
     setOperaciones(opsData || [])
-    const { data: pesajesDiaData } = await supabase.from('pesajes_dia').select('*').eq('empresa_id', empresaId).gte('fecha', hace30Str)
-    setPesajesDia(pesajesDiaData || [])
-    if (pesajesDiaData && pesajesDiaData.length > 0) {
-      const pesajeIds = pesajesDiaData.map(p => p.id)
-      const { data: ingsData } = await supabase.from('pesajes_dia_ingredientes').select('*, ingredientes(*)').in('pesaje_dia_id', pesajeIds)
-      setPesajesIngs(ingsData || [])
-    }
+
+    // FUENTE DE VERDAD DEL COSTO REAL (INT-008):
+    // movimientos_inventario con origen='consumo_operacion'.
+    const { data: movConsumoData } = await supabase
+      .from('movimientos_inventario')
+      .select('*')
+      .eq('empresa_id', empresaId)
+      .eq('origen', 'consumo_operacion')
+      .gte('fecha', hace30Str)
+    setMovimientosConsumo(movConsumoData || [])
+
     if (opsData && opsData.length > 0) {
       const opIds = opsData.map(op => op.id)
       const { data: pesajesOpData } = await supabase.from('pesajes_operacion').select('*').in('operacion_id', opIds)
@@ -69,36 +84,52 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
     </div>
   }
 
-  const totalDiasOperados = pesajesDia.length
-  const totalOperacionesActivas = operaciones.filter(op => !op.no_hubo_clase).length
+  const operacionesActivas = operaciones.filter(op => !op.no_hubo_clase && op.estado !== 'sin_clase')
+  const totalOperacionesActivas = operacionesActivas.length
+  const fechasConOps = [...new Set(operacionesActivas.map(op => op.fecha))]
+
+  const fechasConConsumo = [...new Set(movimientosConsumo.map(m => m.fecha))]
+  const totalDiasOperados = fechasConConsumo.length
+
+  let costoTotalReal = 0
+  let racionesTotalesReal = 0
+  fechasConConsumo.forEach(fecha => {
+    const movsDeLaFecha = movimientosConsumo.filter(m => m.fecha === fecha)
+    const costoDelDia = movsDeLaFecha.reduce((sum, m) => sum + (num(m.cantidad) * num(m.precio_unitario)), 0)
+    costoTotalReal += costoDelDia
+    const racionesDelDia = operacionesActivas
+      .filter(op => op.fecha === fecha)
+      .reduce((sum, op) => sum + num(pick(op, ['raciones_planificadas', 'raciones'], 0)), 0)
+    racionesTotalesReal += racionesDelDia
+  })
+
+  const costoObjetivo = num(pick(finanzas, ['costo_objetivo_racion'], 35))
+  const costoRealPorRacion = racionesTotalesReal > 0 ? costoTotalReal / racionesTotalesReal : 0
+  const ahorroProRacion = costoObjetivo - costoRealPorRacion
+  const ahorro30dias = ahorroProRacion * racionesTotalesReal
+
+  let motivoCostoCero = null
+  if (totalDiasOperados > 0 && costoRealPorRacion === 0) {
+    const movsSinPrecio = movimientosConsumo.filter(m => num(m.precio_unitario) === 0).length
+    if (movimientosConsumo.length === 0) {
+      motivoCostoCero = 'No hay movimientos de consumo registrados. Aprueba el pesaje crudo del día desde el dashboard.'
+    } else if (movsSinPrecio === movimientosConsumo.length) {
+      motivoCostoCero = 'Los ingredientes no tenían precio al momento del pesaje (precio_unitario en 0). Configura precios en Ingredientes y vuelve a aprobar el pesaje.'
+    } else if (racionesTotalesReal === 0) {
+      motivoCostoCero = 'Hay costo de ingredientes pero 0 raciones en las operaciones de esos días. Revisa que las escuelas se hayan iniciado con sus raciones.'
+    } else {
+      motivoCostoCero = 'Costo real en 0 por datos incompletos. Revisa precios de ingredientes y raciones del día.'
+    }
+  }
+
   const pesajesCocinado = pesajesOperacion.filter(p => p.tipo === 'cocinado').length
   const pesajesSobrante = pesajesOperacion.filter(p => p.tipo === 'retorno').length
   const tasaCocinado = totalOperacionesActivas > 0 ? Math.round((pesajesCocinado / totalOperacionesActivas) * 100) : 0
   const tasaSobrante = totalOperacionesActivas > 0 ? Math.round((pesajesSobrante / totalOperacionesActivas) * 100) : 0
-  const fechasConOps = [...new Set(operaciones.filter(op => !op.no_hubo_clase).map(op => op.fecha))]
   const tasaCrudo = fechasConOps.length > 0 ? Math.round((totalDiasOperados / fechasConOps.length) * 100) : 0
   const calidadDatos = Math.round((tasaCrudo * 0.5 + tasaCocinado * 0.3 + tasaSobrante * 0.2))
-  const costoObjetivo = parseFloat(finanzas?.costo_objetivo_racion || 35)
 
-  let costoTotalReal = 0
-  let racionesTotalesReal = 0
-  pesajesDia.forEach(pd => {
-    const ingsDePesaje = pesajesIngs.filter(pi => pi.pesaje_dia_id === pd.id)
-    const costoDelDia = ingsDePesaje.reduce((sum, pi) => {
-      const ing = pi.ingredientes
-      if (!ing) return sum
-      return sum + (parseFloat(pi.peso_real) * parseFloat(ing.precio_unitario || 0))
-    }, 0)
-    costoTotalReal += costoDelDia
-    racionesTotalesReal += pd.total_raciones || 0
-  })
-
-  const costoRealPorRacion = racionesTotalesReal > 0 ? costoTotalReal / racionesTotalesReal : 0
-  const ahorroProRacion = costoObjetivo - costoRealPorRacion
-  const ahorro30dias = ahorroProRacion * racionesTotalesReal
-  const ingsEditados = pesajesIngs.filter(pi => pi.fue_editado).length
-  const totalIngsPesados = pesajesIngs.length
-  const tasaEdicion = totalIngsPesados > 0 ? Math.round((ingsEditados / totalIngsPesados) * 100) : 0
+  const totalIngsPesados = movimientosConsumo.length
 
   const sobrantePorEscuela = {}
   pesajesOperacion.filter(p => p.tipo === 'retorno').forEach(p => {
@@ -109,9 +140,9 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
     if (!sobrantePorEscuela[escuela.id]) {
       sobrantePorEscuela[escuela.id] = { nombre: escuela.nombre, totalSobrante: 0, totalCocinado: 0, muestras: 0 }
     }
-    sobrantePorEscuela[escuela.id].totalSobrante += parseFloat(p.peso || 0)
+    sobrantePorEscuela[escuela.id].totalSobrante += num(pick(p, ['peso', 'peso_real', 'peso_kg'], 0))
     const cocinado = pesajesOperacion.find(c => c.operacion_id === op.id && c.tipo === 'cocinado')
-    if (cocinado) sobrantePorEscuela[escuela.id].totalCocinado += parseFloat(cocinado.peso || 0)
+    if (cocinado) sobrantePorEscuela[escuela.id].totalCocinado += num(pick(cocinado, ['peso', 'peso_real', 'peso_kg'], 0))
     sobrantePorEscuela[escuela.id].muestras += 1
   })
 
@@ -120,9 +151,9 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
     pctSobrante: e.totalCocinado > 0 ? (e.totalSobrante / e.totalCocinado * 100) : 0
   })).sort((a, b) => b.pctSobrante - a.pctSobrante)
 
-  const opsSinClase = operaciones.filter(op => op.no_hubo_clase).length
+  const opsSinClase = operaciones.filter(op => op.no_hubo_clase || op.estado === 'sin_clase').length
 
-  const gastoTotal30dias = gastos.reduce((sum, g) => sum + parseFloat(g.total || 0), 0)
+  const gastoTotal30dias = gastos.reduce((sum, g) => sum + num(pick(g, ['total', 'monto', 'total_gasto'], 0)), 0)
   const gastosPorCategoria = {}
   gastos.forEach(g => {
     const cat = g.categorias_gasto
@@ -130,29 +161,29 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
     if (!gastosPorCategoria[cat.id]) {
       gastosPorCategoria[cat.id] = { id: cat.id, nombre: cat.nombre, icono: cat.icono, color: cat.color, total: 0, cantidad: 0 }
     }
-    gastosPorCategoria[cat.id].total += parseFloat(g.total || 0)
+    gastosPorCategoria[cat.id].total += num(pick(g, ['total', 'monto', 'total_gasto'], 0))
     gastosPorCategoria[cat.id].cantidad += 1
   })
   const categoriasOrdenadas = Object.values(gastosPorCategoria).map(c => ({
     ...c, pct: gastoTotal30dias > 0 ? (c.total / gastoTotal30dias * 100) : 0
   })).sort((a, b) => b.total - a.total)
 
-  const top3Gastos = [...gastos].sort((a, b) => parseFloat(b.total || 0) - parseFloat(a.total || 0)).slice(0, 3)
+  const top3Gastos = [...gastos].sort((a, b) => num(pick(b, ['total', 'monto'], 0)) - num(pick(a, ['total', 'monto'], 0))).slice(0, 3)
 
   const facturacionReal30 = operaciones
     .filter(op => op.estado === 'entregada' || op.estado === 'cerrada')
     .reduce((sum, op) => {
       const escuela = escuelas.find(e => e.id === op.escuela_id)
-      return sum + ((op.raciones_planificadas || 0) * (parseFloat(escuela?.precio_racion) || 0))
+      return sum + (num(pick(op, ['raciones_planificadas', 'raciones'], 0)) * num(pick(escuela, ['precio_racion'], 0)))
     }, 0)
 
   const racionesEntregadas30 = operaciones
     .filter(op => op.estado === 'entregada' || op.estado === 'cerrada')
-    .reduce((sum, op) => sum + (op.raciones_planificadas || 0), 0)
+    .reduce((sum, op) => sum + num(pick(op, ['raciones_planificadas', 'raciones'], 0)), 0)
 
   const margenReal = facturacionReal30 - gastoTotal30dias
   const margenRealPct = facturacionReal30 > 0 ? (margenReal / facturacionReal30 * 100) : 0
-  const margenMinimoObjetivo = parseFloat(finanzas?.margen_minimo_porcentaje || 25)
+  const margenMinimoObjetivo = num(pick(finanzas, ['margen_minimo_porcentaje'], 25))
   const costoTotalPorRacion = racionesEntregadas30 > 0 ? gastoTotal30dias / racionesEntregadas30 : 0
   const costoNoIngredientes = costoTotalPorRacion - costoRealPorRacion
 
@@ -206,7 +237,6 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
           </div>
         ) : (
           <>
-            {/* VISIÓN FINANCIERA */}
             <div style={{
               background: 'var(--color-modulo-bg)', border: '1px solid var(--color-modulo-border)',
               borderLeft: `4px solid ${COLOR_OP}`,
@@ -318,7 +348,7 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
                             </div>
                           </div>
                           <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-                            RD$ {parseFloat(g.total).toLocaleString('es-DO', { maximumFractionDigits: 0 })}
+                            RD$ {num(pick(g, ['total', 'monto'], 0)).toLocaleString('es-DO', { maximumFractionDigits: 0 })}
                           </div>
                         </div>
                       )
@@ -336,7 +366,6 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
               )}
             </div>
 
-            {/* SALUD DEL SISTEMA */}
             <div style={{ background: 'var(--color-modulo-bg)', border: '1px solid var(--color-modulo-border)', borderLeft: '4px solid #1D9E75', borderRadius: '14px', padding: '20px', marginBottom: '20px', boxShadow: 'var(--modulo-sombra)' }}>
               <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', letterSpacing: '1.5px', fontWeight: 600, marginBottom: '14px' }}>
                 📊 SALUD DEL SISTEMA
@@ -364,7 +393,6 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
               </div>
             </div>
 
-            {/* COSTO INGREDIENTES VS OBJETIVO */}
             <div style={{ background: 'var(--color-modulo-bg)', border: '1px solid var(--color-modulo-border)', borderLeft: '4px solid #EF9F27', borderRadius: '14px', padding: '20px', marginBottom: '20px', boxShadow: 'var(--modulo-sombra)' }}>
               <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', letterSpacing: '1.5px', fontWeight: 600, marginBottom: '14px' }}>
                 🥕 COSTO INGREDIENTES VS OBJETIVO
@@ -372,6 +400,22 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
               {totalDiasOperados === 0 ? (
                 <div style={{ textAlign: 'center', padding: '24px', fontSize: '13px', color: 'var(--color-text-muted)' }}>
                   Aprueba al menos un pesaje crudo para ver el costo real
+                </div>
+              ) : motivoCostoCero ? (
+                <div style={{
+                  background: esTropical ? '#FAF3E5' : 'rgba(186, 117, 23, 0.08)',
+                  border: '1px solid rgba(186, 117, 23, 0.3)', borderLeft: '4px solid #BA7517',
+                  borderRadius: '10px', padding: '16px 18px',
+                }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: esTropical ? '#854F0B' : '#FAC775', marginBottom: '6px' }}>
+                    ⚠️ El costo real salió en RD$ 0.00
+                  </div>
+                  <div style={{ fontSize: '12px', color: esTropical ? '#633806' : 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+                    {motivoCostoCero}
+                  </div>
+                  <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '10px', fontFamily: 'monospace' }}>
+                    Movimientos consumo: {movimientosConsumo.length} · días con consumo: {totalDiasOperados} · raciones: {racionesTotalesReal}
+                  </div>
                 </div>
               ) : (
                 <>
@@ -404,42 +448,34 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
                       </span>
                     </div>
                     <div style={{ fontSize: '11px', color: esTropical ? COLOR_OP : `${COLOR_OP}CC`, marginTop: '4px' }}>
-                      Basado en {racionesTotalesReal.toLocaleString()} raciones pesadas en {totalDiasOperados} días
+                      Basado en {racionesTotalesReal.toLocaleString()} raciones en {totalDiasOperados} día(s) con pesaje
                     </div>
                   </div>
                 </>
               )}
             </div>
 
-            {/* AJUSTES MANUALES */}
             {totalIngsPesados > 0 && (
               <div style={{ background: 'var(--color-modulo-bg)', border: '1px solid var(--color-modulo-border)', borderLeft: '4px solid #BA7517', borderRadius: '14px', padding: '20px', marginBottom: '20px', boxShadow: 'var(--modulo-sombra)' }}>
                 <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', letterSpacing: '1.5px', fontWeight: 600, marginBottom: '14px' }}>
-                  ✏️ AJUSTES MANUALES
+                  🥘 INGREDIENTES PESADOS
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{totalIngsPesados}</div>
-                    <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '4px' }}>Ingredientes pesados</div>
+                    <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '4px' }}>Movimientos de consumo</div>
                   </div>
                   <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '28px', fontWeight: 700, color: esTropical ? '#854F0B' : '#FAC775' }}>{ingsEditados}</div>
-                    <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '4px' }}>Fueron editados</div>
-                  </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '28px', fontWeight: 700, color: tasaEdicion < 20 ? (esTropical ? '#04342C' : '#5DCAA5') : tasaEdicion < 50 ? (esTropical ? '#854F0B' : '#FAC775') : (esTropical ? '#A32D2D' : '#F4C0D1') }}>
-                      {tasaEdicion}%
-                    </div>
-                    <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '4px' }}>Tasa de edición</div>
+                    <div style={{ fontSize: '28px', fontWeight: 700, color: esTropical ? '#04342C' : '#5DCAA5' }}>RD$ {costoTotalReal.toLocaleString('es-DO', { maximumFractionDigits: 0 })}</div>
+                    <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '4px' }}>Costo total ingredientes</div>
                   </div>
                 </div>
                 <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '14px', fontStyle: 'italic' }}>
-                  💡 Si la tasa es alta, puede que las recetas necesiten ajuste. Mientras más uses la app, mejor afinarán los valores.
+                  💡 Calculado desde los pesajes crudos aprobados en los últimos 30 días.
                 </div>
               </div>
             )}
 
-            {/* SOBRANTE POR ESCUELA */}
             {escuelasOrdenadas.length > 0 && (
               <div style={{ background: 'var(--color-modulo-bg)', border: '1px solid var(--color-modulo-border)', borderLeft: '4px solid #D85A30', borderRadius: '14px', padding: '20px', marginBottom: '20px', boxShadow: 'var(--modulo-sombra)' }}>
                 <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', letterSpacing: '1.5px', fontWeight: 600, marginBottom: '14px' }}>
@@ -468,7 +504,6 @@ function InteligenciaOperativa({ usuario, empresaId, onVolver }) {
               </div>
             )}
 
-            {/* DÍAS SIN CLASE */}
             {opsSinClase > 0 && (
               <div style={{
                 background: esTropical ? '#FAF3E5' : 'rgba(186, 117, 23, 0.08)',
@@ -510,7 +545,7 @@ function KpiMini({ label, valor, sublabel, color, esTropical }) {
       borderRadius: '10px', padding: '14px', textAlign: 'center',
     }}>
       <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', fontWeight: 700, letterSpacing: '1px' }}>{label}</div>
-      <div style={{ fontSize: '20px', fontWeight: 700, color: esTropical ? color : color, marginTop: '6px' }}>{valor}</div>
+      <div style={{ fontSize: '20px', fontWeight: 700, color: color, marginTop: '6px' }}>{valor}</div>
       <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '4px' }}>{sublabel}</div>
     </div>
   )
