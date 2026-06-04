@@ -27,7 +27,7 @@ const CATEGORIAS = {
     colorDarker: '#72243E',
     bgClaro: '#FBEAF0',
     label: 'Personal',
-    sublabel: 'Empleados, nómina, contratos y calculadora',
+    sublabel: 'Empleados, asistencia, nómina, contratos',
   },
   operacion: {
     color: '#7F77DD',
@@ -40,7 +40,7 @@ const CATEGORIAS = {
   },
 }
 
-function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario, onIrConfiguracion, onIrFactura, onIrConduces, onIrCalculadora, onIrInteligencia, onIrDespacho, onIrEmpleados, onIrContratos, onIrMiContrato, onIrMisRecibos, onIrProveedores, onIrCompras, onIrIngredientes, onVerComoSecretaria, onIrGastos, onIrNomina, onIrCatalogo, onIrHistorial }) {
+function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario, onIrConfiguracion, onIrFactura, onIrConduces, onIrCalculadora, onIrInteligencia, onIrDespacho, onIrEmpleados, onIrContratos, onIrMiContrato, onIrMisRecibos, onIrProveedores, onIrCompras, onIrIngredientes, onVerComoSecretaria, onIrGastos, onIrNomina, onIrCatalogo, onIrHistorial, onIrAsistencia }) {
   const [empresa, setEmpresa] = useState(null)
   const [escuelas, setEscuelas] = useState([])
   const [operaciones, setOperaciones] = useState([])
@@ -527,8 +527,9 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuar
           <Modulo emoji="👨‍🍳" label="Recetas"      sublabel="Catálogo"    cat={CATEGORIAS.inventario} tema={tema} onClick={onIrCatalogo ? onIrCatalogo : () => mostrarProximamente('Recetas')} />
         </CategoriaBanner>
 
-        <CategoriaBanner cat={CATEGORIAS.personal} icon="👥" count={4} tema={tema} delay={0.8}>
+        <CategoriaBanner cat={CATEGORIAS.personal} icon="👥" count={5} tema={tema} delay={0.8}>
           <Modulo emoji="👤" label="Empleados"   sublabel="Equipo"       cat={CATEGORIAS.personal} tema={tema} onClick={onIrEmpleados ? onIrEmpleados : () => mostrarProximamente('Empleados')} />
+          <Modulo emoji="🕐" label="Asistencia"  sublabel="Quién vino"   cat={CATEGORIAS.personal} tema={tema} onClick={onIrAsistencia ? onIrAsistencia : () => mostrarProximamente('Asistencia')} />
           <Modulo emoji="💵" label="Nómina"      sublabel="Pagos"        cat={CATEGORIAS.personal} tema={tema} onClick={onIrNomina ? onIrNomina : () => mostrarProximamente('Nómina')} />
           <Modulo emoji="📄" label="Contratos"   sublabel="Por empleado" cat={CATEGORIAS.personal} tema={tema} onClick={onIrContratos ? onIrContratos : () => mostrarProximamente('Contratos')} />
           <Modulo emoji="🧮" label="Calculadora" sublabel="Liquidación"  cat={CATEGORIAS.personal} tema={tema} onClick={onIrCalculadora ? onIrCalculadora : () => mostrarProximamente('Calculadora')} />

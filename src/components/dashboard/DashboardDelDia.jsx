@@ -32,7 +32,7 @@ const CATEGORIAS = {
     glowBg: 'rgba(212, 83, 126, 0.15)',
     bgClaro: '#FBEAF0',
     label: 'Personal',
-    sublabel: 'Empleados, nómina, contratos y calculadora',
+    sublabel: 'Empleados, asistencia, nómina, contratos',
   },
   operacion: {
     color: '#7F77DD',
@@ -65,6 +65,7 @@ function DashboardDelDia({
   onIrGastos,
   onIrNomina,
   onIrDGII,
+  onIrAsistencia,
   onIrCatalogo,
   onIrHistorial,
   onIrFactura,
@@ -1012,8 +1013,9 @@ function DashboardDelDia({
           <Modulo emoji="👨‍🍳" label="Recetas"      sublabel="Catálogo"    cat={CATEGORIAS.inventario} tema={tema} onClick={onIrCatalogo ? onIrCatalogo : () => mostrarProximamente('Recetas')} />
         </CategoriaBanner>
 
-        <CategoriaBanner cat={CATEGORIAS.personal} icon="👥" count={4} tema={tema} delay={0.8}>
+        <CategoriaBanner cat={CATEGORIAS.personal} icon="👥" count={5} tema={tema} delay={0.8}>
           <Modulo emoji="👤" label="Empleados"   sublabel="Equipo"       cat={CATEGORIAS.personal} tema={tema} onClick={onIrEmpleados ? onIrEmpleados : () => mostrarProximamente('Empleados')} />
+          <Modulo emoji="🕐" label="Asistencia"  sublabel="Quién vino"   cat={CATEGORIAS.personal} tema={tema} onClick={onIrAsistencia ? onIrAsistencia : () => mostrarProximamente('Asistencia')} />
           <Modulo emoji="💵" label="Nómina"      sublabel="Pagos"        cat={CATEGORIAS.personal} tema={tema} onClick={onIrNomina ? onIrNomina : () => mostrarProximamente('Nómina')} />
           <Modulo emoji="📄" label="Contratos"   sublabel="Por empleado" cat={CATEGORIAS.personal} tema={tema} onClick={onIrContratos ? onIrContratos : () => mostrarProximamente('Contratos')} />
           <Modulo emoji="🧮" label="Calculadora" sublabel="Liquidación"  cat={CATEGORIAS.personal} tema={tema} onClick={onIrCalculadora ? onIrCalculadora : () => mostrarProximamente('Calculadora')} />
