@@ -35,6 +35,7 @@ import VistaNomina from './components/nomina/VistaNomina'
 import MisRecibos from './components/nomina/MisRecibos'
 import ReportesDGII from './components/dgii/ReportesDGII'
 import VistaAsistencia from './components/asistencia/VistaAsistencia'
+import VistaEstadisticas from './components/estadisticas/VistaEstadisticas'
 
 function App() {
   const [mostrarIntro, setMostrarIntro] = useState(true)
@@ -207,6 +208,9 @@ function App() {
   const puedeVerAsistencia = usuarioLogueado && 
     (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador')
 
+  const puedeVerEstadisticas = usuarioLogueado && 
+    (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador')
+
   const puedeVerCatalogo = usuarioLogueado !== null
   const puedeVerHistorial = usuarioLogueado !== null
   const puedeVerMiContrato = usuarioLogueado && usuarioLogueado.rol !== 'propietario'
@@ -286,6 +290,7 @@ function App() {
           onIrNomina={puedeGestionarNomina ? () => setVistaActual('nomina') : null}
           onIrDGII={puedeVerDGII ? () => setVistaActual('dgii') : null}
           onIrAsistencia={puedeVerAsistencia ? () => setVistaActual('asistencia') : null}
+          onIrEstadisticas={puedeVerEstadisticas ? () => setVistaActual('estadisticas') : null}
           onVerComoSecretaria={usuarioLogueado.rol === 'administrador' ? () => setVistaActual('vista_secretaria_admin') : null}
           onIrCatalogo={puedeVerCatalogo ? () => setVistaActual('catalogo_recetas') : null}
           onIrHistorial={puedeVerHistorial ? () => setVistaActual('historial') : null}
@@ -317,6 +322,7 @@ function App() {
         onIrNomina={puedeGestionarNomina ? () => setVistaActual('nomina') : null}
         onIrDGII={puedeVerDGII ? () => setVistaActual('dgii') : null}
         onIrAsistencia={puedeVerAsistencia ? () => setVistaActual('asistencia') : null}
+        onIrEstadisticas={puedeVerEstadisticas ? () => setVistaActual('estadisticas') : null}
         onVerComoSecretaria={usuarioLogueado.rol === 'propietario' ? () => setVistaActual('vista_secretaria_admin') : null}
         onIrCatalogo={puedeVerCatalogo ? () => setVistaActual('catalogo_recetas') : null}
         onIrHistorial={puedeVerHistorial ? () => setVistaActual('historial') : null}
@@ -562,6 +568,14 @@ function App() {
       
       {pasoActual === 7 && vistaActual === 'asistencia' && usuarioLogueado && puedeVerAsistencia && (
         <VistaAsistencia 
+          usuario={usuarioLogueado}
+          empresaId={empresaActual?.id}
+          onVolver={() => setVistaActual('dashboard')}
+        />
+      )}
+      
+      {pasoActual === 7 && vistaActual === 'estadisticas' && usuarioLogueado && puedeVerEstadisticas && (
+        <VistaEstadisticas 
           usuario={usuarioLogueado}
           empresaId={empresaActual?.id}
           onVolver={() => setVistaActual('dashboard')}

@@ -66,6 +66,7 @@ function DashboardDelDia({
   onIrNomina,
   onIrDGII,
   onIrAsistencia,
+  onIrEstadisticas,
   onIrCatalogo,
   onIrHistorial,
   onIrFactura,
@@ -1021,8 +1022,9 @@ function DashboardDelDia({
           <Modulo emoji="🧮" label="Calculadora" sublabel="Liquidación"  cat={CATEGORIAS.personal} tema={tema} onClick={onIrCalculadora ? onIrCalculadora : () => mostrarProximamente('Calculadora')} />
         </CategoriaBanner>
 
-        <CategoriaBanner cat={CATEGORIAS.operacion} icon="🧠" count={4} tema={tema} delay={0.95}>
+        <CategoriaBanner cat={CATEGORIAS.operacion} icon="🧠" count={5} tema={tema} delay={0.95}>
           <Modulo emoji="💡" label="Inteligencia"    sublabel="Análisis"  cat={CATEGORIAS.operacion} tema={tema} onClick={onIrInteligencia ? onIrInteligencia : () => mostrarProximamente('Inteligencia')} />
+          <Modulo emoji="📊" label="Estadísticas"    sublabel="En qué pie" cat={CATEGORIAS.operacion} tema={tema} onClick={onIrEstadisticas ? onIrEstadisticas : () => mostrarProximamente('Estadísticas')} />
           <Modulo emoji="📜" label="Historial"       sublabel="Todas ops" cat={CATEGORIAS.operacion} tema={tema} onClick={onIrHistorial ? onIrHistorial : () => mostrarProximamente('Historial')} />
           <Modulo emoji="🏫" label="Centros INABIE"  sublabel={`${escuelas.length} escuelas`} cat={CATEGORIAS.operacion} tema={tema} proximamente onClick={() => mostrarProximamente('Centros INABIE')} />
           <Modulo emoji="⚙️" label="Configuración"  sublabel="Empresa"   cat={CATEGORIAS.operacion} tema={tema} onClick={onIrConfiguracion ? onIrConfiguracion : () => mostrarProximamente('Configuración')} />

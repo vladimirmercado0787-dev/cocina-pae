@@ -40,7 +40,7 @@ const CATEGORIAS = {
   },
 }
 
-function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario, onIrConfiguracion, onIrFactura, onIrConduces, onIrCalculadora, onIrInteligencia, onIrDespacho, onIrEmpleados, onIrContratos, onIrMiContrato, onIrMisRecibos, onIrProveedores, onIrCompras, onIrIngredientes, onVerComoSecretaria, onIrGastos, onIrNomina, onIrCatalogo, onIrHistorial, onIrAsistencia }) {
+function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuario, onIrConfiguracion, onIrFactura, onIrConduces, onIrCalculadora, onIrInteligencia, onIrDespacho, onIrEmpleados, onIrContratos, onIrMiContrato, onIrMisRecibos, onIrProveedores, onIrCompras, onIrIngredientes, onVerComoSecretaria, onIrGastos, onIrNomina, onIrCatalogo, onIrHistorial, onIrAsistencia, onIrEstadisticas }) {
   const [empresa, setEmpresa] = useState(null)
   const [escuelas, setEscuelas] = useState([])
   const [operaciones, setOperaciones] = useState([])
@@ -535,9 +535,10 @@ function VistaAdministrador({ usuario, empresaId, onCerrarSesion, onCambiarUsuar
           <Modulo emoji="🧮" label="Calculadora" sublabel="Liquidación"  cat={CATEGORIAS.personal} tema={tema} onClick={onIrCalculadora ? onIrCalculadora : () => mostrarProximamente('Calculadora')} />
         </CategoriaBanner>
 
-        <CategoriaBanner cat={CATEGORIAS.operacion} icon="🧠" count={4} tema={tema} delay={0.95}>
+        <CategoriaBanner cat={CATEGORIAS.operacion} icon="🧠" count={5} tema={tema} delay={0.95}>
           <Modulo emoji="🚚" label="Modo Despacho"   sublabel="Operación"   cat={CATEGORIAS.operacion} tema={tema} onClick={onIrDespacho ? onIrDespacho : () => mostrarProximamente('Modo Despacho')} />
           <Modulo emoji="💡" label="Inteligencia"    sublabel="Análisis"    cat={CATEGORIAS.operacion} tema={tema} onClick={onIrInteligencia ? onIrInteligencia : () => mostrarProximamente('Inteligencia')} />
+          <Modulo emoji="📊" label="Estadísticas"    sublabel="En qué pie"  cat={CATEGORIAS.operacion} tema={tema} onClick={onIrEstadisticas ? onIrEstadisticas : () => mostrarProximamente('Estadísticas')} />
           <Modulo emoji="📜" label="Historial"       sublabel="Todas ops"   cat={CATEGORIAS.operacion} tema={tema} onClick={onIrHistorial ? onIrHistorial : () => mostrarProximamente('Historial')} />
           <Modulo emoji="⚙️" label="Configuración"  sublabel={onIrConfiguracion ? "Empresa" : "Solo propietario"} cat={CATEGORIAS.operacion} tema={tema} proximamente={!onIrConfiguracion} onClick={onIrConfiguracion ? onIrConfiguracion : () => mostrarProximamente('Configuración (solo propietario)')} />
         </CategoriaBanner>
