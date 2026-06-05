@@ -10,16 +10,13 @@ const AZUL = '#378ADD'
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 
-const INICIALES_DOW = ['D', 'L', 'M', 'M', 'J', 'V', 'S']
-
 const ESTADOS_OPERATIVOS = ['preparando', 'lista', 'despachando', 'entregada', 'cerrada']
 
 function fmt(n) {
   return Math.round(n).toLocaleString('es-DO')
 }
-function fmtMiles(n) {
-  if (n >= 1000) return `RD$ ${(n / 1000).toFixed(0)}K`
-  return `RD$ ${Math.round(n)}`
+function fmtRD(n) {
+  return `RD$ ${Math.round(n).toLocaleString('es-DO')}`
 }
 
 function VistaEstadisticas({ usuario, empresaId, onVolver }) {
@@ -36,6 +33,8 @@ function VistaEstadisticas({ usuario, empresaId, onVolver }) {
   const [pesajes, setPesajes] = useState([])
   const [pesajeIngred, setPesajeIngred] = useState([])
   const [ingredientes, setIngredientes] = useState([])
+  const [gastos, setGastos] = useState([])
+  const [categoriasGasto, setCategoriasGasto] = useState([])
 
   const [tema, setTema] = useState(() => localStorage.getItem('cocina_pae_tema') || 'oscuro')
   useEffect(() => {
@@ -54,35 +53,23 @@ function VistaEstadisticas({ usuario, empresaId, onVolver }) {
     const ultimoDia = `${anio}-${String(mes + 1).padStart(2, '0')}-${String(ultimoDiaNum).padStart(2, '0')}`
 
     const { data: ops } = await supabase
-      .from('operaciones_dia')
-      .select('*')
-      .eq('empresa_id', empresaId)
-      .gte('fecha', primerDia)
-      .lte('fecha', ultimoDia)
+      .from('operaciones_dia').select('*')
+      .eq('empresa_id', empresaId).gte('fecha', primerDia).lte('fecha', ultimoDia)
     setOperaciones(ops || [])
 
     const { data: esc } = await supabase
-      .from('escuelas')
-      .select('id, nombre, precio_racion')
-      .eq('empresa_id', empresaId)
+      .from('escuelas').select('id, nombre, precio_racion').eq('empresa_id', empresaId)
     setEscuelas(esc || [])
 
     const { data: rec } = await supabase
-      .from('recetas')
-      .select('id, nombre, emoji')
-      .eq('empresa_id', empresaId)
+      .from('recetas').select('id, nombre, emoji').eq('empresa_id', empresaId)
     setRecetas(rec || [])
 
-    // Pesajes del mes (para costo por menú)
     const { data: pes } = await supabase
-      .from('pesajes_dia')
-      .select('id, fecha, receta_id, total_raciones')
-      .eq('empresa_id', empresaId)
-      .gte('fecha', primerDia)
-      .lte('fecha', ultimoDia)
+      .from('pesajes_dia').select('id, fecha, receta_id, total_raciones')
+      .eq('empresa_id', empresaId).gte('fecha', primerDia).lte('fecha', ultimoDia)
     setPesajes(pes || [])
 
-    // Ingredientes pesados (bajan de los pesajes del mes)
     const pesajeIds = (pes || []).map(p => p.id)
     if (pesajeIds.length > 0) {
       const { data: pIng } = await supabase
@@ -94,18 +81,24 @@ function VistaEstadisticas({ usuario, empresaId, onVolver }) {
       setPesajeIngred([])
     }
 
-    // Catálogo de ingredientes con precio
     const { data: ing } = await supabase
-      .from('ingredientes')
-      .select('id, nombre, precio_unitario')
-      .eq('empresa_id', empresaId)
+      .from('ingredientes').select('id, nombre, precio_unitario').eq('empresa_id', empresaId)
     setIngredientes(ing || [])
+
+    // ── Finanzas: gastos del mes ──
+    const { data: gas } = await supabase
+      .from('gastos').select('id, fecha, total, categoria_id')
+      .eq('empresa_id', empresaId).gte('fecha', primerDia).lte('fecha', ultimoDia)
+    setGastos(gas || [])
+
+    const { data: cats } = await supabase
+      .from('categorias_gasto').select('id, nombre, icono, color').eq('empresa_id', empresaId)
+    setCategoriasGasto(cats || [])
 
     setCargando(false)
   }
 
-  // ════════ CÁLCULOS DE PRODUCCIÓN ════════
-
+  // ════════ CÁLCULOS ════════
   const diasEnMes = new Date(anio, mes + 1, 0).getDate()
   const diasArray = Array.from({ length: diasEnMes }, (_, i) => i + 1)
 
@@ -118,40 +111,33 @@ function VistaEstadisticas({ usuario, empresaId, onVolver }) {
     return r ? { nombre: r.nombre, emoji: r.emoji || '🍽️' } : { nombre: 'Sin menú asignado', emoji: '🍽️' }
   }
 
-  // Operaciones que de verdad operaron (no sin_clase)
   const opsReales = operaciones.filter(op => ESTADOS_OPERATIVOS.includes(op.estado))
 
-  // Raciones por día (entregadas; si 0, planificadas)
   function racionesDeOp(op) {
     return (op.raciones_entregadas && op.raciones_entregadas > 0)
       ? op.raciones_entregadas
       : (op.raciones_planificadas || 0)
   }
 
+  // ── PRODUCCIÓN ──
   const racionesPorDia = diasArray.map(d => {
     const fecha = `${anio}-${String(mes + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-    const total = opsReales
-      .filter(op => op.fecha === fecha)
-      .reduce((s, op) => s + racionesDeOp(op), 0)
+    const total = opsReales.filter(op => op.fecha === fecha).reduce((s, op) => s + racionesDeOp(op), 0)
     return { dia: d, raciones: total, finde: [0, 6].includes(new Date(anio, mes, d).getDay()) }
   })
   const maxRaciones = Math.max(1, ...racionesPorDia.map(r => r.raciones))
   const totalRacionesMes = racionesPorDia.reduce((s, r) => s + r.raciones, 0)
   const diasOperados = racionesPorDia.filter(r => r.raciones > 0).length
 
-  // Costo de ingredientes por cada pesaje_dia
   function precioIngrediente(ingId) {
     const i = ingredientes.find(x => x.id === ingId)
     return parseFloat(i?.precio_unitario) || 0
   }
   function costoDePesaje(pesajeId) {
-    return pesajeIngred
-      .filter(pi => pi.pesaje_dia_id === pesajeId)
+    return pesajeIngred.filter(pi => pi.pesaje_dia_id === pesajeId)
       .reduce((s, pi) => s + (parseFloat(pi.peso_real) || 0) * precioIngrediente(pi.ingrediente_id), 0)
   }
 
-  // ── ANÁLISIS POR MENÚ ──
-  // Agrupamos las operaciones reales por receta
   const menuMap = {}
   opsReales.forEach(op => {
     const rid = op.receta_id_override || op.receta_id
@@ -162,7 +148,6 @@ function VistaEstadisticas({ usuario, empresaId, onVolver }) {
     menuMap[rid].raciones += rac
     menuMap[rid].facturacion += rac * precioEscuela(op.escuela_id)
   })
-  // Costo por receta: sumamos el costo de los pesajes de esa receta en el mes
   pesajes.forEach(p => {
     const rid = p.receta_id
     if (!rid || !menuMap[rid]) return
@@ -179,11 +164,7 @@ function VistaEstadisticas({ usuario, empresaId, onVolver }) {
     return { ...m, costo, margen, margenPct, costoRacion, ...info }
   }).sort((a, b) => b.margenPct - a.margenPct)
 
-  // ── SOBRANTE POR SEMANA ──
-  // Agrupamos peso_cocido y peso_sobrante por semana del mes
-  function semanaDelMes(dia) {
-    return Math.ceil(dia / 7) // 1..5
-  }
+  function semanaDelMes(dia) { return Math.ceil(dia / 7) }
   const semanas = {}
   opsReales.forEach(op => {
     const dia = parseInt(op.fecha.split('-')[2], 10)
@@ -198,6 +179,38 @@ function VistaEstadisticas({ usuario, empresaId, onVolver }) {
     return { semana: s, cocido, sobrante, pct }
   })
   const maxSobrantePct = Math.max(1, ...sobrantePorSemana.map(s => s.pct))
+
+  // ── FINANZAS ──
+  // Entró: facturación del mes (ops entregadas/cerradas × precio)
+  const facturacionMes = opsReales
+    .filter(op => op.estado === 'entregada' || op.estado === 'cerrada')
+    .reduce((s, op) => s + racionesDeOp(op) * precioEscuela(op.escuela_id), 0)
+
+  // Salió: gasto total del mes
+  const gastoMes = gastos.reduce((s, g) => s + (parseFloat(g.total) || 0), 0)
+
+  // Margen neto
+  const margenNeto = facturacionMes - gastoMes
+  const margenNetoPct = facturacionMes > 0 ? Math.round((margenNeto / facturacionMes) * 100) : 0
+
+  // Gasto por categoría
+  function infoCategoria(catId) {
+    const c = categoriasGasto.find(x => x.id === catId)
+    return c ? { nombre: c.nombre, icono: c.icono || '📦', color: c.color || MORADO.bg }
+             : { nombre: 'Sin categoría', icono: '📦', color: '#999' }
+  }
+  const gastoCatMap = {}
+  gastos.forEach(g => {
+    const cid = g.categoria_id || 'sin'
+    if (!gastoCatMap[cid]) gastoCatMap[cid] = 0
+    gastoCatMap[cid] += parseFloat(g.total) || 0
+  })
+  const gastoPorCategoria = Object.keys(gastoCatMap).map(cid => {
+    const info = cid === 'sin' ? { nombre: 'Sin categoría', icono: '📦', color: '#999' } : infoCategoria(cid)
+    const monto = gastoCatMap[cid]
+    const pct = gastoMes > 0 ? Math.round((monto / gastoMes) * 100) : 0
+    return { cid, monto, pct, ...info }
+  }).sort((a, b) => b.monto - a.monto)
 
   function cambiarMes(delta) {
     let nuevoMes = mes + delta, nuevoAnio = anio
@@ -260,17 +273,15 @@ function VistaEstadisticas({ usuario, empresaId, onVolver }) {
           <Pestana activa={tab === 'personal'} onClick={() => setTab('personal')} emoji="👥" texto="Personal" />
         </div>
 
-        {/* ════ CONTENIDO ════ */}
+        {/* ════ PRODUCCIÓN ════ */}
         {tab === 'produccion' && (
           <div>
-            {/* KPIs producción */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px', marginBottom: '24px' }}>
               <KpiCard label="Raciones del mes" valor={fmt(totalRacionesMes)} colorBorde={VERDE} />
               <KpiCard label="Días operados" valor={diasOperados} sublabel="con producción" colorBorde={MORADO.bg} />
               <KpiCard label="Menús distintos" valor={analisisMenu.length} sublabel="cocinados" colorBorde={AZUL} />
             </div>
 
-            {/* Producción por día */}
             <Seccion titulo="Producción por día" badge="por día">
               {totalRacionesMes === 0 ? (
                 <Vacio texto="No hay producción registrada este mes." />
@@ -279,16 +290,8 @@ function VistaEstadisticas({ usuario, empresaId, onVolver }) {
                   {racionesPorDia.map(r => (
                     <div key={r.dia} style={{ flex: '1 0 auto', minWidth: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', height: '100%' }}>
                       <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', width: '100%' }}>
-                        <div
-                          title={`${r.dia}: ${fmt(r.raciones)} raciones`}
-                          style={{
-                            width: '100%',
-                            height: `${(r.raciones / maxRaciones) * 100}%`,
-                            minHeight: r.raciones > 0 ? '3px' : '0',
-                            background: r.raciones > 0 ? MORADO.bg : 'transparent',
-                            borderRadius: '3px 3px 0 0',
-                          }}
-                        />
+                        <div title={`${r.dia}: ${fmt(r.raciones)} raciones`}
+                          style={{ width: '100%', height: `${(r.raciones / maxRaciones) * 100}%`, minHeight: r.raciones > 0 ? '3px' : '0', background: r.raciones > 0 ? MORADO.bg : 'transparent', borderRadius: '3px 3px 0 0' }} />
                       </div>
                       <span style={{ fontSize: '8px', color: r.finde ? 'var(--color-text-muted)' : 'var(--color-text-secondary)' }}>{r.dia}</span>
                     </div>
@@ -297,7 +300,6 @@ function VistaEstadisticas({ usuario, empresaId, onVolver }) {
               )}
             </Seccion>
 
-            {/* Análisis por menú */}
             <Seccion titulo="Análisis por menú" badge="lo más importante" badgeColor={MORADO}>
               <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', margin: '0 0 16px', lineHeight: 1.5 }}>
                 Cada menú usa ingredientes distintos. Aquí ves cuál te deja más ganancia y cuál te cuesta más.
@@ -309,11 +311,7 @@ function VistaEstadisticas({ usuario, empresaId, onVolver }) {
                   {analisisMenu.map(m => {
                     const colorMargen = m.margenPct >= 30 ? VERDE : m.margenPct >= 20 ? AMBAR : ROJO
                     return (
-                      <div key={m.recetaId} style={{
-                        background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-subtle)',
-                        borderRadius: '12px', padding: '14px 16px',
-                        display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap',
-                      }}>
+                      <div key={m.recetaId} style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-subtle)', borderRadius: '12px', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                         <div style={{ fontSize: '26px' }}>{m.emoji}</div>
                         <div style={{ flex: 1, minWidth: '160px' }}>
                           <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--color-text-primary)' }}>{m.nombre}</div>
@@ -334,7 +332,6 @@ function VistaEstadisticas({ usuario, empresaId, onVolver }) {
               )}
             </Seccion>
 
-            {/* Sobrante por semana */}
             <Seccion titulo="Sobrante / merma" badge="por semana">
               {sobrantePorSemana.length === 0 || sobrantePorSemana.every(s => s.cocido === 0) ? (
                 <Vacio texto="No hay datos de pesaje cocido/sobrante este mes." />
@@ -345,14 +342,10 @@ function VistaEstadisticas({ usuario, empresaId, onVolver }) {
                     return (
                       <div key={s.semana} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', height: '100%' }}>
                         <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', width: '100%', maxWidth: '60px' }}>
-                          <div
-                            title={`Semana ${s.semana}: ${s.sobrante.toFixed(1)} lb sobrante de ${s.cocido.toFixed(1)} lb`}
-                            style={{ width: '100%', height: `${(s.pct / maxSobrantePct) * 100}%`, minHeight: '4px', background: color, borderRadius: '4px 4px 0 0' }}
-                          />
+                          <div title={`Semana ${s.semana}: ${s.sobrante.toFixed(1)} lb sobrante de ${s.cocido.toFixed(1)} lb`}
+                            style={{ width: '100%', height: `${(s.pct / maxSobrantePct) * 100}%`, minHeight: '4px', background: color, borderRadius: '4px 4px 0 0' }} />
                         </div>
-                        <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)', textAlign: 'center' }}>
-                          S{s.semana}<br />{s.pct.toFixed(1)}%
-                        </span>
+                        <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)', textAlign: 'center' }}>S{s.semana}<br />{s.pct.toFixed(1)}%</span>
                       </div>
                     )
                   })}
@@ -362,10 +355,72 @@ function VistaEstadisticas({ usuario, empresaId, onVolver }) {
           </div>
         )}
 
+        {/* ════ FINANZAS ════ */}
         {tab === 'finanzas' && (
-          <ProximamenteTab emoji="💰" texto="Finanzas" detalle="Facturación vs gastos, margen neto, gasto por categoría y cobros INABIE." />
+          <div>
+            {/* KPIs grandes: entró, salió, neto */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '24px' }}>
+              <KpiCard label="Entró (facturado)" valor={fmtRD(facturacionMes)} sublabel="ventas a INABIE" colorBorde={VERDE} colorTexto={esTropical ? '#04342C' : '#5DCAA5'} />
+              <KpiCard label="Salió (gastos)" valor={fmtRD(gastoMes)} sublabel="gastos del mes" colorBorde={ROJO} colorTexto={esTropical ? '#A32D2D' : '#F4C0D1'} />
+              <KpiCard label="Quedó (neto)" valor={fmtRD(margenNeto)} sublabel={`${margenNetoPct}% de lo facturado`} colorBorde={margenNeto >= 0 ? MORADO.bg : ROJO} colorTexto={margenNeto >= 0 ? (esTropical ? MORADO.dark : MORADO.bg) : (esTropical ? '#A32D2D' : '#F4C0D1')} />
+            </div>
+
+            {/* Barra entró vs salió */}
+            <Seccion titulo="Entró vs Salió" badge="este mes">
+              {facturacionMes === 0 && gastoMes === 0 ? (
+                <Vacio texto="No hay movimientos financieros este mes." />
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <BarraComparativa label="Entró" monto={facturacionMes} max={Math.max(facturacionMes, gastoMes)} color={VERDE} />
+                  <BarraComparativa label="Salió" monto={gastoMes} max={Math.max(facturacionMes, gastoMes)} color={ROJO} />
+                  <div style={{ borderTop: '1px solid var(--color-border-subtle)', paddingTop: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
+                      {margenNeto >= 0 ? '✅ Ganancia neta' : '⚠️ Pérdida neta'}
+                    </span>
+                    <span style={{ fontSize: '18px', fontWeight: 700, color: margenNeto >= 0 ? VERDE : ROJO }}>
+                      {fmtRD(margenNeto)}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </Seccion>
+
+            {/* Gasto por categoría */}
+            <Seccion titulo="¿En qué se va el dinero?" badge="gasto por categoría" badgeColor={MORADO}>
+              {gastoPorCategoria.length === 0 ? (
+                <Vacio texto="No hay gastos registrados este mes." />
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {gastoPorCategoria.map(c => (
+                    <div key={c.cid} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ fontSize: '22px', width: '32px', textAlign: 'center' }}>{c.icono}</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-primary)' }}>{c.nombre}</span>
+                          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>{fmtRD(c.monto)}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div style={{ flex: 1, height: '8px', background: 'var(--color-border-subtle)', borderRadius: '4px', overflow: 'hidden' }}>
+                            <div style={{ width: `${c.pct}%`, height: '100%', background: c.color, borderRadius: '4px' }} />
+                          </div>
+                          <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', minWidth: '34px', textAlign: 'right' }}>{c.pct}%</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Seccion>
+
+            {facturacionMes > 0 && gastoMes > 0 && (
+              <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', lineHeight: 1.6, padding: '0 4px' }}>
+                💡 De cada RD$ 100 que facturaste, gastaste RD$ {Math.round((gastoMes / facturacionMes) * 100)} y te quedaron RD$ {Math.round((margenNeto / facturacionMes) * 100)}.
+              </div>
+            )}
+          </div>
         )}
 
+        {/* ════ PERSONAL ════ */}
         {tab === 'personal' && (
           <ProximamenteTab emoji="👥" texto="Personal" detalle="Asistencia por empleado, faltas y costo de nómina." />
         )}
@@ -376,6 +431,21 @@ function VistaEstadisticas({ usuario, empresaId, onVolver }) {
 }
 
 // ─── Subcomponentes ───
+
+function BarraComparativa({ label, monto, max, color }) {
+  const pct = max > 0 ? (monto / max) * 100 : 0
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+        <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{label}</span>
+        <span style={{ fontSize: '14px', fontWeight: 600, color }}>{fmtRD(monto)}</span>
+      </div>
+      <div style={{ height: '14px', background: 'var(--color-border-subtle)', borderRadius: '7px', overflow: 'hidden' }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: '7px' }} />
+      </div>
+    </div>
+  )
+}
 
 function Pestana({ activa, onClick, emoji, texto }) {
   return (
@@ -416,14 +486,14 @@ function Seccion({ titulo, badge, badgeColor, children }) {
   )
 }
 
-function KpiCard({ label, valor, sublabel, colorBorde }) {
+function KpiCard({ label, valor, sublabel, colorBorde, colorTexto }) {
   return (
     <div style={{
       background: 'var(--color-modulo-bg)', border: '1px solid var(--color-modulo-border)',
       borderLeft: `4px solid ${colorBorde}`, borderRadius: '12px', padding: '14px', boxShadow: 'var(--modulo-sombra)',
     }}>
       <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginBottom: '8px', fontWeight: 500 }}>{label}</div>
-      <div style={{ fontSize: '24px', fontWeight: 600, color: 'var(--color-text-primary)' }}>{valor}</div>
+      <div style={{ fontSize: '24px', fontWeight: 600, color: colorTexto || 'var(--color-text-primary)' }}>{valor}</div>
       {sublabel && <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '4px' }}>{sublabel}</div>}
     </div>
   )
@@ -446,9 +516,7 @@ function ProximamenteTab({ emoji, texto, detalle }) {
     }}>
       <div style={{ fontSize: '48px', marginBottom: '12px' }}>{emoji}</div>
       <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--color-text-primary)', margin: '0 0 8px' }}>{texto}</h3>
-      <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', margin: '0 auto', maxWidth: '360px', lineHeight: 1.5 }}>
-        {detalle}
-      </p>
+      <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', margin: '0 auto', maxWidth: '360px', lineHeight: 1.5 }}>{detalle}</p>
       <div style={{ marginTop: '14px', fontSize: '11px', color: MORADO.bg, fontWeight: 600, letterSpacing: '0.5px' }}>PRÓXIMAMENTE</div>
     </div>
   )
