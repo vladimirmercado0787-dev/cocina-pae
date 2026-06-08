@@ -20,6 +20,10 @@ const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
 
 const ESTADOS_OPERATIVOS = ['preparando', 'lista', 'despachando', 'entregada', 'cerrada']
 
+const LIMITE_FALTAS = 2
+const UMBRAL_NOMINA = 12
+const UMBRAL_SOBRANTE = 5
+
 function fmt(n) { return Math.round(n).toLocaleString('es-DO') }
 function fmtRD(n) { return `RD$ ${Math.round(n).toLocaleString('es-DO')}` }
 
@@ -250,9 +254,60 @@ function VistaEstadisticas({ usuario, empresaId, onVolver }) {
   const totalFaltas = asistenciaPorEmpleado.reduce((s, e) => s + e.falto, 0)
   const costoNominaMes = pagosNomina.reduce((s, p) => s + (parseFloat(p.total_bruto) || 0), 0)
   const pagosRealizados = pagosNomina.length
+  const nominaPct = facturacionMes > 0 ? Math.round((costoNominaMes / facturacionMes) * 100) : 0
 
   const maxSobrante = Math.max(1, ...sobrantePorSemana.map(s => s.pct))
   const maxEntroSalio = Math.max(1, facturacionMes, gastoMes)
+
+  // ════════ MOTOR DE SUGERENCIAS ════════
+  // Regla sagrada: NUNCA sugerir bajar contrato INABIE. Solo señalar lo accionable del lado del proveedor.
+
+  const sugProduccion = []
+  if (analisisMenu.length > 0) {
+    const mejor = analisisMenu[0]
+    const peor = analisisMenu[analisisMenu.length - 1]
+    if (mejor.margenPct >= 30) {
+      sugProduccion.push({ tipo: 'verde', icono: '🌟', texto: `Tu menú más rentable es ${mejor.emoji} ${mejor.nombre} (${mejor.margenPct}% de margen). Cocínalo más seguido cuando puedas.` })
+    }
+    if (peor.margenPct < 20 && peor.recetaId !== mejor.recetaId) {
+      sugProduccion.push({ tipo: 'rojo', icono: '🔍', texto: `${peor.emoji} ${peor.nombre} te deja poco margen (${peor.margenPct}%). Revisa el costo de sus ingredientes o cómo lo estás comprando.` })
+    }
+  }
+  const semanaMasSobra = [...sobrantePorSemana].sort((a, b) => b.pct - a.pct)[0]
+  if (semanaMasSobra && semanaMasSobra.pct >= UMBRAL_SOBRANTE) {
+    sugProduccion.push({ tipo: 'ambar', icono: '🍲', texto: `La ${semanaMasSobra.semana.toLowerCase()} sobró ${semanaMasSobra.pct}% de la comida. Estás cocinando un poco de más — ajusta las raciones para no botar.` })
+  }
+
+  const sugFinanzas = []
+  if (facturacionMes > 0) {
+    if (margenNetoPct >= 25) {
+      sugFinanzas.push({ tipo: 'verde', icono: '✅', texto: `Te quedó ${margenNetoPct}% de lo que facturaste este mes. Vas bien, sigue así.` })
+    } else if (margenNetoPct >= 10) {
+      sugFinanzas.push({ tipo: 'ambar', icono: '⚖️', texto: `Tu margen quedó en ${margenNetoPct}% este mes, un poco apretado. Ojo con los gastos.` })
+    } else {
+      sugFinanzas.push({ tipo: 'rojo', icono: '⚠️', texto: `Tu margen quedó muy bajo (${margenNetoPct}%). Revisa abajo en qué se está yendo el dinero.` })
+    }
+    if (gastoPorCategoria.length > 0) {
+      const mayorGasto = gastoPorCategoria[0]
+      if (mayorGasto.pct >= 50 && mayorGasto.cid !== 'sin') {
+        sugFinanzas.push({ tipo: 'ambar', icono: '💸', texto: `${mayorGasto.icono} ${mayorGasto.name} se llevó el ${mayorGasto.pct}% de tus gastos (${fmtRD(mayorGasto.monto)}). Es tu gasto más grande, vigílalo.` })
+      }
+    }
+  }
+
+  const sugPersonal = []
+  const conFaltas = asistenciaPorEmpleado.filter(e => e.falto >= LIMITE_FALTAS)
+  conFaltas.forEach(e => {
+    sugPersonal.push({ tipo: 'rojo', icono: '👤', texto: `${e.primerNombre} faltó ${e.falto} ${e.falto === 1 ? 'vez' : 'veces'} sin justificar este mes. Sería bueno hablar con esa persona.` })
+  })
+  if (pagosRealizados > 0 && facturacionMes > 0) {
+    if (nominaPct > UMBRAL_NOMINA) {
+      sugPersonal.push({ tipo: 'ambar', icono: '💰', texto: `La nómina se llevó el ${nominaPct}% de lo facturado. Lo normal en tu cocina ronda 7-10% — revisa si está pesada este mes.` })
+    }
+  }
+  if (totalDiasTrabajo > 0 && pctEquipo >= 90 && asistenciaPorEmpleado.length > 0) {
+    sugPersonal.push({ tipo: 'verde', icono: '👏', texto: `Tu equipo asistió muy bien este mes (${pctEquipo}% promedio). Buen trabajo manteniéndolos.` })
+  }
 
   function cambiarMes(delta) {
     let nuevoMes = mes + delta, nuevoAnio = anio
@@ -387,6 +442,8 @@ function VistaEstadisticas({ usuario, empresaId, onVolver }) {
                 </div>
               )}
             </Seccion>
+
+            <Sugerencias lista={sugProduccion} esTropical={esTropical} />
           </div>
         )}
 
@@ -439,11 +496,7 @@ function VistaEstadisticas({ usuario, empresaId, onVolver }) {
               )}
             </Seccion>
 
-            {facturacionMes > 0 && gastoMes > 0 && (
-              <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', lineHeight: 1.6, padding: '0 4px' }}>
-                💡 De cada RD$ 100 que facturaste, gastaste RD$ {Math.round((gastoMes / facturacionMes) * 100)} y te quedaron RD$ {Math.round((margenNeto / facturacionMes) * 100)}.
-              </div>
-            )}
+            <Sugerencias lista={sugFinanzas} esTropical={esTropical} />
           </div>
         )}
 
@@ -492,16 +545,50 @@ function VistaEstadisticas({ usuario, empresaId, onVolver }) {
                   </div>
                   {facturacionMes > 0 && (
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: '20px', fontWeight: 600, color: MORADO.bg }}>{Math.round((costoNominaMes / facturacionMes) * 100)}%</div>
+                      <div style={{ fontSize: '20px', fontWeight: 600, color: MORADO.bg }}>{nominaPct}%</div>
                       <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>de lo facturado</div>
                     </div>
                   )}
                 </div>
               )}
             </Seccion>
+
+            <Sugerencias lista={sugPersonal} esTropical={esTropical} />
           </div>
         )}
 
+      </div>
+    </div>
+  )
+}
+
+// ─── Tarjetitas de sugerencias ───
+function Sugerencias({ lista, esTropical }) {
+  if (!lista || lista.length === 0) return null
+  const estilos = {
+    rojo: { bg: esTropical ? '#FCEBEB' : 'rgba(226,75,74,0.12)', borde: ROJO, texto: esTropical ? '#A32D2D' : '#F4C0D1' },
+    ambar: { bg: esTropical ? '#FAEEDA' : 'rgba(239,159,39,0.12)', borde: AMBAR, texto: esTropical ? '#633806' : '#FAC775' },
+    verde: { bg: esTropical ? '#D7F0DD' : 'rgba(29,158,117,0.12)', borde: VERDE, texto: esTropical ? '#04342C' : '#5DCAA5' },
+  }
+  return (
+    <div style={{ marginTop: '4px', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+        <span style={{ fontSize: '16px', fontWeight: 600, color: 'var(--color-text-primary)' }}>💡 Qué hacer</span>
+        <span style={{ fontSize: '11px', padding: '3px 9px', borderRadius: '8px', background: MORADO.claro, color: MORADO.dark, fontWeight: 500 }}>consejos</span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {lista.map((s, i) => {
+          const e = estilos[s.tipo] || estilos.ambar
+          return (
+            <div key={i} style={{
+              background: e.bg, border: `1px solid ${e.borde}55`, borderLeft: `4px solid ${e.borde}`,
+              borderRadius: '12px', padding: '14px 16px', display: 'flex', alignItems: 'flex-start', gap: '12px',
+            }}>
+              <span style={{ fontSize: '20px', flexShrink: 0, lineHeight: 1.2 }}>{s.icono}</span>
+              <span style={{ fontSize: '13px', color: e.texto, lineHeight: 1.5, fontWeight: 500 }}>{s.texto}</span>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
