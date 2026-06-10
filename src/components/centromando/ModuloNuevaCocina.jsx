@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { supabase } from '../../supabaseClient'
 
 function ModuloNuevaCocina({ tema: t, empresa, onVolver }) {
-  const [paso, setPaso] = useState(1) // 1: datos cocina, 2: vincular login, 3: listo
+  const [paso, setPaso] = useState(1) // 1: formulario, 2: listo
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
+  const [pasoTexto, setPasoTexto] = useState('')
 
   // Datos de la cocina
   const [nombreCocina, setNombreCocina] = useState('')
@@ -14,31 +15,38 @@ function ModuloNuevaCocina({ tema: t, empresa, onVolver }) {
   const [nombreEscuela, setNombreEscuela] = useState('')
   const [raciones, setRaciones] = useState('')
   const [precioRacion, setPrecioRacion] = useState('')
+
+  // Login de la cocina
+  const [emailLogin, setEmailLogin] = useState('')
+  const [passwordLogin, setPasswordLogin] = useState('')
+
+  // Clave de mando
   const [claveMando, setClaveMando] = useState('')
 
-  // Datos generados
-  const [empresaCreadaId, setEmpresaCreadaId] = useState(null)
+  // Resultado
   const [empresaCreadaNombre, setEmpresaCreadaNombre] = useState('')
-  const [authUid, setAuthUid] = useState('')
 
-  function validarPaso1() {
+  function validar() {
     if (!nombreCocina.trim()) return 'Escribe el nombre de la cocina'
     if (!nombrePropietario.trim()) return 'Escribe el nombre del propietario'
     if (!/^\d{4}$/.test(pinPropietario)) return 'El PIN debe ser de 4 dígitos'
     if (!nombreEscuela.trim()) return 'Escribe el nombre de la primera escuela'
     if (!raciones || Number(raciones) <= 0) return 'Escribe las raciones contractuales'
+    if (!emailLogin.trim() || !emailLogin.includes('@')) return 'Escribe un correo válido para el login'
+    if (!passwordLogin || passwordLogin.length < 6) return 'La contraseña debe tener al menos 6 caracteres'
     if (!claveMando.trim()) return 'Ingresa tu clave de mando para confirmar'
     return null
   }
 
-  async function crearCocina() {
-    const err = validarPaso1()
+  async function crearTodo() {
+    const err = validar()
     if (err) { setError(err); return }
     setError('')
     setGuardando(true)
 
-    // Llamar a la función maestra (pasa por encima del RLS solo si la clave es correcta)
-    const { data, error: rpcError } = await supabase.rpc('crear_cocina_completa', {
+    // ─── PASO 1: Crear la cocina + propietario + escuela ───
+    setPasoTexto('Creando la cocina...')
+    const { data: nuevaEmpresaId, error: rpcError } = await supabase.rpc('crear_cocina_completa', {
       p_empresa_id_admin: empresa.id,
       p_clave: claveMando,
       p_nombre_cocina: nombreCocina.trim(),
@@ -50,64 +58,83 @@ function ModuloNuevaCocina({ tema: t, empresa, onVolver }) {
       p_raciones: Number(raciones),
     })
 
-    setGuardando(false)
-
     if (rpcError) {
+      setGuardando(false)
+      setPasoTexto('')
       if (rpcError.message && rpcError.message.includes('Clave de mando incorrecta')) {
-        setError('Clave de mando incorrecta. No se creó la cocina.')
+        setError('Clave de mando incorrecta. No se creó nada.')
       } else {
         setError('Error al crear la cocina: ' + (rpcError.message || 'desconocido'))
       }
       return
     }
 
-    // data = el id de la nueva empresa
-    setEmpresaCreadaId(data)
-    setEmpresaCreadaNombre(nombreCocina.trim())
-    setClaveMando('') // limpiar la clave por seguridad
-    setPaso(2)
-  }
+    // ─── PASO 2: Crear el login (Edge Function) ───
+    setPasoTexto('Creando el acceso (login)...')
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData?.session?.access_token
 
-  async function vincularLogin() {
-    // Limpiar el UID: quitar espacios al inicio/fin y normalizar
-    const uidLimpio = authUid.trim().toLowerCase()
+    let uidCreado = null
+    try {
+      const resp = await fetch(
+        `https://gcivvxofvzfytnfswopu.supabase.co/functions/v1/crear-login-cocina`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            email: emailLogin.trim().toLowerCase(),
+            password: passwordLogin,
+            empresa_id_admin: empresa.id,
+            clave: claveMando,
+          }),
+        }
+      )
+      const result = await resp.json()
 
-    // Validación flexible: un UUID tiene 36 caracteres con guiones
-    const formatoUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
-
-    if (!uidLimpio) {
-      setError('Pega el UID del login que copiaste de Supabase')
+      if (!resp.ok || result.error) {
+        // La cocina ya se creó, pero el login falló. Avisar pero no perder la cocina.
+        setGuardando(false)
+        setPasoTexto('')
+        setEmpresaCreadaNombre(nombreCocina.trim())
+        setError('La cocina se creó, pero el login falló: ' + (result.error || 'error desconocido') + '. Puedes vincular el login después desde Gestión de Cocinas.')
+        setPaso(2)
+        return
+      }
+      uidCreado = result.uid
+    } catch (e) {
+      setGuardando(false)
+      setPasoTexto('')
+      setEmpresaCreadaNombre(nombreCocina.trim())
+      setError('La cocina se creó, pero hubo un error de conexión con el login. Vincúlalo después desde Gestión de Cocinas.')
+      setPaso(2)
       return
     }
 
-    if (!formatoUuid.test(uidLimpio)) {
-      setError('El UID no tiene el formato correcto. Debe ser como: 8419f510-8056-4c80-8fd6-bc3129b5550f (cópialo completo de Supabase)')
-      return
-    }
-
-    setError('')
-    setGuardando(true)
-
-    const { data, error: errLink } = await supabase
-      .from('empresas')
-      .update({ auth_user_id: uidLimpio })
-      .eq('id', empresaCreadaId)
-      .select()
+    // ─── PASO 3: Vincular el login a la cocina ───
+    setPasoTexto('Vinculando el acceso...')
+    const { error: errVincular } = await supabase.rpc('vincular_login_cocina', {
+      p_empresa_id_admin: empresa.id,
+      p_clave: claveMando,
+      p_cocina_id: nuevaEmpresaId,
+      p_auth_uid: uidCreado,
+    })
 
     setGuardando(false)
+    setPasoTexto('')
 
-    if (errLink) {
-      setError('Error al vincular el login: ' + errLink.message)
+    if (errVincular) {
+      setEmpresaCreadaNombre(nombreCocina.trim())
+      setError('La cocina y el login se crearon, pero falló la vinculación: ' + errVincular.message)
+      setPaso(2)
       return
     }
 
-    // Verificar que de verdad se actualizó
-    if (!data || data.length === 0) {
-      setError('No se pudo vincular (el RLS bloqueó la actualización). Avísame para vincularlo por SQL.')
-      return
-    }
-
-    setPaso(3)
+    // ¡Todo listo!
+    setEmpresaCreadaNombre(nombreCocina.trim())
+    setPaso(2)
   }
 
   const inputStyle = {
@@ -127,7 +154,6 @@ function ModuloNuevaCocina({ tema: t, empresa, onVolver }) {
   return (
     <div style={{ minHeight: '100vh', position: 'relative', overflow: 'hidden', background: t.bgPanel, padding: '20px', fontFamily: 'inherit' }}>
       <style>{`
-        @keyframes nuevaFade { 0% { opacity: 0; } 100% { opacity: 1; } }
         @keyframes nuevaUp { 0% { opacity: 0; transform: translateY(16px); } 100% { opacity: 1; transform: translateY(0); } }
         .nueva-input:focus { border-color: ${t.bordeFuerte} !important; }
       `}</style>
@@ -142,7 +168,7 @@ function ModuloNuevaCocina({ tema: t, empresa, onVolver }) {
           </button>
           <div>
             <p style={{ margin: 0, fontSize: '19px', fontWeight: 600, color: t.textPrimary }}>Nueva Cocina</p>
-            <p style={{ margin: '2px 0 0', fontSize: '11px', color: t.textMuted }}>Dar de alta un cliente · paso {paso} de 3</p>
+            <p style={{ margin: '2px 0 0', fontSize: '11px', color: t.textMuted }}>Dar de alta un cliente nuevo</p>
           </div>
         </div>
 
@@ -152,11 +178,11 @@ function ModuloNuevaCocina({ tema: t, empresa, onVolver }) {
           </div>
         )}
 
-        {/* ─── PASO 1: DATOS ─── */}
+        {/* ─── PASO 1: FORMULARIO ─── */}
         {paso === 1 && (
           <div style={{ background: t.cardBg, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: `1px solid ${t.borde}`, borderRadius: '16px', padding: '22px', opacity: 0, animation: 'nuevaUp 0.5s ease 0.2s forwards' }}>
             <p style={{ margin: '0 0 4px', fontSize: '14px', fontWeight: 600, color: t.textPrimary }}>Datos de la cocina</p>
-            <p style={{ margin: '0 0 8px', fontSize: '12px', color: t.textSec }}>Lo básico para arrancar. El resto se configura después en el wizard.</p>
+            <p style={{ margin: '0 0 8px', fontSize: '12px', color: t.textSec }}>Se crea todo automático: cocina, propietario, escuela y su acceso.</p>
 
             <label style={labelStyle}>NOMBRE DE LA COCINA *</label>
             <input className="nueva-input" style={inputStyle} value={nombreCocina} onChange={(e) => setNombreCocina(e.target.value)} placeholder="Ej: Cocina del Hermano" />
@@ -176,6 +202,9 @@ function ModuloNuevaCocina({ tema: t, empresa, onVolver }) {
 
             <label style={labelStyle}>PRIMERA ESCUELA *</label>
             <input className="nueva-input" style={inputStyle} value={nombreEscuela} onChange={(e) => setNombreEscuela(e.target.value)} placeholder="Ej: Escuela Primaria Las Flores" />
+            <p style={{ margin: '6px 0 0', fontSize: '11px', color: t.textMuted, lineHeight: 1.5 }}>
+              💡 El código de centro, regional, director y demás datos INABIE se completan después en la sección Escuelas.
+            </p>
 
             <div style={{ display: 'flex', gap: '12px' }}>
               <div style={{ flex: 1 }}>
@@ -190,59 +219,51 @@ function ModuloNuevaCocina({ tema: t, empresa, onVolver }) {
 
             <div style={{ height: '1px', background: t.borde, margin: '20px 0' }} />
 
-            {/* Clave de mando para confirmar */}
+            {/* Login de la cocina */}
+            <div style={{ background: `${t.acento2}10`, border: `1px solid ${t.acento2}30`, borderRadius: '11px', padding: '14px' }}>
+              <p style={{ margin: '0 0 4px', fontSize: '13px', fontWeight: 600, color: t.textPrimary }}>🔑 Acceso de la cocina</p>
+              <p style={{ margin: '0 0 6px', fontSize: '11px', color: t.textMuted, lineHeight: 1.5 }}>
+                El correo y contraseña con que esta cocina entrará a la app. Se crea automático.
+              </p>
+
+              <label style={labelStyle}>CORREO DE ACCESO *</label>
+              <input className="nueva-input" style={inputStyle} value={emailLogin} onChange={(e) => setEmailLogin(e.target.value)} placeholder="cocina@ejemplo.com" inputMode="email" />
+
+              <label style={labelStyle}>CONTRASEÑA (mín. 6 caracteres) *</label>
+              <input className="nueva-input" style={inputStyle} value={passwordLogin} onChange={(e) => setPasswordLogin(e.target.value)} placeholder="Contraseña inicial" />
+            </div>
+
+            <div style={{ height: '1px', background: t.borde, margin: '20px 0' }} />
+
+            {/* Clave de mando */}
             <div style={{ background: `${t.acento}10`, border: `1px solid ${t.acento}30`, borderRadius: '11px', padding: '14px' }}>
               <label style={{ ...labelStyle, marginTop: 0 }}>🔐 CLAVE DE MANDO (para confirmar) *</label>
               <input className="nueva-input" type="password" style={inputStyle} value={claveMando} onChange={(e) => setClaveMando(e.target.value)} placeholder="Tu clave de mando" />
-              <p style={{ margin: '8px 0 0', fontSize: '11px', color: t.textMuted, lineHeight: 1.5 }}>
-                Por seguridad, confirma tu clave de mando para crear una cocina nueva.
-              </p>
             </div>
 
-            <button onClick={crearCocina} disabled={guardando} style={{ width: '100%', marginTop: '24px', padding: '14px', background: guardando ? `${t.acento}66` : t.logoGrad, border: 'none', borderRadius: '12px', color: t.claro ? '#fff' : '#0F1208', fontSize: '15px', fontWeight: 700, cursor: guardando ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
-              {guardando ? 'Creando...' : 'Crear cocina →'}
+            <button onClick={crearTodo} disabled={guardando} style={{ width: '100%', marginTop: '24px', padding: '14px', background: guardando ? `${t.acento}66` : t.logoGrad, border: 'none', borderRadius: '12px', color: t.claro ? '#fff' : '#0F1208', fontSize: '15px', fontWeight: 700, cursor: guardando ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+              {guardando ? (pasoTexto || 'Creando...') : 'Crear cocina completa →'}
             </button>
           </div>
         )}
 
-        {/* ─── PASO 2: VINCULAR LOGIN ─── */}
-        {paso === 2 && empresaCreadaId && (
-          <div style={{ background: t.cardBg, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: `1px solid ${t.borde}`, borderRadius: '16px', padding: '22px', opacity: 0, animation: 'nuevaUp 0.5s ease 0.1s forwards' }}>
-            <div style={{ background: `${t.acento}1A`, border: `1px solid ${t.acento}40`, borderRadius: '11px', padding: '12px 14px', marginBottom: '18px' }}>
-              <p style={{ margin: 0, fontSize: '13px', color: t.textPrimary, fontWeight: 600 }}>✅ Cocina "{empresaCreadaNombre}" creada</p>
-              <p style={{ margin: '4px 0 0', fontSize: '12px', color: t.textSec }}>Ahora falta crear su login de acceso.</p>
-            </div>
-
-            <p style={{ margin: '0 0 10px', fontSize: '13px', fontWeight: 600, color: t.textPrimary }}>Crear el login en Supabase</p>
-            <ol style={{ margin: '0 0 18px', paddingLeft: '18px', fontSize: '12px', color: t.textSec, lineHeight: 1.7 }}>
-              <li>En Supabase → Authentication → Users → Add user → <b>Create new user</b></li>
-              <li>Pon el correo y contraseña de esta cocina</li>
-              <li>Marca <b>"Auto Confirm User"</b> y créalo</li>
-              <li>Copia el UID completo y pégalo aquí abajo</li>
-            </ol>
-
-            <label style={labelStyle}>UID DEL LOGIN (de Supabase Auth)</label>
-            <input className="nueva-input" style={inputStyle} value={authUid} onChange={(e) => setAuthUid(e.target.value)} placeholder="Ej: 8419f510-8056-4c80-8fd6-bc3129b5550f" />
-
-            <button onClick={vincularLogin} disabled={guardando} style={{ width: '100%', marginTop: '20px', padding: '14px', background: guardando ? `${t.acento}66` : t.logoGrad, border: 'none', borderRadius: '12px', color: t.claro ? '#fff' : '#0F1208', fontSize: '15px', fontWeight: 700, cursor: guardando ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
-              {guardando ? 'Vinculando...' : 'Vincular login y terminar →'}
-            </button>
-
-            <button onClick={() => setPaso(3)} style={{ width: '100%', marginTop: '10px', padding: '12px', background: 'transparent', border: `1px solid ${t.borde}`, borderRadius: '12px', color: t.textSec, fontSize: '12px', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>
-              Vincular el login después
-            </button>
-          </div>
-        )}
-
-        {/* ─── PASO 3: LISTO ─── */}
-        {paso === 3 && empresaCreadaId && (
+        {/* ─── PASO 2: LISTO ─── */}
+        {paso === 2 && (
           <div style={{ background: t.cardBg, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: `1px solid ${t.borde}`, borderRadius: '16px', padding: '32px 22px', textAlign: 'center', opacity: 0, animation: 'nuevaUp 0.5s ease 0.1s forwards' }}>
             <div style={{ width: '72px', height: '72px', margin: '0 auto 18px', borderRadius: '20px', background: t.logoGrad, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '38px' }}>🎉</div>
             <p style={{ margin: '0 0 6px', fontSize: '20px', fontWeight: 600, color: t.textPrimary }}>¡Cocina creada!</p>
-            <p style={{ margin: '0 0 24px', fontSize: '13px', color: t.textSec, lineHeight: 1.6 }}>
-              "{empresaCreadaNombre}" ya existe en el sistema con su propietario y primera escuela.
-              {authUid ? ' El login quedó vinculado.' : ' Recuerda vincular su login cuando puedas.'}
+            <p style={{ margin: '0 0 8px', fontSize: '13px', color: t.textSec, lineHeight: 1.6 }}>
+              "{empresaCreadaNombre}" quedó lista con su propietario, primera escuela{!error ? ' y su acceso ya vinculado.' : '.'}
             </p>
+            {!error && (
+              <div style={{ background: `${t.acento}12`, border: `1px solid ${t.acento}30`, borderRadius: '11px', padding: '12px', margin: '0 0 20px', textAlign: 'left' }}>
+                <p style={{ margin: 0, fontSize: '12px', color: t.textSec, lineHeight: 1.6 }}>
+                  Entrégale al cliente:<br/>
+                  📧 Correo: <strong style={{ color: t.textPrimary }}>{emailLogin.trim().toLowerCase()}</strong><br/>
+                  🔑 Contraseña: <strong style={{ color: t.textPrimary }}>{passwordLogin}</strong>
+                </p>
+              </div>
+            )}
             <button onClick={onVolver} style={{ width: '100%', padding: '14px', background: t.logoGrad, border: 'none', borderRadius: '12px', color: t.claro ? '#fff' : '#0F1208', fontSize: '15px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
               Volver al Centro de Mando
             </button>
