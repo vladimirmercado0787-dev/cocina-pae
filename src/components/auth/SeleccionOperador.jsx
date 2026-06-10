@@ -27,7 +27,7 @@ function formatHora(iso) {
   return new Date(iso).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit', hour12: true })
 }
 
-function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
+function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion, onAbrirCentroMando }) {
   const [usuarios, setUsuarios] = useState([])
   const [cargando, setCargando] = useState(true)
 
@@ -83,6 +83,9 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
   function getInfo(rol) {
     return ROL_INFO[rol] || ROL_INFO.ayudante
   }
+
+  // 🔐 ¿Esta cocina tiene un súper-admin? → mostrar acceso al Centro de Mando
+  const hayCentroMando = usuarios.some(u => u.es_super_admin === true)
 
   // ─── FLUJO AUTORIZACIÓN ───
   function manejarAgregarEmpleado() {
@@ -307,6 +310,10 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
           60% { transform: scale(1.15); }
           100% { transform: scale(1); }
         }
+        @keyframes cmGlowPulse {
+          0%, 100% { box-shadow: 0 0 20px rgba(163,181,86,0.25), inset 0 0 0 1px rgba(163,181,86,0.2); }
+          50% { box-shadow: 0 0 32px rgba(163,181,86,0.45), inset 0 0 0 1px rgba(163,181,86,0.35); }
+        }
       `}</style>
 
       <div
@@ -486,6 +493,73 @@ function SeleccionOperador({ empresaId, onSeleccionar, onCerrarSesion }) {
             Selecciona tu nombre y luego ingresa tu PIN
           </p>
         </div>
+
+        {/* ─── 🔐 ACCESO CENTRO DE MANDO (solo si hay súper-admin) ─── */}
+        {!cargando && hayCentroMando && onAbrirCentroMando && (
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '1000px',
+              padding: '0 12px',
+              marginBottom: '20px',
+              opacity: 0,
+              animation: 'selOpFadeInUp 0.6s ease 0.65s forwards',
+            }}
+          >
+            <button
+              onClick={onAbrirCentroMando}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '16px',
+                padding: '18px 22px',
+                background: 'linear-gradient(135deg, rgba(163,181,86,0.16) 0%, rgba(40,49,26,0.4) 100%)',
+                border: '1px solid rgba(163,181,86,0.4)',
+                borderLeft: '5px solid #A3B556',
+                borderRadius: '16px',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                transition: 'all 0.25s ease',
+                animation: 'cmGlowPulse 3s ease-in-out infinite',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-2px)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)'
+              }}
+            >
+              <div
+                style={{
+                  width: '52px',
+                  height: '52px',
+                  borderRadius: '14px',
+                  background: 'linear-gradient(135deg, #A3B556, #5E7029)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '26px',
+                  flexShrink: 0,
+                }}
+              >
+                🛡️
+              </div>
+              <div style={{ flex: 1, textAlign: 'left' }}>
+                <div style={{ fontSize: '10px', letterSpacing: '2px', color: '#A3B556', fontWeight: 700, marginBottom: '2px' }}>
+                  ACCESO RESTRINGIDO
+                </div>
+                <div style={{ fontSize: '17px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                  Centro de Mando
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+                  Plataforma Cocina PAE · todas las cocinas
+                </div>
+              </div>
+              <div style={{ fontSize: '20px', color: '#A3B556' }}>→</div>
+            </button>
+          </div>
+        )}
 
         {/* ─── CUADRO MARCAR ASISTENCIA ─── */}
         {!cargando && usuarios.length > 0 && (

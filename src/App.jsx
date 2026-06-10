@@ -13,6 +13,8 @@ import LoginEmpresa from './components/auth/LoginEmpresa'
 import SeleccionOperador from './components/auth/SeleccionOperador'
 import LoginPin from './components/auth/LoginPin'
 import ResetPasswordPage from './components/auth/ResetPasswordPage'
+import LoginCentroMando from './components/centromando/LoginCentroMando'
+import CentroDeMando from './components/centromando/CentroDeMando'
 import DashboardDelDia from './components/dashboard/DashboardDelDia'
 import VistaDespachador from './components/despachador/VistaDespachador'
 import VistaAdministrador from './components/admin/VistaAdministrador'
@@ -158,6 +160,19 @@ function App() {
 
   function volverASeleccion() {
     setUsuarioSeleccionado(null)
+    setVistaActual('seleccion_operador')
+  }
+
+  // 🛡️ CENTRO DE MANDO
+  function abrirLoginCentroMando() {
+    setVistaActual('login_centro_mando')
+  }
+
+  function accesoCentroMandoConcedido() {
+    setVistaActual('centro_mando')
+  }
+
+  function salirCentroMando() {
     setVistaActual('seleccion_operador')
   }
 
@@ -366,6 +381,28 @@ function App() {
     )
   }
 
+  // ═══════════════════════════════════════════════════
+  // 🛡️ CENTRO DE MANDO (fuera del flujo normal de cocina)
+  // ═══════════════════════════════════════════════════
+  if (vistaActual === 'login_centro_mando' && empresaLogueada) {
+    return (
+      <LoginCentroMando
+        empresa={empresaLogueada}
+        onAcceso={accesoCentroMandoConcedido}
+        onVolver={salirCentroMando}
+      />
+    )
+  }
+
+  if (vistaActual === 'centro_mando' && empresaLogueada) {
+    return (
+      <CentroDeMando
+        empresa={empresaLogueada}
+        onSalir={salirCentroMando}
+      />
+    )
+  }
+
   return (
     <>
       {pasoActual < 7 && (
@@ -383,6 +420,7 @@ function App() {
           empresaId={empresaLogueada.id}
           onSeleccionar={seleccionarUsuario}
           onCerrarSesion={cerrarSesionTotal}
+          onAbrirCentroMando={abrirLoginCentroMando}
         />
       )}
       
