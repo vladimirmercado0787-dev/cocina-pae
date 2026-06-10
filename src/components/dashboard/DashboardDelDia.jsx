@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import { registrar, TIPOS_ACCION } from '../../utils/historial'
 import ModalPesajeCrudo from '../pesaje/ModalPesajeCrudo'
+import CampanaNotificaciones from '../notificaciones/CampanaNotificaciones'
 
 const CATEGORIAS = {
   finanzas: {
@@ -585,7 +586,7 @@ function DashboardDelDia({
 
       {/* HEADER */}
       <div style={{
-        position: 'relative', zIndex: 1,
+        position: 'relative', zIndex: 50,
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         marginBottom: '24px', flexWrap: 'wrap', gap: '12px',
         opacity: 0, animation: 'dashSlideTop 0.5s ease forwards',
@@ -612,6 +613,7 @@ function DashboardDelDia({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <CampanaNotificaciones empresaId={empresaId} />
           <div style={{
             background: 'var(--color-bg-elevated)',
             border: '1px solid var(--color-border-subtle)',
