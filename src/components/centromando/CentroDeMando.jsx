@@ -85,6 +85,7 @@ function CentroDeMando({ empresa, onSalir }) {
     return (
       <ModuloNuevaCocina
         tema={t}
+        empresa={empresa}
         onVolver={() => { setVista('panel'); cargarStats() }}
       />
     )
