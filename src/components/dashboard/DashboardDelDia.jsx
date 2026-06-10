@@ -1019,7 +1019,7 @@ function DashboardDelDia({
           <Modulo emoji="🕐" label="Asistencia"  sublabel="Quién vino"   cat={CATEGORIAS.personal} tema={tema} onClick={onIrAsistencia ? onIrAsistencia : () => mostrarProximamente('Asistencia')} />
           <Modulo emoji="💵" label="Nómina"      sublabel="Pagos"        cat={CATEGORIAS.personal} tema={tema} onClick={onIrNomina ? onIrNomina : () => mostrarProximamente('Nómina')} />
           <Modulo emoji="📄" label="Contratos"   sublabel="Por empleado" cat={CATEGORIAS.personal} tema={tema} onClick={onIrContratos ? onIrContratos : () => mostrarProximamente('Contratos')} />
-          <Modulo emoji="🧮" label="Calculadora" sublabel="Liquidación"  cat={CATEGORIAS.personal} tema={tema} onClick={onIrCalculadora ? onIrCalculadora : () => mostrarProximamente('Calculadora')} />
+         <Modulo emoji="🧮" label="Calculadora" sublabel="Producción"  cat={CATEGORIAS.personal} tema={tema} onClick={onIrCalculadora ? onIrCalculadora : () => mostrarProximamente('Calculadora')} />
         </CategoriaBanner>
 
         <CategoriaBanner cat={CATEGORIAS.operacion} icon="🧠" count={5} tema={tema} delay={0.95}>
