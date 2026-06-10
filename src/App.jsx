@@ -52,22 +52,21 @@ function App() {
   const [tabFacturaInicial, setTabFacturaInicial] = useState('factura')
   const [cargando, setCargando] = useState(true)
 
+  // 🛡️ Estado para el bloqueo por suspensión en tiempo real
+  const [cocinaSuspendidaEnVivo, setCocinaSuspendidaEnVivo] = useState(false)
+
   // 🎯 DETECTAR si el usuario viene del email de recuperación de contraseña
-  // Supabase envía un link con #access_token=... en el hash de la URL.
-  // Si lo detectamos, forzamos la vista de reset_password.
   useEffect(() => {
     const hash = window.location.hash
     const pathname = window.location.pathname
 
-    // Caso 1: URL es /reset-password (ruta directa)
     if (pathname === '/reset-password') {
       setVistaActual('reset_password')
-      setMostrarIntro(false)  // saltarse el intro de Andamio
+      setMostrarIntro(false)
       setCargando(false)
       return
     }
 
-    // Caso 2: hash trae access_token y type=recovery (vino del email de Supabase)
     if (hash && hash.includes('type=recovery')) {
       setVistaActual('reset_password')
       setMostrarIntro(false)
@@ -75,9 +74,40 @@ function App() {
       return
     }
 
-    // Caso normal: verificar sesión existente
     verificarSesionExistente()
   }, [])
+
+  // ═══════════════════════════════════════════════════
+  // 🛡️ VIGILANTE DE SUSPENSIÓN EN TIEMPO REAL
+  // Mientras hay una cocina logueada, revisa cada 60 seg
+  // si la cocina sigue activa. Si la suspenden, saca al usuario.
+  // (No aplica al súper-admin en el Centro de Mando.)
+  // ═══════════════════════════════════════════════════
+  useEffect(() => {
+    // Solo vigilar si hay una cocina logueada y NO estamos en el centro de mando
+    if (!empresaLogueada?.id) return
+    if (vistaActual === 'centro_mando' || vistaActual === 'login_centro_mando') return
+
+    async function revisarEstado() {
+      const { data, error } = await supabase
+        .from('empresas')
+        .select('estado')
+        .eq('id', empresaLogueada.id)
+        .single()
+
+      if (!error && data && data.estado === 'suspendida') {
+        // La cocina fue suspendida mientras estaba abierta
+        setCocinaSuspendidaEnVivo(true)
+        await supabase.auth.signOut()
+      }
+    }
+
+    // Revisar de inmediato y luego cada 60 segundos
+    revisarEstado()
+    const intervalo = setInterval(revisarEstado, 60000)
+
+    return () => clearInterval(intervalo)
+  }, [empresaLogueada, vistaActual])
 
   async function verificarSesionExistente() {
     setCargando(true)
@@ -92,6 +122,14 @@ function App() {
         .single()
 
       if (empresa && !error) {
+        // 🛡️ Si la cocina está suspendida, no dejar entrar
+        if (empresa.estado === 'suspendida') {
+          await supabase.auth.signOut()
+          setCocinaSuspendidaEnVivo(true)
+          setVistaActual('login_empresa')
+          setCargando(false)
+          return
+        }
         setEmpresaLogueada(empresa)
         setEmpresaActual(empresa)
         setVistaActual('seleccion_operador')
@@ -152,7 +190,6 @@ function App() {
     setVistaActual('login_empresa')
   }
 
-  // 🎯 Al terminar reset de contraseña, llevar al login limpio
   function resetCompletado() {
     setVistaActual('login_empresa')
     window.history.replaceState({}, document.title, '/')
@@ -161,6 +198,16 @@ function App() {
   function volverASeleccion() {
     setUsuarioSeleccionado(null)
     setVistaActual('seleccion_operador')
+  }
+
+  // 🛡️ Volver al login después de ser suspendido en vivo
+  function volverDeSuspension() {
+    setCocinaSuspendidaEnVivo(false)
+    setUsuarioLogueado(null)
+    setUsuarioSeleccionado(null)
+    setEmpresaLogueada(null)
+    setEmpresaActual(null)
+    setVistaActual('login_empresa')
   }
 
   // 🛡️ CENTRO DE MANDO
@@ -343,6 +390,31 @@ function App() {
         onIrCatalogo={puedeVerCatalogo ? () => setVistaActual('catalogo_recetas') : null}
         onIrHistorial={puedeVerHistorial ? () => setVistaActual('historial') : null}
       />
+    )
+  }
+
+  // ═══════════════════════════════════════════════════
+  // 🛡️ PANTALLA DE COCINA SUSPENDIDA EN VIVO
+  // ═══════════════════════════════════════════════════
+  if (cocinaSuspendidaEnVivo) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--color-bg-primary, #0a1410)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+        <div style={{ width: '100%', maxWidth: '420px', background: 'var(--color-bg-card, #14201a)', border: '1px solid rgba(244, 67, 54, 0.35)', borderRadius: '18px', padding: '32px', textAlign: 'center' }}>
+          <div style={{ width: '72px', height: '72px', margin: '0 auto 20px', borderRadius: '20px', background: 'rgba(244, 67, 54, 0.12)', border: '1px solid rgba(244, 67, 54, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '36px' }}>🔒</div>
+          <h1 style={{ color: 'var(--color-text-primary, #EDF1DD)', fontSize: '22px', fontWeight: 600, margin: '0 0 8px' }}>Servicio suspendido</h1>
+          <p style={{ color: 'var(--color-text-secondary, #8A9663)', fontSize: '14px', lineHeight: 1.6, margin: '0 0 24px' }}>
+            El servicio de esta cocina ha sido suspendido. Por favor comunícate con Andamio para reactivarlo.
+          </p>
+          <div style={{ background: 'rgba(250, 199, 117, 0.08)', border: '1px solid rgba(250, 199, 117, 0.25)', borderRadius: '12px', padding: '18px', marginBottom: '24px', textAlign: 'left' }}>
+            <p style={{ margin: '0 0 12px', fontWeight: 600, color: 'var(--color-text-accent, #FAC775)', fontSize: '13px', textAlign: 'center' }}>📞 Contacto Andamio</p>
+            <p style={{ margin: '0 0 8px', fontSize: '13px', color: 'var(--color-text-secondary, #8A9663)', fontWeight: 500 }}>📧 vladimirmercado0787@gmail.com</p>
+            <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-text-secondary, #8A9663)', fontWeight: 500 }}>📱 WhatsApp: +1 (978) 414-7190</p>
+          </div>
+          <button onClick={volverDeSuspension} style={{ width: '100%', padding: '14px', background: 'var(--gradient-button, linear-gradient(135deg, #BA7517, #8a560f))', border: 'none', borderRadius: '10px', color: 'white', fontSize: '14px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+            Volver al inicio
+          </button>
+        </div>
+      </div>
     )
   }
 

@@ -11,6 +11,9 @@ function LoginEmpresa({ onLoginExitoso }) {
   const [cargando, setCargando] = useState(false)
   const [mostrarAyuda, setMostrarAyuda] = useState(false)
 
+  // ─── Estado de cocina suspendida ───
+  const [cocinaSuspendida, setCocinaSuspendida] = useState(null)
+
   // ─── Estado del tema (Oscuro Híbrido / Tropical Claro) ───
   const [tema, setTema] = useState(() => {
     return localStorage.getItem('cocina_pae_tema') || 'oscuro'
@@ -73,6 +76,15 @@ function LoginEmpresa({ onLoginExitoso }) {
       return
     }
 
+    // ─── 🛡️ VERIFICAR SI LA COCINA ESTÁ SUSPENDIDA ───
+    if (empresa.estado === 'suspendida') {
+      // Cerrar la sesión inmediatamente (no debe quedar logueado)
+      await supabase.auth.signOut()
+      setCocinaSuspendida(empresa)
+      setCargando(false)
+      return
+    }
+
     if (!mantenerSesion) {
       sessionStorage.setItem('cocina_pae_session_only', 'true')
     } else {
@@ -85,6 +97,143 @@ function LoginEmpresa({ onLoginExitoso }) {
 
   function cambiarTema(nuevoTema) {
     setTema(nuevoTema)
+  }
+
+  function volverAlLogin() {
+    setCocinaSuspendida(null)
+    setEmail('')
+    setPassword('')
+    setError('')
+  }
+
+  // ═══════════════════════════════════════════════════
+  // 🛡️ PANTALLA DE COCINA SUSPENDIDA
+  // ═══════════════════════════════════════════════════
+  if (cocinaSuspendida) {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          background: 'var(--color-bg-primary)',
+          position: 'relative',
+          padding: '24px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            backgroundImage: 'var(--glow-verde), var(--glow-ambar)',
+            pointerEvents: 'none',
+          }}
+        />
+
+        <div
+          style={{
+            position: 'relative',
+            width: '100%',
+            maxWidth: '420px',
+            background: esTropical ? 'var(--color-bg-elevated)' : 'var(--color-bg-card)',
+            border: '1px solid rgba(244, 67, 54, 0.35)',
+            borderRadius: '18px',
+            padding: '32px',
+            textAlign: 'center',
+            boxShadow: esTropical ? '0 8px 24px rgba(15, 110, 86, 0.08)' : 'none',
+          }}
+        >
+          {/* Ícono de candado */}
+          <div
+            style={{
+              width: '72px',
+              height: '72px',
+              margin: '0 auto 20px',
+              borderRadius: '20px',
+              background: 'rgba(244, 67, 54, 0.12)',
+              border: '1px solid rgba(244, 67, 54, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '36px',
+            }}
+          >
+            🔒
+          </div>
+
+          <h1
+            style={{
+              color: 'var(--color-text-primary)',
+              fontSize: '22px',
+              fontWeight: 600,
+              margin: '0 0 8px',
+            }}
+          >
+            Servicio suspendido
+          </h1>
+
+          <p
+            style={{
+              color: 'var(--color-text-secondary)',
+              fontSize: '14px',
+              lineHeight: 1.6,
+              margin: '0 0 24px',
+            }}
+          >
+            El servicio de <strong style={{ color: 'var(--color-text-primary)' }}>{cocinaSuspendida.nombre}</strong> está temporalmente suspendido. Por favor comunícate con Andamio para reactivarlo.
+          </p>
+
+          {/* Datos de contacto */}
+          <div
+            style={{
+              background: esTropical ? '#FAF3E5' : 'rgba(250, 199, 117, 0.08)',
+              border: esTropical ? '1px solid rgba(186, 117, 23, 0.3)' : '1px solid rgba(250, 199, 117, 0.25)',
+              borderRadius: '12px',
+              padding: '18px',
+              marginBottom: '24px',
+              textAlign: 'left',
+            }}
+          >
+            <p style={{ margin: '0 0 12px', fontWeight: 600, color: 'var(--color-text-accent)', fontSize: '13px', textAlign: 'center' }}>
+              📞 Contacto Andamio
+            </p>
+            <p style={{ margin: '0 0 8px', fontSize: '13px', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
+              📧 vladimirmercado0787@gmail.com
+            </p>
+            <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
+              📱 WhatsApp: +1 (978) 414-7190
+            </p>
+          </div>
+
+          <button
+            onClick={volverAlLogin}
+            style={{
+              width: '100%',
+              padding: '14px',
+              background: 'var(--gradient-button)',
+              border: 'none',
+              borderRadius: '10px',
+              color: 'white',
+              fontSize: '14px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            Volver
+          </button>
+        </div>
+
+        {/* Footer */}
+        <div style={{ position: 'relative', marginTop: '24px', textAlign: 'center' }}>
+          <span style={{ color: 'var(--color-text-muted)', fontSize: '11px', fontWeight: 500 }}>
+            🇩🇴 Andamio · Cocina PAE
+          </span>
+        </div>
+      </div>
+    )
   }
 
   return (

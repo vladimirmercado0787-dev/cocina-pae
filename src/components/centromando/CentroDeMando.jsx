@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import ModuloNuevaCocina from './ModuloNuevaCocina'
+import GestionCocinas from './GestionCocinas'
 
 // ─── LOS 3 TEMAS DEL CENTRO DE MANDO ───
 const TEMAS = {
@@ -44,7 +45,7 @@ const TEMAS = {
 
 function CentroDeMando({ empresa, onSalir }) {
   const [temaKey, setTemaKey] = useState(() => localStorage.getItem('centro_mando_tema') || 'oliva')
-  const [vista, setVista] = useState('panel') // panel | nueva_cocina
+  const [vista, setVista] = useState('panel') // panel | nueva_cocina | gestion_cocinas
   const [stats, setStats] = useState({ cocinas: 0, escuelas: 0, usuarios: 0 })
   const [cargandoStats, setCargandoStats] = useState(true)
 
@@ -60,8 +61,6 @@ function CentroDeMando({ empresa, onSalir }) {
 
   async function cargarStats() {
     setCargandoStats(true)
-    // Nota: por ahora cuenta lo que el RLS permite ver (tu cocina).
-    // Cuando se active la llave maestra de súper-admin, contará TODA la red.
     const [cocinas, escuelas, usuarios] = await Promise.all([
       supabase.from('empresas').select('id', { count: 'exact', head: true }),
       supabase.from('escuelas').select('id', { count: 'exact', head: true }),
@@ -80,10 +79,19 @@ function CentroDeMando({ empresa, onSalir }) {
   const fechaTexto = ahora.toLocaleDateString('es-DO', { weekday: 'long', day: 'numeric', month: 'long' })
   const horaTexto = ahora.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit', hour12: true })
 
-  // Si está en el módulo Nueva Cocina, renderizar eso
   if (vista === 'nueva_cocina') {
     return (
       <ModuloNuevaCocina
+        tema={t}
+        empresa={empresa}
+        onVolver={() => { setVista('panel'); cargarStats() }}
+      />
+    )
+  }
+
+  if (vista === 'gestion_cocinas') {
+    return (
+      <GestionCocinas
         tema={t}
         empresa={empresa}
         onVolver={() => { setVista('panel'); cargarStats() }}
@@ -115,7 +123,6 @@ function CentroDeMando({ empresa, onSalir }) {
         .cm-tema-btn { transition: all .25s ease; }
       `}</style>
 
-      {/* Resplandores de fondo */}
       <div style={{ position: 'absolute', inset: 0, backgroundImage: `${t.bgGlow1}, ${t.bgGlow2}`, pointerEvents: 'none', opacity: 0, animation: 'cmPanelFade 1.2s ease 0.1s forwards' }} />
 
       <div style={{ position: 'relative', maxWidth: '920px', margin: '0 auto' }}>
@@ -133,11 +140,9 @@ function CentroDeMando({ empresa, onSalir }) {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            {/* Placa COCINA PAE */}
             <span style={{ background: `${t.acento2}22`, border: `1px solid ${t.acento2}55`, color: t.acento2, fontSize: '10px', letterSpacing: '2px', fontWeight: 700, padding: '6px 12px', borderRadius: '7px' }}>
               COCINA PAE
             </span>
-            {/* Salir */}
             <button onClick={onSalir} style={{ background: t.cardBg, border: `1px solid ${t.borde}`, borderRadius: '20px', padding: '8px 15px', color: t.textSec, fontSize: '12px', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>
               🚪 Salir
             </button>
@@ -197,7 +202,7 @@ function CentroDeMando({ empresa, onSalir }) {
           <div
             className="cm-act"
             onClick={() => setVista('nueva_cocina')}
-            style={{ flex: '1 1 240px', position: 'relative', background: t.cardBg, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: `1px solid ${t.borde}`, borderRadius: '16px', padding: '20px', overflow: 'hidden' }}
+            style={{ flex: '1 1 220px', position: 'relative', background: t.cardBg, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: `1px solid ${t.borde}`, borderRadius: '16px', padding: '20px', overflow: 'hidden' }}
           >
             <div style={{ position: 'absolute', top: 0, left: '18px', right: '18px', height: '1px', background: t.claro ? 'linear-gradient(90deg, transparent, rgba(0,0,0,0.1), transparent)' : 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)' }} />
             <span className="cm-ico" style={{ display: 'inline-flex', width: '46px', height: '46px', alignItems: 'center', justifyContent: 'center', borderRadius: '13px', background: `${t.acento}22`, fontSize: '24px' }}>🏗️</span>
@@ -205,9 +210,21 @@ function CentroDeMando({ empresa, onSalir }) {
             <p style={{ margin: 0, fontSize: '12px', color: t.textSec }}>Dar de alta un cliente nuevo</p>
           </div>
 
+          {/* Gestión de Cocinas */}
+          <div
+            className="cm-act"
+            onClick={() => setVista('gestion_cocinas')}
+            style={{ flex: '1 1 220px', position: 'relative', background: t.cardBg, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: `1px solid ${t.borde}`, borderRadius: '16px', padding: '20px', overflow: 'hidden' }}
+          >
+            <div style={{ position: 'absolute', top: 0, left: '18px', right: '18px', height: '1px', background: t.claro ? 'linear-gradient(90deg, transparent, rgba(0,0,0,0.1), transparent)' : 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)' }} />
+            <span className="cm-ico" style={{ display: 'inline-flex', width: '46px', height: '46px', alignItems: 'center', justifyContent: 'center', borderRadius: '13px', background: `${t.acento}22`, fontSize: '24px' }}>🏢</span>
+            <p style={{ margin: '13px 0 3px', fontSize: '16px', fontWeight: 600, color: t.textPrimary }}>Gestión de Cocinas</p>
+            <p style={{ margin: 0, fontSize: '12px', color: t.textSec }}>Ver, suspender, reactivar</p>
+          </div>
+
           {/* Inteligencia (próximamente) */}
           <div
-            style={{ flex: '1 1 240px', position: 'relative', background: t.cardBg, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: `1px solid ${t.borde}`, borderRadius: '16px', padding: '20px', overflow: 'hidden', opacity: 0.75 }}
+            style={{ flex: '1 1 220px', position: 'relative', background: t.cardBg, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: `1px solid ${t.borde}`, borderRadius: '16px', padding: '20px', overflow: 'hidden', opacity: 0.75 }}
           >
             <div style={{ position: 'absolute', top: 0, left: '18px', right: '18px', height: '1px', background: t.claro ? 'linear-gradient(90deg, transparent, rgba(0,0,0,0.1), transparent)' : 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)' }} />
             <span style={{ display: 'inline-flex', width: '46px', height: '46px', alignItems: 'center', justifyContent: 'center', borderRadius: '13px', background: `${t.acento2}22`, fontSize: '24px' }}>📡</span>
