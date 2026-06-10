@@ -6,7 +6,7 @@ const COLOR_SECRETARIA_BG = '#ED93B1'
 const COLOR_SECRETARIA_DARKER = '#72243E'
 const COLOR_SECRETARIA_CLARO = '#FBEAF0'
 
-function VistaSecretaria({ usuario, empresaId, onCerrarSesion, onCambiarUsuario, onIrCalculadora, onIrInteligencia, onIrDespacho, onIrFactura, onIrConduces, onIrProveedores, onIrCompras, onIrGastos, onIrIngredientes, onIrEmpleados, onIrMiContrato, onIrMisRecibos, onIrCatalogo, onIrHistorial, onVolverAlPanel, modoAdmin = false }) {
+function VistaSecretaria({ usuario, empresaId, onCerrarSesion, onCambiarUsuario, onIrCalculadora, onIrInteligencia, onIrDespacho, onIrFactura, onIrConduces, onIrProveedores, onIrCompras, onIrGastos, onIrIngredientes, onIrEmpleados, onIrMiContrato, onIrMisRecibos, onIrCatalogo, onIrHistorial, onIrDGII, onVolverAlPanel, modoAdmin = false }) {
   const [empresa, setEmpresa] = useState(null)
   const [escuelas, setEscuelas] = useState([])
   const [operaciones, setOperaciones] = useState([])
@@ -631,33 +631,35 @@ function VistaSecretaria({ usuario, empresaId, onCerrarSesion, onCambiarUsuario,
 
         {/* TAB: REPORTES */}
         {tabActivo === 'reportes' && (
-          <div style={{
-            background: 'var(--color-modulo-bg)',
-            border: '1px solid var(--color-modulo-border)',
-            borderRadius: '14px',
-            padding: '60px 40px',
-            textAlign: 'center',
-            boxShadow: 'var(--modulo-sombra)',
-          }}>
-            <div style={{ fontSize: '52px', marginBottom: '12px' }}>📈</div>
-            <div style={{ fontSize: '18px', fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: '8px' }}>
-              Reportes Mensuales
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+              <span style={{ fontSize: '14px' }}>📈</span>
+              <span style={{ fontSize: '11px', color: 'var(--color-text-accent)', opacity: 0.85, letterSpacing: '1.5px', fontWeight: 600 }}>
+                REPORTES FISCALES DGII
+              </span>
             </div>
-            <div style={{ fontSize: '13px', color: 'var(--color-text-secondary)', marginBottom: '20px', maxWidth: '420px', margin: '0 auto 20px' }}>
-              Próximamente: P&L, formularios 606/607 DGII, estado INABIE, export Excel/PDF
-            </div>
-            <span style={{
-              display: 'inline-block',
-              background: esTropical ? '#BA7517' : 'rgba(250, 199, 117, 0.2)',
-              color: esTropical ? '#ffffff' : '#FAC775',
-              padding: '5px 12px',
-              borderRadius: '8px',
-              fontSize: '10px',
-              fontWeight: 700,
-              letterSpacing: '0.5px',
-            }}>
-              BLOQUE 6E
-            </span>
+            <CardAccion
+              emoji="🧾"
+              titulo="Reportes 606 / 607 DGII"
+              descripcion="Genera los formularios 606 (compras con NCF) y 607 (ventas a INABIE) para la DGII"
+              colorBorde="#534AB7"
+              onClick={onIrDGII}
+              esTropical={esTropical}
+              labelBoton="Abrir Reportes DGII"
+            />
+            {!onIrDGII && (
+              <div style={{
+                background: esTropical ? '#FCEBEB' : 'rgba(226, 75, 74, 0.12)',
+                border: '1px solid rgba(226, 75, 74, 0.3)',
+                borderLeft: '4px solid #E24B4A',
+                borderRadius: '12px',
+                padding: '14px 16px',
+                fontSize: '12px',
+                color: esTropical ? '#A32D2D' : '#F4C0D1',
+              }}>
+                ⚠️ No tienes permiso para ver los reportes DGII. Contacta al administrador.
+              </div>
+            )}
           </div>
         )}
 

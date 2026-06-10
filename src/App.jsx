@@ -203,7 +203,7 @@ function App() {
     (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador')
 
   const puedeVerDGII = usuarioLogueado && 
-    (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'contador')
+    (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador' || usuarioLogueado.rol === 'contador' || usuarioLogueado.rol === 'secretaria')
 
   const puedeVerAsistencia = usuarioLogueado && 
     (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador')
@@ -258,6 +258,7 @@ function App() {
           onIrIngredientes={() => setVistaActual('ingredientes')}
           onIrGastos={() => setVistaActual('gastos')}
           onIrNomina={() => setVistaActual('nomina')}
+          onIrDGII={puedeVerDGII ? () => setVistaActual('dgii') : null}
           onIrCatalogo={() => setVistaActual('catalogo_recetas')}
           onIrHistorial={() => setVistaActual('historial')}
           onIrMiContrato={() => setVistaActual('mi_contrato')}
@@ -413,6 +414,7 @@ function App() {
           onIrIngredientes={() => setVistaActual('ingredientes')}
           onIrGastos={() => setVistaActual('gastos')}
           onIrNomina={() => setVistaActual('nomina')}
+          onIrDGII={() => setVistaActual('dgii')}
           onIrCatalogo={() => setVistaActual('catalogo_recetas')}
           onIrHistorial={() => setVistaActual('historial')}
           onVolverAlPanel={() => setVistaActual('dashboard')}
