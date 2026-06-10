@@ -55,7 +55,6 @@ function App() {
   // 🛡️ Estado para el bloqueo por suspensión en tiempo real
   const [cocinaSuspendidaEnVivo, setCocinaSuspendidaEnVivo] = useState(false)
 
-  // 🎯 DETECTAR si el usuario viene del email de recuperación de contraseña
   useEffect(() => {
     const hash = window.location.hash
     const pathname = window.location.pathname
@@ -79,16 +78,29 @@ function App() {
 
   // ═══════════════════════════════════════════════════
   // 🛡️ VIGILANTE DE SUSPENSIÓN EN TIEMPO REAL
-  // Mientras hay una cocina logueada, revisa cada 60 seg
-  // si la cocina sigue activa. Si la suspenden, saca al usuario.
+  // Mientras hay una cocina logueada, revisa cada 60 seg:
+  // 1. Si venció el plazo de gracia → la auto-suspende.
+  // 2. Si está suspendida → saca al usuario.
   // (No aplica al súper-admin en el Centro de Mando.)
   // ═══════════════════════════════════════════════════
   useEffect(() => {
-    // Solo vigilar si hay una cocina logueada y NO estamos en el centro de mando
     if (!empresaLogueada?.id) return
     if (vistaActual === 'centro_mando' || vistaActual === 'login_centro_mando') return
 
     async function revisarEstado() {
+      // Primero: verificar si venció la gracia y auto-suspender si aplica
+      const { data: estadoActual } = await supabase.rpc('verificar_y_suspender_si_vencio', {
+        p_cocina_id: empresaLogueada.id,
+      })
+
+      // Si la función dice "suspendida" (o quedó suspendida), sacar al usuario
+      if (estadoActual === 'suspendida') {
+        setCocinaSuspendidaEnVivo(true)
+        await supabase.auth.signOut()
+        return
+      }
+
+      // Doble chequeo directo por si acaso
       const { data, error } = await supabase
         .from('empresas')
         .select('estado')
@@ -96,13 +108,11 @@ function App() {
         .single()
 
       if (!error && data && data.estado === 'suspendida') {
-        // La cocina fue suspendida mientras estaba abierta
         setCocinaSuspendidaEnVivo(true)
         await supabase.auth.signOut()
       }
     }
 
-    // Revisar de inmediato y luego cada 60 segundos
     revisarEstado()
     const intervalo = setInterval(revisarEstado, 60000)
 
@@ -122,16 +132,27 @@ function App() {
         .single()
 
       if (empresa && !error) {
-        // 🛡️ Si la cocina está suspendida, no dejar entrar
-        if (empresa.estado === 'suspendida') {
+        // 🛡️ Verificar si venció la gracia (auto-suspende si aplica)
+        await supabase.rpc('verificar_y_suspender_si_vencio', { p_cocina_id: empresa.id })
+
+        // Releer el estado por si se acaba de suspender
+        const { data: empresaActualizada } = await supabase
+          .from('empresas')
+          .select('*')
+          .eq('id', empresa.id)
+          .single()
+
+        const empresaFinal = empresaActualizada || empresa
+
+        if (empresaFinal.estado === 'suspendida') {
           await supabase.auth.signOut()
           setCocinaSuspendidaEnVivo(true)
           setVistaActual('login_empresa')
           setCargando(false)
           return
         }
-        setEmpresaLogueada(empresa)
-        setEmpresaActual(empresa)
+        setEmpresaLogueada(empresaFinal)
+        setEmpresaActual(empresaFinal)
         setVistaActual('seleccion_operador')
       } else {
         console.warn('Sesión activa pero empresa no encontrada. Cerrando sesión.')
@@ -200,7 +221,6 @@ function App() {
     setVistaActual('seleccion_operador')
   }
 
-  // 🛡️ Volver al login después de ser suspendido en vivo
   function volverDeSuspension() {
     setCocinaSuspendidaEnVivo(false)
     setUsuarioLogueado(null)
@@ -210,7 +230,6 @@ function App() {
     setVistaActual('login_empresa')
   }
 
-  // 🛡️ CENTRO DE MANDO
   function abrirLoginCentroMando() {
     setVistaActual('login_centro_mando')
   }
@@ -393,9 +412,6 @@ function App() {
     )
   }
 
-  // ═══════════════════════════════════════════════════
-  // 🛡️ PANTALLA DE COCINA SUSPENDIDA EN VIVO
-  // ═══════════════════════════════════════════════════
   if (cocinaSuspendidaEnVivo) {
     return (
       <div style={{ minHeight: '100vh', background: 'var(--color-bg-primary, #0a1410)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
@@ -418,23 +434,14 @@ function App() {
     )
   }
 
-  // ═══════════════════════════════════════════════════
-  // 🎯 RESET PASSWORD - antes de cualquier intro
-  // ═══════════════════════════════════════════════════
   if (vistaActual === 'reset_password') {
     return <ResetPasswordPage onTerminado={resetCompletado} />
   }
 
-  // ═══════════════════════════════════════════════════
-  // INTRO ANDAMIO
-  // ═══════════════════════════════════════════════════
   if (mostrarIntro) {
     return <IntroAndamio onTerminada={terminarIntro} />
   }
 
-  // ═══════════════════════════════════════════════════
-  // INTRO COCINA PAE
-  // ═══════════════════════════════════════════════════
   if (mostrarIntroCocina && usuarioLogueado) {
     return <IntroCocinaPAE onTerminada={terminarIntroCocina} />
   }
@@ -453,9 +460,6 @@ function App() {
     )
   }
 
-  // ═══════════════════════════════════════════════════
-  // 🛡️ CENTRO DE MANDO (fuera del flujo normal de cocina)
-  // ═══════════════════════════════════════════════════
   if (vistaActual === 'login_centro_mando' && empresaLogueada) {
     return (
       <LoginCentroMando

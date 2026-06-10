@@ -11,6 +11,7 @@ function GestionCocinas({ tema: t, empresa, onVolver }) {
 
   const [accion, setAccion] = useState(null)
   const [motivoSusp, setMotivoSusp] = useState('')
+  const [motivoGracia, setMotivoGracia] = useState('')
   const [uidVincular, setUidVincular] = useState('')
   const [claveAccion, setClaveAccion] = useState('')
   const [procesando, setProcesando] = useState(false)
@@ -60,6 +61,15 @@ function GestionCocinas({ tema: t, empresa, onVolver }) {
       rpcCall = supabase.rpc('reactivar_cocina', {
         p_empresa_id_admin: empresa.id, p_clave: claveAccion, p_cocina_id: accion.cocina.id,
       })
+    } else if (accion.tipo === 'aviso') {
+      rpcCall = supabase.rpc('dar_aviso_pago', {
+        p_empresa_id_admin: empresa.id, p_clave: claveAccion,
+        p_cocina_id: accion.cocina.id, p_dias: 5, p_motivo: motivoGracia.trim() || 'Pago pendiente',
+      })
+    } else if (accion.tipo === 'quitar_aviso') {
+      rpcCall = supabase.rpc('quitar_aviso_pago', {
+        p_empresa_id_admin: empresa.id, p_clave: claveAccion, p_cocina_id: accion.cocina.id,
+      })
     } else if (accion.tipo === 'vincular') {
       const uidLimpio = uidVincular.trim().toLowerCase()
       const formatoUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
@@ -93,6 +103,7 @@ function GestionCocinas({ tema: t, empresa, onVolver }) {
   function abrirAccion(tipo, cocina) {
     setAccion({ tipo, cocina })
     setMotivoSusp('')
+    setMotivoGracia('')
     setUidVincular('')
     setClaveAccion('')
     setErrorAccion('')
@@ -101,19 +112,30 @@ function GestionCocinas({ tema: t, empresa, onVolver }) {
   function cerrarAccion() {
     setAccion(null)
     setMotivoSusp('')
+    setMotivoGracia('')
     setUidVincular('')
     setClaveAccion('')
     setErrorAccion('')
   }
 
-  // Filtrar cocinas por búsqueda (nombre o RNC)
+  // Calcular días restantes de gracia
+  function diasRestantes(fechaLimite) {
+    if (!fechaLimite) return null
+    const ahora = new Date()
+    const limite = new Date(fechaLimite)
+    const diff = limite - ahora
+    if (diff <= 0) return 0
+    return Math.ceil(diff / (1000 * 60 * 60 * 24))
+  }
+
   const cocinasFiltradas = cocinas.filter((c) => {
     const q = busqueda.trim().toLowerCase()
     if (!q) return true
     return (c.nombre || '').toLowerCase().includes(q) || (c.rnc || '').toLowerCase().includes(q)
   })
 
-  const totalActivas = cocinas.filter((c) => c.estado !== 'suspendida').length
+  const totalActivas = cocinas.filter((c) => c.estado === 'activa').length
+  const totalGracia = cocinas.filter((c) => c.estado === 'gracia').length
   const totalSuspendidas = cocinas.filter((c) => c.estado === 'suspendida').length
 
   const inputStyle = {
@@ -178,7 +200,7 @@ function GestionCocinas({ tema: t, empresa, onVolver }) {
           <div>
             <p style={{ margin: 0, fontSize: '19px', fontWeight: 600, color: t.textPrimary }}>Gestión de Cocinas</p>
             <p style={{ margin: '2px 0 0', fontSize: '11px', color: t.textMuted }}>
-              {cocinas.length} cocina{cocinas.length !== 1 ? 's' : ''} · {totalActivas} activa{totalActivas !== 1 ? 's' : ''}{totalSuspendidas > 0 ? ` · ${totalSuspendidas} suspendida${totalSuspendidas !== 1 ? 's' : ''}` : ''}
+              {cocinas.length} cocina{cocinas.length !== 1 ? 's' : ''} · {totalActivas} activa{totalActivas !== 1 ? 's' : ''}{totalGracia > 0 ? ` · ${totalGracia} en gracia` : ''}{totalSuspendidas > 0 ? ` · ${totalSuspendidas} suspendida${totalSuspendidas !== 1 ? 's' : ''}` : ''}
             </p>
           </div>
         </div>
@@ -200,7 +222,6 @@ function GestionCocinas({ tema: t, empresa, onVolver }) {
           )}
         </div>
 
-        {/* Resultado vacío */}
         {cocinasFiltradas.length === 0 && (
           <div style={{ background: t.cardBg, border: `1px solid ${t.borde}`, borderRadius: '14px', padding: '30px', textAlign: 'center' }}>
             <p style={{ margin: 0, fontSize: '13px', color: t.textSec }}>
@@ -212,12 +233,19 @@ function GestionCocinas({ tema: t, empresa, onVolver }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {cocinasFiltradas.map((c, idx) => {
             const suspendida = c.estado === 'suspendida'
+            const enGracia = c.estado === 'gracia'
             const sinLogin = !c.auth_user_id
+            const dias = enGracia ? diasRestantes(c.fecha_limite_gracia) : null
+
+            let colorBorde = t.acento
+            if (suspendida) colorBorde = '#C45B4A'
+            else if (enGracia) colorBorde = '#D9A441'
+
             return (
               <div key={c.id} style={{
                 background: t.cardBg, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
-                border: `1px solid ${suspendida ? 'rgba(196,91,74,0.4)' : t.borde}`,
-                borderLeft: `4px solid ${suspendida ? '#C45B4A' : t.acento}`,
+                border: `1px solid ${suspendida ? 'rgba(196,91,74,0.4)' : enGracia ? 'rgba(217,164,65,0.4)' : t.borde}`,
+                borderLeft: `4px solid ${colorBorde}`,
                 borderRadius: '14px', padding: '16px 18px',
                 opacity: 0, animation: `gcUp 0.4s ease ${idx * 0.05}s forwards`,
               }}>
@@ -225,9 +253,15 @@ function GestionCocinas({ tema: t, empresa, onVolver }) {
                   <div style={{ flex: 1, minWidth: '200px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                       <p style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: t.textPrimary }}>{c.nombre}</p>
-                      {suspendida ? (
+                      {suspendida && (
                         <span style={{ background: 'rgba(196,91,74,0.18)', border: '1px solid rgba(196,91,74,0.5)', color: '#E8A598', fontSize: '9px', fontWeight: 700, letterSpacing: '1px', padding: '3px 8px', borderRadius: '6px' }}>SUSPENDIDA</span>
-                      ) : (
+                      )}
+                      {enGracia && (
+                        <span style={{ background: 'rgba(217,164,65,0.18)', border: '1px solid rgba(217,164,65,0.5)', color: '#E8C97A', fontSize: '9px', fontWeight: 700, letterSpacing: '1px', padding: '3px 8px', borderRadius: '6px' }}>
+                          ⏳ {dias > 0 ? `${dias} DÍA${dias !== 1 ? 'S' : ''}` : 'VENCIDA'}
+                        </span>
+                      )}
+                      {!suspendida && !enGracia && (
                         <span style={{ background: `${t.acento}22`, border: `1px solid ${t.acento}50`, color: t.acento, fontSize: '9px', fontWeight: 700, letterSpacing: '1px', padding: '3px 8px', borderRadius: '6px' }}>ACTIVA</span>
                       )}
                       {sinLogin && (
@@ -239,8 +273,11 @@ function GestionCocinas({ tema: t, empresa, onVolver }) {
                       {c.rnc ? ` · RNC ${c.rnc}` : ''}
                     </p>
                     {suspendida && c.motivo_suspension && (
-                      <p style={{ margin: '6px 0 0', fontSize: '11px', color: '#E8A598' }}>
-                        Motivo: {c.motivo_suspension}
+                      <p style={{ margin: '6px 0 0', fontSize: '11px', color: '#E8A598' }}>Motivo: {c.motivo_suspension}</p>
+                    )}
+                    {enGracia && (
+                      <p style={{ margin: '6px 0 0', fontSize: '11px', color: '#E8C97A' }}>
+                        ⏳ {c.motivo_gracia || 'Pago pendiente'} {dias > 0 ? `· se suspende en ${dias} día${dias !== 1 ? 's' : ''}` : '· plazo vencido, se suspenderá al abrir'}
                       </p>
                     )}
                   </div>
@@ -251,6 +288,22 @@ function GestionCocinas({ tema: t, empresa, onVolver }) {
                         🔗 Vincular login
                       </button>
                     )}
+
+                    {/* Botón dar aviso (solo si está activa) */}
+                    {!suspendida && !enGracia && (
+                      <button onClick={() => abrirAccion('aviso', c)} style={{ background: 'rgba(217,164,65,0.15)', border: '1px solid rgba(217,164,65,0.4)', borderRadius: '10px', padding: '8px 13px', color: '#E8C97A', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                        ⏳ Dar aviso
+                      </button>
+                    )}
+
+                    {/* Botón quitar aviso (solo si está en gracia) */}
+                    {enGracia && (
+                      <button onClick={() => abrirAccion('quitar_aviso', c)} style={{ background: `${t.acento}22`, border: `1px solid ${t.acento}50`, borderRadius: '10px', padding: '8px 13px', color: t.acento, fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                        ✓ Quitar aviso
+                      </button>
+                    )}
+
+                    {/* Suspender / Reactivar */}
                     {suspendida ? (
                       <button onClick={() => abrirAccion('reactivar', c)} style={{ background: `${t.acento}22`, border: `1px solid ${t.acento}50`, borderRadius: '10px', padding: '8px 13px', color: t.acento, fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
                         ✓ Reactivar
@@ -274,9 +327,23 @@ function GestionCocinas({ tema: t, empresa, onVolver }) {
             <p style={{ margin: '0 0 4px', fontSize: '17px', fontWeight: 600, color: t.textPrimary }}>
               {accion.tipo === 'suspender' && '⊘ Suspender cocina'}
               {accion.tipo === 'reactivar' && '✓ Reactivar cocina'}
+              {accion.tipo === 'aviso' && '⏳ Dar aviso de pago (5 días)'}
+              {accion.tipo === 'quitar_aviso' && '✓ Quitar aviso de pago'}
               {accion.tipo === 'vincular' && '🔗 Vincular login'}
             </p>
             <p style={{ margin: '0 0 18px', fontSize: '13px', color: t.textSec }}>{accion.cocina.nombre}</p>
+
+            {accion.tipo === 'aviso' && (
+              <>
+                <div style={{ background: 'rgba(217,164,65,0.1)', border: '1px solid rgba(217,164,65,0.3)', borderRadius: '10px', padding: '12px', marginBottom: '14px' }}>
+                  <p style={{ margin: 0, fontSize: '12px', color: '#E8C97A', lineHeight: 1.5 }}>
+                    La cocina seguirá trabajando, pero verá un aviso de que su servicio se suspenderá en 5 días. Si no paga, se suspende automáticamente.
+                  </p>
+                </div>
+                <label style={{ fontSize: '11px', letterSpacing: '1px', color: t.textSec, display: 'block', marginBottom: '6px' }}>MOTIVO (opcional)</label>
+                <input style={{ ...inputStyle, marginBottom: '14px' }} value={motivoGracia} onChange={(e) => setMotivoGracia(e.target.value)} placeholder="Ej: Pago de junio pendiente" />
+              </>
+            )}
 
             {accion.tipo === 'suspender' && (
               <>
@@ -307,9 +374,9 @@ function GestionCocinas({ tema: t, empresa, onVolver }) {
               </button>
               <button onClick={ejecutarAccion} disabled={procesando} style={{
                 flex: 1, padding: '12px',
-                background: accion.tipo === 'suspender' ? 'linear-gradient(135deg, #C45B4A, #9A3F32)' : t.logoGrad,
+                background: accion.tipo === 'suspender' ? 'linear-gradient(135deg, #C45B4A, #9A3F32)' : accion.tipo === 'aviso' ? 'linear-gradient(135deg, #D9A441, #B0862C)' : t.logoGrad,
                 border: 'none', borderRadius: '11px',
-                color: accion.tipo === 'suspender' ? '#fff' : (t.claro ? '#fff' : '#0F1208'),
+                color: (accion.tipo === 'suspender' || accion.tipo === 'aviso') ? '#fff' : (t.claro ? '#fff' : '#0F1208'),
                 fontSize: '13px', fontWeight: 700, cursor: procesando ? 'wait' : 'pointer', fontFamily: 'inherit',
               }}>
                 {procesando ? 'Procesando...' : 'Confirmar'}
