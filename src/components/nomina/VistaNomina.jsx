@@ -102,6 +102,7 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
   function diasFaltantes(fp) { const h = new Date(); h.setHours(0,0,0,0); const p = new Date(fp); p.setHours(0,0,0,0); return Math.ceil((p - h) / 86400000) }
   function formatearFecha(f) { return new Date(f).toLocaleDateString('es-DO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) }
   function formatearMoneda(m) { return Number(m || 0).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
+  function fechaISO(f) { return f ? new Date(f).toISOString().split('T')[0] : null }
   function obtenerAvatar(emp) { if (emp.foto_url) return null; if (emp.sexo === 'hombre') return '👨'; if (emp.sexo === 'mujer') return '👩'; return emp.nombre?.charAt(0)?.toUpperCase() || '?' }
 
   const proximoPeriodo = empresa ? calcularProximoPeriodo() : null
@@ -137,7 +138,20 @@ function VistaNomina({ usuario, empresaId, onVolver }) {
       )}
 
       {modalPagoAbierto && proximoPeriodo && (
-        <ModalPagarQuincena empresa={empresa} empleados={empleados} periodo={proximoPeriodo} usuarioActual={usuario} onCerrar={() => setModalPagoAbierto(false)} onPagoExitoso={onPagoExitoso} />
+        <ModalPagarQuincena
+          empresaId={empresaId}
+          usuarioActual={usuario}
+          periodoPagar={{
+            tipo: proximoPeriodo.tipo_periodo,
+            año: proximoPeriodo.año,
+            mes: proximoPeriodo.mes,
+            semana: proximoPeriodo.semana || null,
+            fechaInicio: fechaISO(proximoPeriodo.fecha_inicio),
+            fechaFin: fechaISO(proximoPeriodo.fecha_fin),
+          }}
+          onCerrar={() => setModalPagoAbierto(false)}
+          onPagado={onPagoExitoso}
+        />
       )}
 
       <div style={{ maxWidth: '1100px', margin: '0 auto', position: 'relative', zIndex: 1 }}>

@@ -143,6 +143,7 @@ function ModalPagarQuincena({ empresaId, usuarioActual, periodoPagar, onCerrar, 
         const bono = bonoEmpleado(d.usuario_id)
         return {
           pago_nomina_id: pagoCreado.id,
+          empresa_id: empresaId,
           usuario_id: d.usuario_id,
           empleado_nombre: d.nombre,
           empleado_rol: d.rol,
@@ -160,26 +161,43 @@ function ModalPagarQuincena({ empresaId, usuarioActual, periodoPagar, onCerrar, 
 
       const { error: errDet } = await supabase
         .from('pagos_nomina_detalle').insert(detallesInsert)
-      if (errDet) throw new Error(errDet.message)
+      if (errDet) {
+        // Si el detalle falla, revertimos el pago para no dejar un registro
+        // huérfano que bloquee reintentar. Best-effort: si el borrado falla, seguimos.
+        await supabase.from('pagos_nomina').delete().eq('id', pagoCreado.id)
+        throw new Error(errDet.message)
+      }
 
-      const resGasto = await crearGastosDesdeNomina?.({
-        empresaId,
-        pagoNominaId: pagoCreado.id,
-        periodo: periodoPagar,
-        totalNeto: totales.neto,
-        totalAportes: totales.aportes,
-        totalBonos: totales.bonos,
-        registradoPor: usuarioActual?.id,
-        registradoPorNombre: usuarioActual?.nombre || 'Sistema',
-      })
-      if (resGasto && !resGasto.success) console.warn('Pago OK pero falló gasto automático:', resGasto.error)
+      // El gasto automático es SECUNDARIO: el pago ya está hecho.
+      // Lo aislamos en su propio try/catch para que NUNCA congele ni
+      // impida que el modal se cierre y la pantalla se refresque.
+      try {
+        const resGasto = await crearGastosDesdeNomina?.({
+          empresaId,
+          pagoNominaId: pagoCreado.id,
+          periodo: periodoPagar,
+          totalNeto: totales.neto,
+          totalAportes: totales.aportes,
+          totalBonos: totales.bonos,
+          registradoPor: usuarioActual?.id,
+          registradoPorNombre: usuarioActual?.nombre || 'Sistema',
+        })
+        if (resGasto && !resGasto.success) console.warn('Pago OK pero falló gasto automático:', resGasto.error)
+      } catch (gastoErr) {
+        console.warn('Pago OK pero el gasto automático lanzó error:', gastoErr?.message)
+      }
 
+      // Éxito: cerrar la confirmación, avisar al padre (refresca) y cerrar el modal.
       setProcesando(false)
+      setConfirmar(false)
       if (onPagado) onPagado(pagoCreado)
       onCerrar()
     } catch (e) {
-      setError(e.message)
+      // Falla real: cerramos la ventana de confirmación para que el error
+      // quede VISIBLE y nunca se sienta como "no pasó nada".
+      setError(e.message || 'No se pudo procesar el pago.')
       setProcesando(false)
+      setConfirmar(false)
     }
   }
 
@@ -223,6 +241,8 @@ function ModalPagarQuincena({ empresaId, usuarioActual, periodoPagar, onCerrar, 
   }
 
   return (
+    <>
+    {/* ─── MODAL PRINCIPAL (largo, con scroll) ─── */}
     <div style={{
       position: 'fixed', inset: 0, zIndex: 90,
       background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
@@ -453,83 +473,84 @@ function ModalPagarQuincena({ empresaId, usuarioActual, periodoPagar, onCerrar, 
             </>
           )}
         </div>
-
-        {/* MODAL DE CONFIRMACIÓN */}
-        {confirmar && (
-          <div style={{
-            position: 'fixed', inset: 0, zIndex: 100,
-            background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: '20px',
-          }}>
-            <div style={{
-              background: 'var(--color-bg-elevated)',
-              border: '0.5px solid var(--color-border-accent)',
-              borderRadius: '16px', maxWidth: '420px', width: '100%',
-              overflow: 'hidden',
-            }}>
-              <div style={{
-                background: 'linear-gradient(135deg, #1D9E75 0%, #0F6E56 100%)',
-                padding: '24px', textAlign: 'center', color: 'white',
-              }}>
-                <div style={{ fontSize: '40px', marginBottom: '6px' }}>💰</div>
-                <div style={{ fontSize: '18px', fontWeight: 600 }}>¿Confirmar pago?</div>
-                <div style={{ fontSize: '11px', opacity: 0.9, marginTop: '2px' }}>{labelPeriodo()}</div>
-              </div>
-              <div style={{ padding: '20px' }}>
-                <div style={{
-                  background: 'var(--color-bg-input)',
-                  border: '1px solid var(--color-border-subtle)',
-                  borderRadius: '10px', padding: '14px',
-                  fontSize: '13px', textAlign: 'center', marginBottom: '14px',
-                }}>
-                  <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', letterSpacing: '0.5px' }}>TOTAL A PAGAR</div>
-                  <div style={{ fontSize: '24px', fontWeight: 600, color: '#1D9E75', marginTop: '4px' }}>
-                    RD$ {formatearMoneda(totales.neto)}
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
-                    a {detallePagos.length} empleado(s)
-                  </div>
-                </div>
-
-                <div style={{
-                  background: 'rgba(239, 159, 39, 0.12)',
-                  border: '1px solid rgba(239, 159, 39, 0.35)',
-                  borderRadius: '10px', padding: '10px 12px',
-                  fontSize: '11px', color: 'var(--color-text-secondary)', marginBottom: '14px',
-                }}>
-                  <div style={{ fontWeight: 600, color: '#EF9F27', marginBottom: '4px' }}>Al confirmar:</div>
-                  📝 Se guarda el pago en el histórico de nómina<br />
-                  💰 Se crea gasto automático en módulo Gastos<br />
-                  📊 Aparece en reportes y dashboard
-                </div>
-
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button onClick={() => setConfirmar(false)} disabled={procesando} style={{
-                    flex: 1, padding: '12px',
-                    background: 'var(--color-bg-elevated)',
-                    border: '1px solid var(--color-border-subtle)',
-                    borderRadius: '10px',
-                    color: 'var(--color-text-secondary)',
-                    fontSize: '13px', fontWeight: 500,
-                    cursor: procesando ? 'not-allowed' : 'pointer',
-                    opacity: procesando ? 0.6 : 1, fontFamily: 'inherit',
-                  }}>Cancelar</button>
-                  <button onClick={procesarPago} disabled={procesando} style={{
-                    flex: 1, padding: '12px',
-                    background: 'linear-gradient(135deg, #1D9E75 0%, #0F6E56 100%)',
-                    border: 'none', borderRadius: '10px',
-                    color: 'white', fontSize: '13px', fontWeight: 600,
-                    cursor: procesando ? 'not-allowed' : 'pointer',
-                    opacity: procesando ? 0.6 : 1, fontFamily: 'inherit',
-                  }}>{procesando ? '⏳ Procesando...' : '✓ CONFIRMAR'}</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
+
+    {/* ─── VENTANA DE CONFIRMACIÓN — fuera del modal largo, fija a la PANTALLA ─── */}
+    {confirmar && (
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 110,
+        background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '20px', overflowY: 'auto',
+      }}>
+        <div style={{
+          background: 'var(--color-bg-elevated)',
+          border: '0.5px solid var(--color-border-accent)',
+          borderRadius: '16px', maxWidth: '420px', width: '100%',
+          overflow: 'hidden',
+        }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #1D9E75 0%, #0F6E56 100%)',
+            padding: '24px', textAlign: 'center', color: 'white',
+          }}>
+            <div style={{ fontSize: '40px', marginBottom: '6px' }}>💰</div>
+            <div style={{ fontSize: '18px', fontWeight: 600 }}>¿Confirmar pago?</div>
+            <div style={{ fontSize: '11px', opacity: 0.9, marginTop: '2px' }}>{labelPeriodo()}</div>
+          </div>
+          <div style={{ padding: '20px' }}>
+            <div style={{
+              background: 'var(--color-bg-input)',
+              border: '1px solid var(--color-border-subtle)',
+              borderRadius: '10px', padding: '14px',
+              fontSize: '13px', textAlign: 'center', marginBottom: '14px',
+            }}>
+              <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', letterSpacing: '0.5px' }}>TOTAL A PAGAR</div>
+              <div style={{ fontSize: '24px', fontWeight: 600, color: '#1D9E75', marginTop: '4px' }}>
+                RD$ {formatearMoneda(totales.neto)}
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                a {detallePagos.length} empleado(s)
+              </div>
+            </div>
+
+            <div style={{
+              background: 'rgba(239, 159, 39, 0.12)',
+              border: '1px solid rgba(239, 159, 39, 0.35)',
+              borderRadius: '10px', padding: '10px 12px',
+              fontSize: '11px', color: 'var(--color-text-secondary)', marginBottom: '14px',
+            }}>
+              <div style={{ fontWeight: 600, color: '#EF9F27', marginBottom: '4px' }}>Al confirmar:</div>
+              📝 Se guarda el pago en el histórico de nómina<br />
+              💰 Se crea gasto automático en módulo Gastos<br />
+              📊 Aparece en reportes y dashboard
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={() => setConfirmar(false)} disabled={procesando} style={{
+                flex: 1, padding: '12px',
+                background: 'var(--color-bg-elevated)',
+                border: '1px solid var(--color-border-subtle)',
+                borderRadius: '10px',
+                color: 'var(--color-text-secondary)',
+                fontSize: '13px', fontWeight: 500,
+                cursor: procesando ? 'not-allowed' : 'pointer',
+                opacity: procesando ? 0.6 : 1, fontFamily: 'inherit',
+              }}>Cancelar</button>
+              <button onClick={procesarPago} disabled={procesando} style={{
+                flex: 1, padding: '12px',
+                background: 'linear-gradient(135deg, #1D9E75 0%, #0F6E56 100%)',
+                border: 'none', borderRadius: '10px',
+                color: 'white', fontSize: '13px', fontWeight: 600,
+                cursor: procesando ? 'not-allowed' : 'pointer',
+                opacity: procesando ? 0.6 : 1, fontFamily: 'inherit',
+              }}>{procesando ? '⏳ Procesando...' : '✓ CONFIRMAR'}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   )
 }
 

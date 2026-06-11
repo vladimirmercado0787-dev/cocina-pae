@@ -38,6 +38,7 @@ import MisRecibos from './components/nomina/MisRecibos'
 import ReportesDGII from './components/dgii/ReportesDGII'
 import VistaAsistencia from './components/asistencia/VistaAsistencia'
 import VistaEstadisticas from './components/estadisticas/VistaEstadisticas'
+import SaludDeLaCocina from './components/salud/SaludDeLaCocina'
 
 function App() {
   const [mostrarIntro, setMostrarIntro] = useState(true)
@@ -78,29 +79,22 @@ function App() {
 
   // ═══════════════════════════════════════════════════
   // 🛡️ VIGILANTE DE SUSPENSIÓN EN TIEMPO REAL
-  // Mientras hay una cocina logueada, revisa cada 60 seg:
-  // 1. Si venció el plazo de gracia → la auto-suspende.
-  // 2. Si está suspendida → saca al usuario.
-  // (No aplica al súper-admin en el Centro de Mando.)
   // ═══════════════════════════════════════════════════
   useEffect(() => {
     if (!empresaLogueada?.id) return
     if (vistaActual === 'centro_mando' || vistaActual === 'login_centro_mando') return
 
     async function revisarEstado() {
-      // Primero: verificar si venció la gracia y auto-suspender si aplica
       const { data: estadoActual } = await supabase.rpc('verificar_y_suspender_si_vencio', {
         p_cocina_id: empresaLogueada.id,
       })
 
-      // Si la función dice "suspendida" (o quedó suspendida), sacar al usuario
       if (estadoActual === 'suspendida') {
         setCocinaSuspendidaEnVivo(true)
         await supabase.auth.signOut()
         return
       }
 
-      // Doble chequeo directo por si acaso
       const { data, error } = await supabase
         .from('empresas')
         .select('estado')
@@ -132,10 +126,8 @@ function App() {
         .single()
 
       if (empresa && !error) {
-        // 🛡️ Verificar si venció la gracia (auto-suspende si aplica)
         await supabase.rpc('verificar_y_suspender_si_vencio', { p_cocina_id: empresa.id })
 
-        // Releer el estado por si se acaba de suspender
         const { data: empresaActualizada } = await supabase
           .from('empresas')
           .select('*')
@@ -297,6 +289,9 @@ function App() {
   const puedeVerMiContrato = usuarioLogueado && usuarioLogueado.rol !== 'propietario'
   const puedeVerMisRecibos = usuarioLogueado && usuarioLogueado.rol !== 'propietario'
 
+  const puedeVerSalud = usuarioLogueado && 
+    (usuarioLogueado.rol === 'propietario' || usuarioLogueado.rol === 'administrador')
+
   function renderPasoWizard() {
     if (pasoActual === 1) {
       return <Paso1MiCocina onAvanzar={avanzarPaso} empresaActual={empresaActual} setEmpresaActual={setEmpresaActual} />
@@ -408,6 +403,7 @@ function App() {
         onVerComoSecretaria={usuarioLogueado.rol === 'propietario' ? () => setVistaActual('vista_secretaria_admin') : null}
         onIrCatalogo={puedeVerCatalogo ? () => setVistaActual('catalogo_recetas') : null}
         onIrHistorial={puedeVerHistorial ? () => setVistaActual('historial') : null}
+        onIrSalud={puedeVerSalud ? () => setVistaActual('salud') : null}
       />
     )
   }
@@ -693,6 +689,13 @@ function App() {
       {pasoActual === 7 && vistaActual === 'estadisticas' && usuarioLogueado && puedeVerEstadisticas && (
         <VistaEstadisticas 
           usuario={usuarioLogueado}
+          empresaId={empresaActual?.id}
+          onVolver={() => setVistaActual('dashboard')}
+        />
+      )}
+      
+      {pasoActual === 7 && vistaActual === 'salud' && usuarioLogueado && puedeVerSalud && (
+        <SaludDeLaCocina 
           empresaId={empresaActual?.id}
           onVolver={() => setVistaActual('dashboard')}
         />

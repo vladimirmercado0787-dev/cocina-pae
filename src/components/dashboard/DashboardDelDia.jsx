@@ -70,6 +70,7 @@ function DashboardDelDia({
   onIrEstadisticas,
   onIrCatalogo,
   onIrHistorial,
+  onIrSalud,
   onIrFactura,
   onIrConduces,
   onIrProveedores,
@@ -1028,7 +1029,7 @@ function DashboardDelDia({
           <Modulo emoji="💡" label="Inteligencia"    sublabel="Análisis"  cat={CATEGORIAS.operacion} tema={tema} onClick={onIrInteligencia ? onIrInteligencia : () => mostrarProximamente('Inteligencia')} />
           <Modulo emoji="📊" label="Estadísticas"    sublabel="En qué pie" cat={CATEGORIAS.operacion} tema={tema} onClick={onIrEstadisticas ? onIrEstadisticas : () => mostrarProximamente('Estadísticas')} />
           <Modulo emoji="📜" label="Historial"       sublabel="Todas ops" cat={CATEGORIAS.operacion} tema={tema} onClick={onIrHistorial ? onIrHistorial : () => mostrarProximamente('Historial')} />
-          <Modulo emoji="🏫" label="Centros INABIE"  sublabel={`${escuelas.length} escuelas`} cat={CATEGORIAS.operacion} tema={tema} proximamente onClick={() => mostrarProximamente('Centros INABIE')} />
+          <Modulo emoji="🩺" label="Salud de mi Cocina"  sublabel="Cómo va tu cocina" cat={CATEGORIAS.operacion} tema={tema} onClick={onIrSalud ? onIrSalud : () => mostrarProximamente('Salud de mi Cocina')} />
           <Modulo emoji="⚙️" label="Configuración"  sublabel="Empresa"   cat={CATEGORIAS.operacion} tema={tema} onClick={onIrConfiguracion ? onIrConfiguracion : () => mostrarProximamente('Configuración')} />
         </CategoriaBanner>
       </div>
