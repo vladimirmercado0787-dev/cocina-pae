@@ -6,18 +6,32 @@ const VERDE = { c: '#1D9E75', claro: '#D7F0DD', dark: '#04342C' }
 const AZUL = { c: '#378ADD', claro: '#E6F1FB', dark: '#0C447C' }
 const AMBAR = { c: '#EF9F27', claro: '#FAEEDA', dark: '#633806' }
 const MORADO = { c: '#7F77DD', claro: '#EEEDFE', dark: '#3C3489' }
+const CYAN = { c: '#00A8B5', claro: '#D9F4F6', dark: '#04484D' }
 
 function Paso2Escuelas({ empresaId }) {
   const [escuelas, setEscuelas] = useState([])
   const [mostrarFormulario, setMostrarFormulario] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [mensaje, setMensaje] = useState(null)
-  
+
   const [datos, setDatos] = useState({
     nombre: '', direccion: '', director_nombre: '', director_telefono: '',
     raciones_contractuales: '', precio_racion: '51.00', distancia_km: '',
-    codigo_centro: '', regional_distrito: '', provincia: '', municipio: '', barrio_sector: ''
+    codigo_centro: '', regional_distrito: '', provincia: '', municipio: '', barrio_sector: '',
+    cat_escuela_codigo: null, regional_codigo: null, distrito_codigo: null,
+    latitud: null, longitud: null, sector: null, nivel: null, matricula: null,
   })
+
+  // ─── Buscador de catálogo ───
+  const [modoManual, setModoManual] = useState(false)
+  const [provincias, setProvincias] = useState([])
+  const [municipios, setMunicipios] = useState([])
+  const [provinciaSel, setProvinciaSel] = useState('')
+  const [municipioSel, setMunicipioSel] = useState('')
+  const [resultados, setResultados] = useState([])
+  const [buscandoCat, setBuscandoCat] = useState(false)
+  const [textoBusqueda, setTextoBusqueda] = useState('')
+  const [escuelaCatSel, setEscuelaCatSel] = useState(null)
 
   const [esTropical, setEsTropical] = useState(
     typeof document !== 'undefined' && document.documentElement.getAttribute('data-tema') === 'tropical'
@@ -43,9 +57,72 @@ function Paso2Escuelas({ empresaId }) {
     setDatos({
       nombre: '', direccion: '', director_nombre: '', director_telefono: '',
       raciones_contractuales: '', precio_racion: '51.00', distancia_km: '',
-      codigo_centro: '', regional_distrito: '', provincia: '', municipio: '', barrio_sector: ''
+      codigo_centro: '', regional_distrito: '', provincia: '', municipio: '', barrio_sector: '',
+      cat_escuela_codigo: null, regional_codigo: null, distrito_codigo: null,
+      latitud: null, longitud: null, sector: null, nivel: null, matricula: null,
     })
     setMensaje(null)
+    setModoManual(false); setEscuelaCatSel(null)
+    setProvinciaSel(''); setMunicipioSel(''); setMunicipios([]); setResultados([]); setTextoBusqueda('')
+  }
+
+  // ─── Catálogo ───
+  async function cargarProvincias() {
+    const { data } = await supabase.rpc('listar_provincias_catalogo')
+    setProvincias((data || []).map(d => d.provincia))
+  }
+
+  async function alElegirProvincia(prov) {
+    setProvinciaSel(prov)
+    setMunicipioSel(''); setMunicipios([]); setResultados([]); setEscuelaCatSel(null)
+    if (!prov) return
+    const { data } = await supabase.rpc('listar_municipios_catalogo', { p_provincia: prov })
+    setMunicipios((data || []).map(d => d.municipio))
+  }
+
+  async function alElegirMunicipio(mun) {
+    setMunicipioSel(mun); setEscuelaCatSel(null)
+    if (!mun) { setResultados([]); return }
+    buscarEnCatalogo(provinciaSel, mun, textoBusqueda)
+  }
+
+  async function buscarEnCatalogo(prov, mun, texto) {
+    setBuscandoCat(true)
+    const { data, error } = await supabase.rpc('buscar_escuelas_catalogo', {
+      p_texto: texto?.trim() || null,
+      p_provincia: prov || null,
+      p_municipio: mun || null,
+      p_regional: null,
+      p_limite: 100,
+    })
+    setBuscandoCat(false)
+    if (!error) setResultados(data || [])
+  }
+
+  function elegirEscuelaCatalogo(esc) {
+    setEscuelaCatSel(esc)
+    setDatos(prev => ({
+      ...prev,
+      nombre: esc.nombre || '',
+      codigo_centro: esc.codigo || '',
+      regional_distrito: `${esc.regional_codigo || ''}${esc.distrito_codigo ? '-' + esc.distrito_codigo.slice(-2) : ''}`,
+      provincia: esc.provincia || '',
+      municipio: esc.municipio || '',
+      cat_escuela_codigo: esc.codigo || null,
+      regional_codigo: esc.regional_codigo || null,
+      distrito_codigo: esc.distrito_codigo || null,
+      latitud: esc.latitud || null,
+      longitud: esc.longitud || null,
+      sector: esc.sector || null,
+      nivel: esc.nivel || null,
+      matricula: esc.matricula || null,
+    }))
+  }
+
+  function abrirFormulario() {
+    setMostrarFormulario(true)
+    resetFormulario()
+    cargarProvincias()
   }
 
   async function agregarEscuela(e) {
@@ -62,14 +139,22 @@ function Paso2Escuelas({ empresaId }) {
         direccion: datos.direccion || null,
         director_nombre: datos.director_nombre || null,
         director_telefono: datos.director_telefono || null,
-        raciones_contractuales: parseInt(datos.raciones_contractuales),
+        raciones_contractuales: parseInt(datos.raciones_contractuales) || 0,
         precio_racion: parseFloat(datos.precio_racion),
         distancia_km: datos.distancia_km ? parseFloat(datos.distancia_km) : null,
         codigo_centro: datos.codigo_centro || null,
         regional_distrito: datos.regional_distrito || null,
         provincia: datos.provincia || null,
         municipio: datos.municipio || null,
-        barrio_sector: datos.barrio_sector || null
+        barrio_sector: datos.barrio_sector || null,
+        cat_escuela_codigo: datos.cat_escuela_codigo || null,
+        regional_codigo: datos.regional_codigo || null,
+        distrito_codigo: datos.distrito_codigo || null,
+        latitud: datos.latitud || null,
+        longitud: datos.longitud || null,
+        sector: datos.sector || null,
+        nivel: datos.nivel || null,
+        matricula: datos.matricula || null,
       }
       const { error } = await supabase.from('escuelas').insert([escuelaParaGuardar]).select()
       if (error) {
@@ -106,7 +191,7 @@ function Paso2Escuelas({ empresaId }) {
 
   return (
     <div style={tarjetaStyle()}>
-      
+
       <div style={{ marginBottom: '24px' }}>
         <p style={{ fontSize: '11px', color: NARANJA.c, fontWeight: 700, letterSpacing: '1px', marginBottom: '4px' }}>
           PASO 2 DE 6 · ESTIMADO 5 MIN
@@ -155,6 +240,7 @@ function Paso2Escuelas({ empresaId }) {
                   <p style={{ fontSize: '11px', color: AZUL.c, fontFamily: 'monospace', margin: '4px 0 0' }}>
                     🏷️ Cód: {escuela.codigo_centro}
                     {escuela.regional_distrito && ` · Regional: ${escuela.regional_distrito}`}
+                    {escuela.latitud && ' · 📍 GPS'}
                   </p>
                 )}
               </div>
@@ -169,7 +255,7 @@ function Paso2Escuelas({ empresaId }) {
 
       {/* BOTÓN o FORMULARIO */}
       {!mostrarFormulario ? (
-        <button onClick={() => setMostrarFormulario(true)} style={botonDashedStyle(AZUL, esTropical)}>
+        <button onClick={abrirFormulario} style={botonDashedStyle(AZUL, esTropical)}>
           + Agregar escuela
         </button>
       ) : (
@@ -180,98 +266,198 @@ function Paso2Escuelas({ empresaId }) {
         }}>
           <h3 style={{ fontWeight: 700, color: 'var(--color-text-primary)', margin: 0, fontSize: '16px' }}>Nueva escuela</h3>
 
-          {/* DATOS BÁSICOS */}
-          <div>
-            <p style={tituloSeccionStyle()}>📋 DATOS BÁSICOS</p>
-            <Campo label="Nombre de la escuela" requerido>
-              <input type="text" value={datos.nombre} onChange={(e) => actualizarCampo('nombre', e.target.value)}
-                placeholder="Ej: Escuela San Juan Bautista" style={inputStyle()} />
-            </Campo>
-          </div>
+          {/* ─── BUSCADOR DE CATÁLOGO ─── */}
+          {!modoManual && (
+            <div style={bloqueColorStyle(CYAN, esTropical)}>
+              <p style={tituloBloqueStyle(CYAN, esTropical)}>🔍 BUSCAR ESCUELA EN EL CATÁLOGO OFICIAL</p>
+              <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', margin: '0 0 12px' }}>
+                Elige provincia y municipio para encontrar la escuela. Sus datos se llenarán solos.
+              </p>
 
-          {/* DATOS INABIE */}
-          <div style={bloqueColorStyle(AZUL, esTropical)}>
-            <p style={tituloBloqueStyle(AZUL, esTropical)}>🏛️ DATOS OFICIALES INABIE</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <Campo label="Código del Centro">
-                <input type="text" value={datos.codigo_centro} onChange={(e) => actualizarCampo('codigo_centro', e.target.value)}
-                  placeholder="Ej: 04377" style={{ ...inputStyle(), fontFamily: 'monospace' }} />
-                <p style={textoAyudaStyle()}>Código asignado por INABIE</p>
-              </Campo>
-              <Campo label="Regional/Distrito">
-                <input type="text" value={datos.regional_distrito} onChange={(e) => actualizarCampo('regional_distrito', e.target.value)}
-                  placeholder="Ej: 09-02" style={{ ...inputStyle(), fontFamily: 'monospace' }} />
-                <p style={textoAyudaStyle()}>Regional - Distrito</p>
-              </Campo>
-            </div>
-          </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                <Campo label="Provincia">
+                  <select value={provinciaSel} onChange={(e) => alElegirProvincia(e.target.value)} style={inputStyle()}>
+                    <option value="">— Selecciona provincia —</option>
+                    {provincias.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </Campo>
+                <Campo label="Municipio">
+                  <select value={municipioSel} onChange={(e) => alElegirMunicipio(e.target.value)} style={inputStyle()} disabled={!provinciaSel}>
+                    <option value="">— Selecciona municipio —</option>
+                    {municipios.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </Campo>
+              </div>
 
-          {/* UBICACIÓN */}
-          <div style={bloqueColorStyle(AMBAR, esTropical)}>
-            <p style={tituloBloqueStyle(AMBAR, esTropical)}>📍 UBICACIÓN DETALLADA</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-              <Campo label="Provincia">
-                <input type="text" value={datos.provincia} onChange={(e) => actualizarCampo('provincia', e.target.value)}
-                  placeholder="Ej: Valverde" style={inputStyle()} />
-              </Campo>
-              <Campo label="Municipio">
-                <input type="text" value={datos.municipio} onChange={(e) => actualizarCampo('municipio', e.target.value)}
-                  placeholder="Ej: Esperanza" style={inputStyle()} />
-              </Campo>
-            </div>
-            <Campo label="Barrio / Sector">
-              <input type="text" value={datos.barrio_sector} onChange={(e) => actualizarCampo('barrio_sector', e.target.value)}
-                placeholder="Ej: Barrio Buena Vista / El Bolsillo" style={inputStyle()} />
-            </Campo>
-            <div style={{ marginTop: '12px' }}>
-              <Campo label="Dirección (calle, número)">
-                <input type="text" value={datos.direccion} onChange={(e) => actualizarCampo('direccion', e.target.value)}
-                  placeholder="Ej: Calle Primera No. 7" style={inputStyle()} />
-              </Campo>
-            </div>
-          </div>
+              {municipioSel && (
+                <div style={{ marginBottom: '12px' }}>
+                  <input
+                    type="text"
+                    placeholder="🔎 Filtrar por nombre de escuela..."
+                    value={textoBusqueda}
+                    onChange={(e) => { setTextoBusqueda(e.target.value); buscarEnCatalogo(provinciaSel, municipioSel, e.target.value) }}
+                    style={inputStyle()}
+                  />
+                </div>
+              )}
 
-          {/* DIRECTOR */}
-          <div style={bloqueColorStyle(MORADO, esTropical)}>
-            <p style={tituloBloqueStyle(MORADO, esTropical)}>👤 DIRECTOR(A) DEL CENTRO</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <Campo label="Nombre completo">
-                <input type="text" value={datos.director_nombre} onChange={(e) => actualizarCampo('director_nombre', e.target.value)}
-                  placeholder="Ej: Migdalia Domínguez" style={inputStyle()} />
-              </Campo>
-              <Campo label="Teléfono">
-                <input type="tel" value={datos.director_telefono} onChange={(e) => actualizarCampo('director_telefono', e.target.value)}
-                  placeholder="829-294-6109" style={inputStyle()} />
-              </Campo>
-            </div>
-          </div>
+              {buscandoCat && <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', textAlign: 'center', padding: '12px' }}>Buscando...</p>}
 
-          {/* CONTRATO */}
-          <div style={bloqueColorStyle(VERDE, esTropical)}>
-            <p style={tituloBloqueStyle(VERDE, esTropical)}>💰 CONTRATO</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
-              <Campo label="Raciones" requerido>
-                <input type="number" value={datos.raciones_contractuales} onChange={(e) => actualizarCampo('raciones_contractuales', e.target.value)}
-                  placeholder="350" style={inputStyle()} />
-              </Campo>
-              <Campo label="Precio/ración">
-                <input type="number" step="0.01" value={datos.precio_racion} onChange={(e) => actualizarCampo('precio_racion', e.target.value)} style={inputStyle()} />
-              </Campo>
-              <Campo label="Distancia (km)">
-                <input type="number" step="0.1" value={datos.distancia_km} onChange={(e) => actualizarCampo('distancia_km', e.target.value)}
-                  placeholder="4.5" style={inputStyle()} />
-              </Campo>
+              {!buscandoCat && municipioSel && resultados.length === 0 && (
+                <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', textAlign: 'center', padding: '12px' }}>
+                  No se encontraron escuelas con ese filtro.
+                </p>
+              )}
+
+              {!buscandoCat && resultados.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '260px', overflowY: 'auto', marginBottom: '4px' }}>
+                  {resultados.map(esc => {
+                    const sel = escuelaCatSel?.codigo === esc.codigo
+                    return (
+                      <button
+                        type="button"
+                        key={esc.codigo}
+                        onClick={() => elegirEscuelaCatalogo(esc)}
+                        style={{
+                          textAlign: 'left', padding: '10px 12px', cursor: 'pointer', fontFamily: 'inherit',
+                          background: sel ? (esTropical ? CYAN.claro : `${CYAN.c}30`) : 'var(--color-bg-input)',
+                          border: `1px solid ${sel ? CYAN.c : 'var(--color-border-subtle)'}`,
+                          borderRadius: '9px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                            {sel ? '✅ ' : ''}{esc.nombre}
+                          </span>
+                          <span style={{ fontSize: '10px', fontFamily: 'monospace', color: CYAN.c, whiteSpace: 'nowrap' }}>
+                            Cód: {esc.codigo}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '3px' }}>
+                          {esc.sector} · {esc.nivel || 'Sin nivel'} · 🍽️ {esc.matricula || 0} matrícula
+                          {esc.latitud ? ' · 📍 GPS' : ''}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
+              {escuelaCatSel && (
+                <div style={{ background: esTropical ? VERDE.claro : `${VERDE.c}15`, border: `1px solid ${VERDE.c}40`, borderRadius: '9px', padding: '10px 12px', marginTop: '10px' }}>
+                  <p style={{ fontSize: '12px', color: esTropical ? VERDE.dark : '#A8E0BD', margin: 0 }}>
+                    ✅ <strong>{escuelaCatSel.nombre}</strong> seleccionada. Completa abajo los datos del contrato (raciones, precio, director).
+                  </p>
+                </div>
+              )}
+
+              <div style={{ marginTop: '14px', textAlign: 'center' }}>
+                <button type="button" onClick={() => setModoManual(true)} style={{ background: 'none', border: 'none', color: CYAN.c, fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>
+                  ¿No encuentras la escuela? Agrégala manualmente →
+                </button>
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* ─── CAMPOS (manual o tras elegir del catálogo) ─── */}
+          {(modoManual || escuelaCatSel) && (
+            <>
+              {/* DATOS BÁSICOS */}
+              <div>
+                <p style={tituloSeccionStyle()}>📋 DATOS BÁSICOS</p>
+                <Campo label="Nombre de la escuela" requerido>
+                  <input type="text" value={datos.nombre} onChange={(e) => actualizarCampo('nombre', e.target.value)}
+                    placeholder="Ej: Escuela San Juan Bautista" style={inputStyle()} />
+                </Campo>
+              </div>
+
+              {/* DATOS INABIE */}
+              <div style={bloqueColorStyle(AZUL, esTropical)}>
+                <p style={tituloBloqueStyle(AZUL, esTropical)}>🏛️ DATOS OFICIALES INABIE</p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <Campo label="Código del Centro">
+                    <input type="text" value={datos.codigo_centro} onChange={(e) => actualizarCampo('codigo_centro', e.target.value)}
+                      placeholder="Ej: 04377" style={{ ...inputStyle(), fontFamily: 'monospace' }} />
+                    <p style={textoAyudaStyle()}>Código asignado por INABIE</p>
+                  </Campo>
+                  <Campo label="Regional/Distrito">
+                    <input type="text" value={datos.regional_distrito} onChange={(e) => actualizarCampo('regional_distrito', e.target.value)}
+                      placeholder="Ej: 09-02" style={{ ...inputStyle(), fontFamily: 'monospace' }} />
+                    <p style={textoAyudaStyle()}>Regional - Distrito</p>
+                  </Campo>
+                </div>
+              </div>
+
+              {/* UBICACIÓN */}
+              <div style={bloqueColorStyle(AMBAR, esTropical)}>
+                <p style={tituloBloqueStyle(AMBAR, esTropical)}>📍 UBICACIÓN DETALLADA</p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                  <Campo label="Provincia">
+                    <input type="text" value={datos.provincia} onChange={(e) => actualizarCampo('provincia', e.target.value)}
+                      placeholder="Ej: Valverde" style={inputStyle()} />
+                  </Campo>
+                  <Campo label="Municipio">
+                    <input type="text" value={datos.municipio} onChange={(e) => actualizarCampo('municipio', e.target.value)}
+                      placeholder="Ej: Esperanza" style={inputStyle()} />
+                  </Campo>
+                </div>
+                <Campo label="Barrio / Sector">
+                  <input type="text" value={datos.barrio_sector} onChange={(e) => actualizarCampo('barrio_sector', e.target.value)}
+                    placeholder="Ej: Barrio Buena Vista / El Bolsillo" style={inputStyle()} />
+                </Campo>
+                <div style={{ marginTop: '12px' }}>
+                  <Campo label="Dirección (calle, número)">
+                    <input type="text" value={datos.direccion} onChange={(e) => actualizarCampo('direccion', e.target.value)}
+                      placeholder="Ej: Calle Primera No. 7" style={inputStyle()} />
+                  </Campo>
+                </div>
+              </div>
+
+              {/* DIRECTOR */}
+              <div style={bloqueColorStyle(MORADO, esTropical)}>
+                <p style={tituloBloqueStyle(MORADO, esTropical)}>👤 DIRECTOR(A) DEL CENTRO</p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <Campo label="Nombre completo">
+                    <input type="text" value={datos.director_nombre} onChange={(e) => actualizarCampo('director_nombre', e.target.value)}
+                      placeholder="Ej: Migdalia Domínguez" style={inputStyle()} />
+                  </Campo>
+                  <Campo label="Teléfono">
+                    <input type="tel" value={datos.director_telefono} onChange={(e) => actualizarCampo('director_telefono', e.target.value)}
+                      placeholder="829-294-6109" style={inputStyle()} />
+                  </Campo>
+                </div>
+              </div>
+
+              {/* CONTRATO */}
+              <div style={bloqueColorStyle(VERDE, esTropical)}>
+                <p style={tituloBloqueStyle(VERDE, esTropical)}>💰 CONTRATO</p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                  <Campo label="Raciones" requerido>
+                    <input type="number" value={datos.raciones_contractuales} onChange={(e) => actualizarCampo('raciones_contractuales', e.target.value)}
+                      placeholder="350" style={inputStyle()} />
+                  </Campo>
+                  <Campo label="Precio/ración">
+                    <input type="number" step="0.01" value={datos.precio_racion} onChange={(e) => actualizarCampo('precio_racion', e.target.value)} style={inputStyle()} />
+                  </Campo>
+                  <Campo label="Distancia (km)">
+                    <input type="number" step="0.1" value={datos.distancia_km} onChange={(e) => actualizarCampo('distancia_km', e.target.value)}
+                      placeholder="4.5" style={inputStyle()} />
+                  </Campo>
+                </div>
+              </div>
+            </>
+          )}
 
           {mensaje && <Mensaje mensaje={mensaje} esTropical={esTropical} />}
 
           <div style={{ display: 'flex', gap: '12px' }}>
             <button type="button" onClick={() => { setMostrarFormulario(false); resetFormulario() }}
               style={botonCancelarStyle()}>Cancelar</button>
-            <button type="submit" disabled={guardando} style={botonAccionStyle(AZUL, guardando)}>
-              {guardando ? 'Guardando...' : 'Agregar escuela'}
-            </button>
+            {(modoManual || escuelaCatSel) && (
+              <button type="submit" disabled={guardando} style={botonAccionStyle(AZUL, guardando)}>
+                {guardando ? 'Guardando...' : 'Agregar escuela'}
+              </button>
+            )}
           </div>
         </form>
       )}
@@ -306,8 +492,8 @@ function Mensaje({ mensaje, esTropical }) {
   const colorBase = mensaje.tipo === 'exito' ? '#1D9E75' : '#E24B4A'
   return (
     <div style={{
-      background: esTropical 
-        ? (mensaje.tipo === 'exito' ? '#D7F0DD' : '#FCEBEB') 
+      background: esTropical
+        ? (mensaje.tipo === 'exito' ? '#D7F0DD' : '#FCEBEB')
         : `${colorBase}15`,
       border: `1px solid ${colorBase}40`, borderRadius: '8px', padding: '10px 12px',
       color: esTropical ? (mensaje.tipo === 'exito' ? '#04342C' : '#A32D2D') : (mensaje.tipo === 'exito' ? '#A8E0BD' : '#F4C0D1'),

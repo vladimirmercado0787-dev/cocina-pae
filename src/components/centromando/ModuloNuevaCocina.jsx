@@ -16,6 +16,24 @@ function ModuloNuevaCocina({ tema: t, empresa, onVolver }) {
   const [raciones, setRaciones] = useState('')
   const [precioRacion, setPrecioRacion] = useState('')
 
+  // Datos del catálogo de la primera escuela
+  const [escCat, setEscCat] = useState({
+    codigo_centro: '', regional_distrito: '', provincia: '', municipio: '',
+    cat_escuela_codigo: null, regional_codigo: null, distrito_codigo: null,
+    latitud: null, longitud: null, sector: null, nivel: null, matricula: null,
+  })
+
+  // Buscador de catálogo
+  const [provincias, setProvincias] = useState([])
+  const [municipios, setMunicipios] = useState([])
+  const [provinciaSel, setProvinciaSel] = useState('')
+  const [municipioSel, setMunicipioSel] = useState('')
+  const [resultados, setResultados] = useState([])
+  const [buscandoCat, setBuscandoCat] = useState(false)
+  const [textoBusqueda, setTextoBusqueda] = useState('')
+  const [escuelaCatSel, setEscuelaCatSel] = useState(null)
+  const [provinciasCargadas, setProvinciasCargadas] = useState(false)
+
   // Login de la cocina
   const [emailLogin, setEmailLogin] = useState('')
   const [passwordLogin, setPasswordLogin] = useState('')
@@ -26,11 +44,74 @@ function ModuloNuevaCocina({ tema: t, empresa, onVolver }) {
   // Resultado
   const [empresaCreadaNombre, setEmpresaCreadaNombre] = useState('')
 
+  async function cargarProvincias() {
+    if (provinciasCargadas) return
+    const { data } = await supabase.rpc('listar_provincias_catalogo')
+    setProvincias((data || []).map(d => d.provincia))
+    setProvinciasCargadas(true)
+  }
+
+  async function alElegirProvincia(prov) {
+    setProvinciaSel(prov)
+    setMunicipioSel(''); setMunicipios([]); setResultados([]); setEscuelaCatSel(null)
+    if (!prov) return
+    const { data } = await supabase.rpc('listar_municipios_catalogo', { p_provincia: prov })
+    setMunicipios((data || []).map(d => d.municipio))
+  }
+
+  async function alElegirMunicipio(mun) {
+    setMunicipioSel(mun); setEscuelaCatSel(null)
+    if (!mun) { setResultados([]); return }
+    buscarEnCatalogo(provinciaSel, mun, textoBusqueda)
+  }
+
+  async function buscarEnCatalogo(prov, mun, texto) {
+    setBuscandoCat(true)
+    const { data, error: err } = await supabase.rpc('buscar_escuelas_catalogo', {
+      p_texto: texto?.trim() || null,
+      p_provincia: prov || null,
+      p_municipio: mun || null,
+      p_regional: null,
+      p_limite: 100,
+    })
+    setBuscandoCat(false)
+    if (!err) setResultados(data || [])
+  }
+
+  function elegirEscuelaCatalogo(esc) {
+    setEscuelaCatSel(esc)
+    setNombreEscuela(esc.nombre || '')
+    setEscCat({
+      codigo_centro: esc.codigo || '',
+      regional_distrito: `${esc.regional_codigo || ''}${esc.distrito_codigo ? '-' + esc.distrito_codigo.slice(-2) : ''}`,
+      provincia: esc.provincia || '',
+      municipio: esc.municipio || '',
+      cat_escuela_codigo: esc.codigo || null,
+      regional_codigo: esc.regional_codigo || null,
+      distrito_codigo: esc.distrito_codigo || null,
+      latitud: esc.latitud || null,
+      longitud: esc.longitud || null,
+      sector: esc.sector || null,
+      nivel: esc.nivel || null,
+      matricula: esc.matricula || null,
+    })
+  }
+
+  function limpiarSeleccionEscuela() {
+    setEscuelaCatSel(null)
+    setNombreEscuela('')
+    setEscCat({
+      codigo_centro: '', regional_distrito: '', provincia: '', municipio: '',
+      cat_escuela_codigo: null, regional_codigo: null, distrito_codigo: null,
+      latitud: null, longitud: null, sector: null, nivel: null, matricula: null,
+    })
+  }
+
   function validar() {
     if (!nombreCocina.trim()) return 'Escribe el nombre de la cocina'
     if (!nombrePropietario.trim()) return 'Escribe el nombre del propietario'
     if (!/^\d{4}$/.test(pinPropietario)) return 'El PIN debe ser de 4 dígitos'
-    if (!nombreEscuela.trim()) return 'Escribe el nombre de la primera escuela'
+    if (!nombreEscuela.trim()) return 'Elige o escribe el nombre de la primera escuela'
     if (!raciones || Number(raciones) <= 0) return 'Escribe las raciones contractuales'
     if (!emailLogin.trim() || !emailLogin.includes('@')) return 'Escribe un correo válido para el login'
     if (!passwordLogin || passwordLogin.length < 6) return 'La contraseña debe tener al menos 6 caracteres'
@@ -56,6 +137,18 @@ function ModuloNuevaCocina({ tema: t, empresa, onVolver }) {
       p_pin_propietario: pinPropietario,
       p_nombre_escuela: nombreEscuela.trim(),
       p_raciones: Number(raciones),
+      p_codigo_centro: escCat.codigo_centro || null,
+      p_regional_distrito: escCat.regional_distrito || null,
+      p_provincia: escCat.provincia || null,
+      p_municipio: escCat.municipio || null,
+      p_cat_escuela_codigo: escCat.cat_escuela_codigo || null,
+      p_regional_codigo: escCat.regional_codigo || null,
+      p_distrito_codigo: escCat.distrito_codigo || null,
+      p_latitud: escCat.latitud || null,
+      p_longitud: escCat.longitud || null,
+      p_sector: escCat.sector || null,
+      p_nivel: escCat.nivel || null,
+      p_matricula: escCat.matricula || null,
     })
 
     if (rpcError) {
@@ -95,7 +188,6 @@ function ModuloNuevaCocina({ tema: t, empresa, onVolver }) {
       const result = await resp.json()
 
       if (!resp.ok || result.error) {
-        // La cocina ya se creó, pero el login falló. Avisar pero no perder la cocina.
         setGuardando(false)
         setPasoTexto('')
         setEmpresaCreadaNombre(nombreCocina.trim())
@@ -132,7 +224,6 @@ function ModuloNuevaCocina({ tema: t, empresa, onVolver }) {
       return
     }
 
-    // ¡Todo listo!
     setEmpresaCreadaNombre(nombreCocina.trim())
     setPaso(2)
   }
@@ -200,11 +291,86 @@ function ModuloNuevaCocina({ tema: t, empresa, onVolver }) {
 
             <div style={{ height: '1px', background: t.borde, margin: '20px 0' }} />
 
-            <label style={labelStyle}>PRIMERA ESCUELA *</label>
-            <input className="nueva-input" style={inputStyle} value={nombreEscuela} onChange={(e) => setNombreEscuela(e.target.value)} placeholder="Ej: Escuela Primaria Las Flores" />
-            <p style={{ margin: '6px 0 0', fontSize: '11px', color: t.textMuted, lineHeight: 1.5 }}>
-              💡 El código de centro, regional, director y demás datos INABIE se completan después en la sección Escuelas.
-            </p>
+            {/* ─── PRIMERA ESCUELA con buscador ─── */}
+            <p style={{ margin: '0 0 4px', fontSize: '13px', fontWeight: 600, color: t.textPrimary }}>🏫 Primera escuela</p>
+
+            {!escuelaCatSel ? (
+              <div style={{ background: `${t.acento2 || t.acento}10`, border: `1px solid ${t.acento2 || t.acento}30`, borderRadius: '11px', padding: '14px', marginTop: '8px' }}>
+                <p style={{ margin: '0 0 10px', fontSize: '11px', color: t.textMuted, lineHeight: 1.5 }}>
+                  🔍 Búscala en el catálogo oficial: elige provincia y municipio.
+                </p>
+
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ ...labelStyle, marginTop: 0 }}>PROVINCIA</label>
+                    <select className="nueva-input" style={inputStyle} value={provinciaSel} onFocus={cargarProvincias} onChange={(e) => alElegirProvincia(e.target.value)}>
+                      <option value="">— Provincia —</option>
+                      {provincias.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ ...labelStyle, marginTop: 0 }}>MUNICIPIO</label>
+                    <select className="nueva-input" style={inputStyle} value={municipioSel} onChange={(e) => alElegirMunicipio(e.target.value)} disabled={!provinciaSel}>
+                      <option value="">— Municipio —</option>
+                      {municipios.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                {municipioSel && (
+                  <input className="nueva-input" style={{ ...inputStyle, marginTop: '10px' }} placeholder="🔎 Filtrar por nombre..." value={textoBusqueda}
+                    onChange={(e) => { setTextoBusqueda(e.target.value); buscarEnCatalogo(provinciaSel, municipioSel, e.target.value) }} />
+                )}
+
+                {buscandoCat && <p style={{ fontSize: '12px', color: t.textMuted, textAlign: 'center', padding: '10px' }}>Buscando...</p>}
+
+                {!buscandoCat && municipioSel && resultados.length === 0 && (
+                  <p style={{ fontSize: '12px', color: t.textMuted, textAlign: 'center', padding: '10px' }}>No se encontraron escuelas.</p>
+                )}
+
+                {!buscandoCat && resultados.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '220px', overflowY: 'auto', marginTop: '10px' }}>
+                    {resultados.map(esc => (
+                      <button type="button" key={esc.codigo} onClick={() => elegirEscuelaCatalogo(esc)}
+                        style={{ textAlign: 'left', padding: '10px 12px', cursor: 'pointer', fontFamily: 'inherit', background: t.claro ? 'rgba(255,255,255,0.6)' : 'rgba(14,18,8,0.4)', border: `1px solid ${t.borde}`, borderRadius: '9px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 600, color: t.textPrimary }}>{esc.nombre}</span>
+                          <span style={{ fontSize: '10px', fontFamily: 'monospace', color: t.textSec, whiteSpace: 'nowrap' }}>Cód: {esc.codigo}</span>
+                        </div>
+                        <div style={{ fontSize: '10px', color: t.textMuted, marginTop: '3px' }}>
+                          {esc.sector} · {esc.nivel || 'Sin nivel'} · 🍽️ {esc.matricula || 0}{esc.latitud ? ' · 📍 GPS' : ''}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ marginTop: '12px', textAlign: 'center' }}>
+                  <button type="button" onClick={() => { setEscuelaCatSel({ manual: true }); }} style={{ background: 'none', border: 'none', color: t.acento, fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>
+                    ¿No está? Escribir manualmente →
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ marginTop: '8px' }}>
+                {!escuelaCatSel.manual && (
+                  <div style={{ background: `${t.acento}12`, border: `1px solid ${t.acento}30`, borderRadius: '11px', padding: '10px 12px', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                    <span style={{ fontSize: '12px', color: t.textPrimary }}>✅ <strong>{escuelaCatSel.nombre}</strong>{escCat.codigo_centro ? ` · Cód: ${escCat.codigo_centro}` : ''}</span>
+                    <button type="button" onClick={limpiarSeleccionEscuela} style={{ background: 'none', border: 'none', color: t.textSec, fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline', whiteSpace: 'nowrap' }}>Cambiar</button>
+                  </div>
+                )}
+                <label style={{ ...labelStyle, marginTop: 0 }}>NOMBRE DE LA ESCUELA *</label>
+                <input className="nueva-input" style={inputStyle} value={nombreEscuela} onChange={(e) => setNombreEscuela(e.target.value)} placeholder="Ej: Escuela Primaria Las Flores" />
+                {escuelaCatSel.manual && (
+                  <button type="button" onClick={limpiarSeleccionEscuela} style={{ background: 'none', border: 'none', color: t.acento, fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline', marginTop: '8px' }}>
+                    ← Volver al buscador
+                  </button>
+                )}
+                <p style={{ margin: '8px 0 0', fontSize: '11px', color: t.textMuted, lineHeight: 1.5 }}>
+                  💡 El director y demás datos se completan después en la sección Escuelas.
+                </p>
+              </div>
+            )}
 
             <div style={{ display: 'flex', gap: '12px' }}>
               <div style={{ flex: 1 }}>
