@@ -4,6 +4,7 @@ import ModuloNuevaCocina from './ModuloNuevaCocina'
 import GestionCocinas from './GestionCocinas'
 import ContabilidadAndamio from './ContabilidadAndamio'
 import SaludFlota from '../salud/SaludFlota'
+import LaboratorioRed from './LaboratorioRed'
 
 // ─── LOS 3 TEMAS DEL CENTRO DE MANDO ───
 const TEMAS = {
@@ -47,7 +48,7 @@ const TEMAS = {
 
 function CentroDeMando({ empresa, claveMando, onSalir }) {
   const [temaKey, setTemaKey] = useState(() => localStorage.getItem('centro_mando_tema') || 'oliva')
-  const [vista, setVista] = useState('panel') // panel | nueva_cocina | gestion_cocinas | contabilidad | salud_flota
+  const [vista, setVista] = useState('panel') // panel | nueva_cocina | gestion_cocinas | contabilidad | salud_flota | inteligencia
   const [stats, setStats] = useState({ cocinas: 0, escuelas: 0, usuarios: 0 })
   const [cargandoStats, setCargandoStats] = useState(true)
 
@@ -115,6 +116,16 @@ function CentroDeMando({ empresa, claveMando, onSalir }) {
     return (
       <SaludFlota
         tema={t}
+        empresaIdAdmin={empresa.id}
+        claveMando={claveMando}
+        onVolver={() => { setVista('panel'); cargarStats() }}
+      />
+    )
+  }
+
+  if (vista === 'inteligencia') {
+    return (
+      <LaboratorioRed
         empresaIdAdmin={empresa.id}
         claveMando={claveMando}
         onVolver={() => { setVista('panel'); cargarStats() }}
@@ -269,15 +280,16 @@ function CentroDeMando({ empresa, claveMando, onSalir }) {
             <p style={{ margin: 0, fontSize: '12px', color: t.textSec }}>Salud y alertas de la flota</p>
           </div>
 
-          {/* Inteligencia (próximamente) */}
+          {/* Inteligencia de la Red (Laboratorio) */}
           <div
-            style={{ flex: '1 1 220px', position: 'relative', background: t.cardBg, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: `1px solid ${t.borde}`, borderRadius: '16px', padding: '20px', overflow: 'hidden', opacity: 0.75 }}
+            className="cm-act"
+            onClick={() => setVista('inteligencia')}
+            style={{ flex: '1 1 220px', position: 'relative', background: t.cardBg, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: `1px solid ${t.borde}`, borderRadius: '16px', padding: '20px', overflow: 'hidden' }}
           >
             <div style={{ position: 'absolute', top: 0, left: '18px', right: '18px', height: '1px', background: t.claro ? 'linear-gradient(90deg, transparent, rgba(0,0,0,0.1), transparent)' : 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)' }} />
-            <span style={{ display: 'inline-flex', width: '46px', height: '46px', alignItems: 'center', justifyContent: 'center', borderRadius: '13px', background: `${t.acento2}22`, fontSize: '24px' }}>📡</span>
-            <p style={{ margin: '13px 0 3px', fontSize: '16px', fontWeight: 600, color: t.textPrimary }}>Inteligencia</p>
-            <p style={{ margin: 0, fontSize: '12px', color: t.textSec }}>Datos acumulados de la red</p>
-            <span style={{ position: 'absolute', top: '16px', right: '16px', background: `${t.acento2}22`, color: t.acento2, fontSize: '9px', letterSpacing: '1px', fontWeight: 700, padding: '4px 9px', borderRadius: '6px' }}>PRONTO</span>
+            <span className="cm-ico" style={{ display: 'inline-flex', width: '46px', height: '46px', alignItems: 'center', justifyContent: 'center', borderRadius: '13px', background: `${t.acento2}22`, fontSize: '24px' }}>🧪</span>
+            <p style={{ margin: '13px 0 3px', fontSize: '16px', fontWeight: 600, color: t.textPrimary }}>Inteligencia de la Red</p>
+            <p style={{ margin: 0, fontSize: '12px', color: t.textSec }}>Laboratorio de datos vendibles</p>
           </div>
         </div>
 
