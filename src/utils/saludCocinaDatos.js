@@ -1,9 +1,5 @@
-// src/utils/saludCocinaDatos.js
-// Capa de datos de la Salud de la Cocina (SOLO LECTURA).
-// Va a las tablas reales, recoge las "señales" y se las entrega
-// al motor calcularSalud() de saludCocina.js. No escribe nada.
-
 import { supabase } from '../supabaseClient'
+import { calcularSalud } from './saludCocina'
 
 export async function cargarSenalesSalud(empresaId) {
   const avisos = []
@@ -15,7 +11,6 @@ export async function cargarSenalesSalud(empresaId) {
     const d = new Date(fecha); d.setHours(0, 0, 0, 0)
     return Math.round((hoy0 - d) / 86400000)
   }
-  // días de clase esperados (lun–vie) en los últimos 14 días
   const diasClaseEsperadosUltimos14 = (() => {
     let c = 0
     for (let i = 0; i < 14; i++) {
@@ -26,7 +21,6 @@ export async function cargarSenalesSalud(empresaId) {
     return c
   })()
 
-  // valores por defecto (si una fuente falla, queda neutro y se avisa)
   const s = {
     diasDesdeUltimoPesaje: null,
     diasDesdeUltimoDespacho: null,
@@ -35,7 +29,7 @@ export async function cargarSenalesSalud(empresaId) {
     diasDesdeUltimoGasto: null,
     comprasUltimoMes: 0,
     comprasConNcfUltimoMes: 0,
-    reporteDgiiMesGenerado: null, // no hay tabla todavía → no medible
+    reporteDgiiMesGenerado: null,
     empleadosConSueldo: 0,
     nominaUltimoPeriodoPagada: false,
     diasActivosUltimos7: 0,
@@ -46,7 +40,6 @@ export async function cargarSenalesSalud(empresaId) {
     ingredientesTotal: 0,
   }
 
-  // ── DESPACHOS Y PESAJE (despachos_componente) ──
   try {
     const { data, error } = await supabase
       .from('despachos_componente')
@@ -63,7 +56,6 @@ export async function cargarSenalesSalud(empresaId) {
     s.diasOperativosUltimos14 = new Set(rows.filter(r => r.fecha >= corte14).map(r => r.fecha)).size
   } catch (e) { avisos.push('despachos_componente: ' + (e?.message || 'sin acceso')) }
 
-  // ── GASTOS ──
   try {
     const { data, error } = await supabase
       .from('gastos')
@@ -75,7 +67,6 @@ export async function cargarSenalesSalud(empresaId) {
     if (data?.[0]?.fecha) s.diasDesdeUltimoGasto = diasDesde(data[0].fecha)
   } catch (e) { avisos.push('gastos: ' + (e?.message || 'sin acceso')) }
 
-  // ── COMPRAS (NCF del último mes) ──
   try {
     const { data, error } = await supabase
       .from('compras')
@@ -88,7 +79,6 @@ export async function cargarSenalesSalud(empresaId) {
     s.comprasConNcfUltimoMes = rows.filter(r => r.ncf && r.ncf.trim() !== '').length
   } catch (e) { avisos.push('compras: ' + (e?.message || 'sin acceso')) }
 
-  // ── CONSTANCIA (historial_actividad) ──
   try {
     const { data, error } = await supabase
       .from('historial_actividad')
@@ -106,7 +96,6 @@ export async function cargarSenalesSalud(empresaId) {
     ).size
   } catch (e) { avisos.push('historial_actividad: ' + (e?.message || 'sin acceso')) }
 
-  // ── EMPLEADOS CON SUELDO ──
   try {
     const { count, error } = await supabase
       .from('usuarios')
@@ -119,7 +108,6 @@ export async function cargarSenalesSalud(empresaId) {
     s.empleadosConSueldo = count || 0
   } catch (e) { avisos.push('usuarios: ' + (e?.message || 'sin acceso')) }
 
-  // ── NÓMINA PAGADA RECIENTE ──
   try {
     const { data, error } = await supabase
       .from('pagos_nomina')
@@ -132,7 +120,6 @@ export async function cargarSenalesSalud(empresaId) {
     s.nominaUltimoPeriodoPagada = (data?.length || 0) > 0
   } catch (e) { avisos.push('pagos_nomina: ' + (e?.message || 'sin acceso')) }
 
-  // ── ESCUELAS ──
   try {
     const { count, error } = await supabase
       .from('escuelas')
@@ -142,7 +129,6 @@ export async function cargarSenalesSalud(empresaId) {
     s.tieneEscuelas = (count || 0) > 0
   } catch (e) { avisos.push('escuelas: ' + (e?.message || 'sin acceso')) }
 
-  // ── RECETAS ──
   try {
     const { count, error } = await supabase
       .from('recetas')
@@ -152,7 +138,6 @@ export async function cargarSenalesSalud(empresaId) {
     s.tieneRecetas = (count || 0) > 0
   } catch (e) { avisos.push('recetas: ' + (e?.message || 'sin acceso')) }
 
-  // ── INGREDIENTES (precios completos) ──
   try {
     const { data, error } = await supabase
       .from('ingredientes')
@@ -167,4 +152,51 @@ export async function cargarSenalesSalud(empresaId) {
 
   s._avisos = avisos
   return s
+}
+
+export async function cargarSaludFlota() {
+  const { data: empresas, error } = await supabase
+    .from('empresas')
+    .select('id, nombre, estado')
+    .order('nombre', { ascending: true })
+
+  if (error) {
+    return { cocinas: [], error: error.message }
+  }
+
+  const cocinas = await Promise.all(
+    (empresas || []).map(async (emp) => {
+      try {
+        const senales = await cargarSenalesSalud(emp.id)
+        const salud = calcularSalud(senales)
+        return {
+          id: emp.id,
+          nombre: emp.nombre,
+          estado: emp.estado,
+          puntuacion: salud.puntuacion,
+          nivel: salud.nivel,
+          areas: salud.areas,
+          consejos: salud.consejos,
+          senales,
+          avisos: senales._avisos || [],
+        }
+      } catch (e) {
+        return {
+          id: emp.id,
+          nombre: emp.nombre,
+          estado: emp.estado,
+          puntuacion: null,
+          nivel: 'error',
+          areas: {},
+          consejos: [],
+          senales: {},
+          avisos: ['No se pudo calcular: ' + (e?.message || 'error')],
+        }
+      }
+    })
+  )
+
+  cocinas.sort((a, b) => (a.puntuacion ?? 99) - (b.puntuacion ?? 99))
+
+  return { cocinas, error: null }
 }

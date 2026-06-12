@@ -17,14 +17,12 @@ const AZUL = {
   rojo: '#E24B4A', rojoBg: 'rgba(226,75,74,0.12)', rojoTxt: '#F09595',
 }
 
-// Color de un área según su puntaje 0-100
 function colorArea(v) {
   if (v >= 75) return { barra: AZUL.verde, texto: AZUL.verdeTxt }
   if (v >= 50) return { barra: AZUL.ambar, texto: AZUL.ambarTxt }
   return { barra: AZUL.rojo, texto: AZUL.rojoTxt }
 }
 
-// Color del aro de la nota según nivel
 function colorNivel(nivel) {
   if (nivel === 'sana') return AZUL.verde
   if (nivel === 'atencion') return AZUL.ambar
@@ -76,10 +74,8 @@ function SaludDeLaCocina({ empresaId, onVolver }) {
     )
   }
 
-  // Solo consejos para el cliente (los de 'andamio' no se le muestran al dueño)
   const consejosCliente = (salud?.consejos || []).filter(c => c.paraQuien !== 'andamio')
 
-  // Aro de la nota
   const R = 54
   const C = 2 * Math.PI * R
   const frac = Math.max(0, Math.min(1, (salud?.puntuacion || 0) / 10))
@@ -180,7 +176,7 @@ function SaludDeLaCocina({ empresaId, onVolver }) {
           </div>
         )}
 
-        {/* Aviso técnico si alguna tabla falló (solo si hay avisos) */}
+        {/* Aviso técnico si alguna tabla falló */}
         {avisos.length > 0 && (
           <div style={{ background: 'rgba(226,75,74,0.08)', border: '1px solid rgba(240,149,149,0.25)', borderRadius: '12px', padding: '12px 14px', marginBottom: '16px' }}>
             <div style={{ fontSize: '11px', color: AZUL.rojoTxt, fontWeight: 600, marginBottom: '4px' }}>⚠️ No se pudieron leer algunas fuentes:</div>
