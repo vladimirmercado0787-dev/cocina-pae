@@ -45,7 +45,7 @@ const TEMAS = {
   },
 }
 
-function CentroDeMando({ empresa, onSalir }) {
+function CentroDeMando({ empresa, claveMando, onSalir }) {
   const [temaKey, setTemaKey] = useState(() => localStorage.getItem('centro_mando_tema') || 'oliva')
   const [vista, setVista] = useState('panel') // panel | nueva_cocina | gestion_cocinas | contabilidad | salud_flota
   const [stats, setStats] = useState({ cocinas: 0, escuelas: 0, usuarios: 0 })
@@ -115,6 +115,8 @@ function CentroDeMando({ empresa, onSalir }) {
     return (
       <SaludFlota
         tema={t}
+        empresaIdAdmin={empresa.id}
+        claveMando={claveMando}
         onVolver={() => { setVista('panel'); cargarStats() }}
       />
     )

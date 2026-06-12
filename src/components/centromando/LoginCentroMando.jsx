@@ -29,7 +29,7 @@ function LoginCentroMando({ empresa, onAcceso, onVolver }) {
     }
 
     if (data === true) {
-      onAcceso()
+      onAcceso(clave)
     } else {
       setError('Clave de mando incorrecta')
       setClave('')

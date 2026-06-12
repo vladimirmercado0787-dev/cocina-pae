@@ -154,47 +154,65 @@ export async function cargarSenalesSalud(empresaId) {
   return s
 }
 
-export async function cargarSaludFlota() {
-  const { data: empresas, error } = await supabase
-    .from('empresas')
-    .select('id, nombre, estado')
-    .order('nombre', { ascending: true })
+// ─────────────────────────────────────────────────────────────
+// VISTA DE FLOTA (Centro de Mando) — usa la función SQL maestra
+// salud_flota, que pasa por encima del RLS con la clave de mando.
+// Convierte cada fila al formato del motor calcularSalud.
+// ─────────────────────────────────────────────────────────────
+export async function cargarSaludFlotaSQL(empresaIdAdmin, claveMando) {
+  const diasClaseEsperadosUltimos14 = (() => {
+    const hoy0 = new Date(); hoy0.setHours(0, 0, 0, 0)
+    let c = 0
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(hoy0); d.setDate(d.getDate() - i)
+      const dow = d.getDay()
+      if (dow >= 1 && dow <= 5) c++
+    }
+    return c
+  })()
+
+  const { data, error } = await supabase.rpc('salud_flota', {
+    p_empresa_id_admin: empresaIdAdmin,
+    p_clave: claveMando,
+  })
 
   if (error) {
     return { cocinas: [], error: error.message }
   }
 
-  const cocinas = await Promise.all(
-    (empresas || []).map(async (emp) => {
-      try {
-        const senales = await cargarSenalesSalud(emp.id)
-        const salud = calcularSalud(senales)
-        return {
-          id: emp.id,
-          nombre: emp.nombre,
-          estado: emp.estado,
-          puntuacion: salud.puntuacion,
-          nivel: salud.nivel,
-          areas: salud.areas,
-          consejos: salud.consejos,
-          senales,
-          avisos: senales._avisos || [],
-        }
-      } catch (e) {
-        return {
-          id: emp.id,
-          nombre: emp.nombre,
-          estado: emp.estado,
-          puntuacion: null,
-          nivel: 'error',
-          areas: {},
-          consejos: [],
-          senales: {},
-          avisos: ['No se pudo calcular: ' + (e?.message || 'error')],
-        }
-      }
-    })
-  )
+  const cocinas = (data || []).map((r) => {
+    // Convertir la fila SQL al formato que entiende calcularSalud
+    const senales = {
+      diasDesdeUltimoPesaje: r.dias_desde_ultimo_pesaje,
+      diasDesdeUltimoDespacho: r.dias_desde_ultimo_despacho,
+      diasOperativosUltimos14: r.dias_operativos_ultimos_14 || 0,
+      diasClaseEsperadosUltimos14,
+      diasDesdeUltimoGasto: r.dias_desde_ultimo_gasto,
+      comprasUltimoMes: r.compras_ultimo_mes || 0,
+      comprasConNcfUltimoMes: r.compras_con_ncf_ultimo_mes || 0,
+      reporteDgiiMesGenerado: null,
+      empleadosConSueldo: r.empleados_con_sueldo || 0,
+      nominaUltimoPeriodoPagada: r.nomina_ultimo_periodo_pagada || false,
+      diasActivosUltimos7: r.dias_activos_ultimos_7 || 0,
+      diasDesdeUltimaActividad: r.dias_desde_ultima_actividad,
+      tieneEscuelas: r.tiene_escuelas || false,
+      tieneRecetas: r.tiene_recetas || false,
+      ingredientesSinPrecio: r.ingredientes_sin_precio || 0,
+      ingredientesTotal: r.ingredientes_total || 0,
+    }
+    const salud = calcularSalud(senales)
+    return {
+      id: r.id,
+      nombre: r.nombre,
+      estado: r.estado,
+      puntuacion: salud.puntuacion,
+      nivel: salud.nivel,
+      areas: salud.areas,
+      consejos: salud.consejos,
+      senales,
+      avisos: [],
+    }
+  })
 
   cocinas.sort((a, b) => (a.puntuacion ?? 99) - (b.puntuacion ?? 99))
 

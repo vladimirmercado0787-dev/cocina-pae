@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react'
-import { cargarSaludFlota } from '../../utils/saludCocinaDatos'
+import { cargarSaludFlotaSQL } from '../../utils/saludCocinaDatos'
 
-// Color según nivel de salud
 function colorNivel(nivel) {
   if (nivel === 'sana') return { punto: '#1D9E75', txt: '#5DCAA5', bg: 'rgba(29,158,117,0.15)' }
   if (nivel === 'atencion') return { punto: '#EF9F27', txt: '#FAC775', bg: 'rgba(239,159,39,0.14)' }
   if (nivel === 'riesgo') return { punto: '#E24B4A', txt: '#F09595', bg: 'rgba(226,75,74,0.12)' }
-  return { punto: '#6E7857', txt: '#8A9663', bg: 'rgba(110,120,87,0.12)' } // error / sin nota
+  return { punto: '#6E7857', txt: '#8A9663', bg: 'rgba(110,120,87,0.12)' }
 }
 
 const NIVEL_TEXTO = {
@@ -36,8 +35,8 @@ function colorArea(v) {
   return { barra: '#E24B4A', texto: '#F09595' }
 }
 
-// SaludFlota usa el tema (t) que le pasa el Centro de Mando, igual que los otros módulos.
-function SaludFlota({ tema: t, onVolver }) {
+// Recibe el tema (t), el id de la empresa maestra y la clave de mando.
+function SaludFlota({ tema: t, empresaIdAdmin, claveMando, onVolver }) {
   const [cargando, setCargando] = useState(true)
   const [cocinas, setCocinas] = useState([])
   const [error, setError] = useState(null)
@@ -49,13 +48,17 @@ function SaludFlota({ tema: t, onVolver }) {
 
   async function cargar() {
     setCargando(true)
-    const res = await cargarSaludFlota()
+    if (!claveMando) {
+      setError('No se recibió la clave de mando. Vuelve a entrar al Centro de Mando.')
+      setCargando(false)
+      return
+    }
+    const res = await cargarSaludFlotaSQL(empresaIdAdmin, claveMando)
     setCocinas(res.cocinas || [])
     setError(res.error)
     setCargando(false)
   }
 
-  // Conteo por nivel para los KPIs de arriba
   const conteo = cocinas.reduce((acc, c) => {
     acc[c.nivel] = (acc[c.nivel] || 0) + 1
     return acc
@@ -141,7 +144,11 @@ function SaludFlota({ tema: t, onVolver }) {
                               🔒 Suspendida
                             </span>
                           )}
-                          {/* Alerta de fuga (solo Andamio la ve) */}
+                          {c.estado === 'gracia' && (
+                            <span style={{ background: 'rgba(239,159,39,0.14)', color: '#FAC775', fontSize: '10px', fontWeight: 600, padding: '3px 9px', borderRadius: '7px' }}>
+                              ⏳ En gracia
+                            </span>
+                          )}
                           {c.consejos?.some(cs => cs.paraQuien === 'andamio') && (
                             <span style={{ background: 'rgba(226,75,74,0.12)', color: '#F09595', fontSize: '10px', fontWeight: 600, padding: '3px 9px', borderRadius: '7px' }}>
                               📞 Posible fuga
@@ -164,7 +171,7 @@ function SaludFlota({ tema: t, onVolver }) {
         )}
       </div>
 
-      {/* MODAL DE DETALLE DE UNA COCINA */}
+      {/* MODAL DE DETALLE */}
       {seleccionada && (
         <div
           onClick={() => setSeleccionada(null)}
@@ -199,7 +206,6 @@ function DetalleCocina({ cocina, t, onCerrar }) {
 
   return (
     <div>
-      {/* Encabezado del modal */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
         <div>
           <div style={{ fontSize: '18px', fontWeight: 600, color: t.textPrimary }}>{cocina.nombre}</div>
@@ -210,7 +216,6 @@ function DetalleCocina({ cocina, t, onCerrar }) {
         </button>
       </div>
 
-      {/* Nota + aro */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '18px', marginBottom: '20px' }}>
         <svg viewBox="0 0 120 120" style={{ width: '100px', height: '100px', flexShrink: 0 }}>
           <circle cx="60" cy="60" r={R} fill="none" stroke={`${t.borde}`} strokeWidth="10" />
@@ -231,7 +236,6 @@ function DetalleCocina({ cocina, t, onCerrar }) {
         </div>
       </div>
 
-      {/* Áreas */}
       <div style={{ fontSize: '10px', letterSpacing: '1.5px', color: t.textMuted, marginBottom: '12px', fontWeight: 600 }}>ÁREAS</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
         {Object.entries(AREA_INFO).map(([key, info]) => {
@@ -254,7 +258,6 @@ function DetalleCocina({ cocina, t, onCerrar }) {
         })}
       </div>
 
-      {/* Consejos (TODOS, incluyendo los de Andamio / fuga) */}
       {cocina.consejos?.length > 0 && (
         <>
           <div style={{ fontSize: '10px', letterSpacing: '1.5px', color: t.textMuted, marginBottom: '12px', fontWeight: 600 }}>DIAGNÓSTICO Y ACCIONES</div>
@@ -276,14 +279,6 @@ function DetalleCocina({ cocina, t, onCerrar }) {
             })}
           </div>
         </>
-      )}
-
-      {/* Avisos técnicos si alguna tabla falló */}
-      {cocina.avisos?.length > 0 && (
-        <div style={{ marginTop: '16px', background: 'rgba(226,75,74,0.08)', border: '1px solid rgba(240,149,149,0.25)', borderRadius: '12px', padding: '12px 14px' }}>
-          <div style={{ fontSize: '11px', color: '#F09595', fontWeight: 600, marginBottom: '4px' }}>⚠️ Fuentes que no se pudieron leer:</div>
-          <div style={{ fontSize: '11px', color: t.textSec, lineHeight: 1.5 }}>{cocina.avisos.join(' · ')}</div>
-        </div>
       )}
     </div>
   )

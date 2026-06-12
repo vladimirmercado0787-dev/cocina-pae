@@ -53,6 +53,9 @@ function App() {
   const [tabFacturaInicial, setTabFacturaInicial] = useState('factura')
   const [cargando, setCargando] = useState(true)
 
+  // 🛡️ Clave de mando guardada en memoria mientras dura la sesión del Centro de Mando
+  const [claveMando, setClaveMando] = useState(null)
+
   // 🛡️ Estado para el bloqueo por suspensión en tiempo real
   const [cocinaSuspendidaEnVivo, setCocinaSuspendidaEnVivo] = useState(false)
 
@@ -200,6 +203,7 @@ function App() {
     setUsuarioSeleccionado(null)
     setEmpresaLogueada(null)
     setEmpresaActual(null)
+    setClaveMando(null)
     setVistaActual('login_empresa')
   }
 
@@ -226,11 +230,13 @@ function App() {
     setVistaActual('login_centro_mando')
   }
 
-  function accesoCentroMandoConcedido() {
+  function accesoCentroMandoConcedido(clave) {
+    setClaveMando(clave || null)
     setVistaActual('centro_mando')
   }
 
   function salirCentroMando() {
+    setClaveMando(null)
     setVistaActual('seleccion_operador')
   }
 
@@ -470,6 +476,7 @@ function App() {
     return (
       <CentroDeMando
         empresa={empresaLogueada}
+        claveMando={claveMando}
         onSalir={salirCentroMando}
       />
     )
