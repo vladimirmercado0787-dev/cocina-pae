@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { cargarResumenRed } from '../../utils/inteligenciaRed'
+import MapaRed from './MapaRed'
+import ModuloAceptacion from './ModuloAceptacion'
 
-// ─── TEMA LABORATORIO FIJO (verde-cian científico) ───
 const LAB = {
   bg: '#0a0f14',
   card: '#0e151b',
@@ -18,6 +19,7 @@ function LaboratorioRed({ empresaIdAdmin, claveMando, onVolver }) {
   const [cargando, setCargando] = useState(true)
   const [resumen, setResumen] = useState(null)
   const [error, setError] = useState(null)
+  const [vista, setVista] = useState('panel') // panel | mapa | aceptacion
 
   useEffect(() => {
     cargar()
@@ -34,6 +36,26 @@ function LaboratorioRed({ empresaIdAdmin, claveMando, onVolver }) {
     setResumen(res.resumen)
     setError(res.error)
     setCargando(false)
+  }
+
+  if (vista === 'mapa') {
+    return (
+      <MapaRed
+        empresaIdAdmin={empresaIdAdmin}
+        claveMando={claveMando}
+        onVolver={() => setVista('panel')}
+      />
+    )
+  }
+
+  if (vista === 'aceptacion') {
+    return (
+      <ModuloAceptacion
+        empresaIdAdmin={empresaIdAdmin}
+        claveMando={claveMando}
+        onVolver={() => setVista('panel')}
+      />
+    )
   }
 
   return (
@@ -70,7 +92,6 @@ function LaboratorioRed({ empresaIdAdmin, claveMando, onVolver }) {
 
         {!cargando && !error && resumen && (
           <>
-            {/* Badge vista nacional */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '18px' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(94,234,212,0.1)', border: `1px solid ${LAB.bordeFuerte}`, color: LAB.cian, fontSize: '11px', padding: '6px 12px', borderRadius: '20px' }}>
                 <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: LAB.cian }} />
@@ -78,7 +99,6 @@ function LaboratorioRed({ empresaIdAdmin, claveMando, onVolver }) {
               </span>
             </div>
 
-            {/* INSTRUMENTOS (KPIs) */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px', marginBottom: '24px' }}>
               <Instrumento label="RACIONES DESPACHADAS" valor={resumen.totalRaciones.toLocaleString()} color={LAB.cian} />
               <Instrumento label="ESCUELAS" valor={resumen.totalEscuelas} color={LAB.cian} />
@@ -86,14 +106,12 @@ function LaboratorioRed({ empresaIdAdmin, claveMando, onVolver }) {
               <Instrumento label="MUESTRAS (EVENTOS)" valor={resumen.totalEventos.toLocaleString()} color={LAB.cian} />
             </div>
 
-            {/* HIPÓTESIS / HALLAZGOS automáticos */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
               <span style={{ fontSize: '15px' }}>💡</span>
               <span style={{ fontSize: '11px', letterSpacing: '0.14em', color: LAB.muted }}>HALLAZGOS DE LA RED</span>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '24px' }}>
-              {/* % de pesaje real */}
               <div style={{ background: LAB.card, border: `1px solid ${LAB.borde}`, borderLeft: `3px solid ${resumen.porcentajePesaje < 50 ? '#f0997b' : LAB.cian}`, borderRadius: '0 11px 11px 0', padding: '14px 16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
                   <div style={{ fontSize: '13px', color: LAB.texto }}>
@@ -106,7 +124,6 @@ function LaboratorioRed({ empresaIdAdmin, claveMando, onVolver }) {
                 <div style={{ fontSize: '11px', color: LAB.muted, marginTop: '5px' }}>métrica vendible: confiabilidad de medición · comprador: suplidores, auditoría</div>
               </div>
 
-              {/* Sobrante total */}
               <div style={{ background: LAB.card, border: `1px solid ${LAB.borde}`, borderLeft: `3px solid ${LAB.ambar}`, borderRadius: '0 11px 11px 0', padding: '14px 16px' }}>
                 <div style={{ fontSize: '13px', color: LAB.texto }}>
                   La red registra <strong style={{ color: LAB.ambar }}>{resumen.sobranteTotal.toLocaleString()}</strong> libras de sobrante acumulado
@@ -115,19 +132,36 @@ function LaboratorioRed({ empresaIdAdmin, claveMando, onVolver }) {
               </div>
             </div>
 
-            {/* EXPERIMENTOS / vetas próximas */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
               <span style={{ fontSize: '15px' }}>🔬</span>
-              <span style={{ fontSize: '11px', letterSpacing: '0.14em', color: LAB.muted }}>EXPERIMENTOS · PRÓXIMAS VETAS</span>
+              <span style={{ fontSize: '11px', letterSpacing: '0.14em', color: LAB.muted }}>EXPERIMENTOS · VETAS</span>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
-              <Veta emoji="🍽️" titulo="Aceptación por receta" sub="sobras por plato y zona" />
+              {/* Mapa — VIVO */}
+              <button
+                onClick={() => setVista('mapa')}
+                style={{ background: LAB.card, border: `1px solid ${LAB.bordeFuerte}`, borderRadius: '12px', padding: '14px', textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                <div style={{ fontSize: '20px' }}>🗺️</div>
+                <div style={{ fontSize: '13px', color: LAB.texto, marginTop: '9px' }}>Mapa de la red</div>
+                <div style={{ fontSize: '11px', color: LAB.cian, marginTop: '3px' }}>32 provincias · ver zonas →</div>
+              </button>
+
+              {/* Aceptación — VIVO */}
+              <button
+                onClick={() => setVista('aceptacion')}
+                style={{ background: LAB.card, border: `1px solid ${LAB.bordeFuerte}`, borderRadius: '12px', padding: '14px', textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                <div style={{ fontSize: '20px' }}>🍽️</div>
+                <div style={{ fontSize: '13px', color: LAB.texto, marginTop: '9px' }}>Aceptación por receta</div>
+                <div style={{ fontSize: '11px', color: LAB.cian, marginTop: '3px' }}>sobras por plato y zona →</div>
+              </button>
+
               <Veta emoji="📍" titulo="Demanda por zona" sub="raciones por provincia" />
               <Veta emoji="💰" titulo="Índice de precios" sub="canasta y por ración" />
               <Veta emoji="🏪" titulo="Ranking de proveedores" sub="por RNC e informalidad" />
               <Veta emoji="🏫" titulo="Asistencia escolar" sub="matrícula real vs oficial" />
-              <Veta emoji="🗺️" titulo="Mapa de la red" sub="zonas con coordenadas" />
             </div>
 
             <div style={{ textAlign: 'center', marginTop: '28px', fontSize: '11px', color: LAB.muted }}>

@@ -1,7 +1,5 @@
 // src/utils/inteligenciaRed.js
 // Capa de datos del Laboratorio · Inteligencia de la Red (SOLO LECTURA).
-// Llama a las funciones SQL maestras (con clave de mando) que pasan
-// por encima del RLS y devuelven el análisis ya masticado.
 
 import { supabase } from '../supabaseClient'
 
@@ -34,4 +32,32 @@ export async function cargarResumenRed(empresaIdAdmin, claveMando, provincia = n
     },
     error: null,
   }
+}
+
+// Datos agrupados por provincia (para el mapa).
+// Devuelve un objeto { "Valverde": {...}, "Santiago": {...} } indexado por nombre de provincia.
+export async function cargarPorProvincia(empresaIdAdmin, claveMando) {
+  const { data, error } = await supabase.rpc('inteligencia_por_provincia', {
+    p_empresa_id_admin: empresaIdAdmin,
+    p_clave: claveMando,
+  })
+
+  if (error) {
+    return { porProvincia: {}, error: error.message }
+  }
+
+  const porProvincia = {}
+  for (const r of data || []) {
+    porProvincia[r.provincia] = {
+      raciones: Number(r.total_raciones || 0),
+      escuelas: Number(r.total_escuelas || 0),
+      cocinas: Number(r.total_cocinas || 0),
+      despachosPesados: Number(r.despachos_pesados || 0),
+      despachosTotales: Number(r.despachos_totales || 0),
+      pctPesaje: Number(r.pct_pesaje || 0),
+      sobrante: Number(r.sobrante_total || 0),
+    }
+  }
+
+  return { porProvincia, error: null }
 }
