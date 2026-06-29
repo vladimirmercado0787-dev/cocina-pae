@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import { registrar, TIPOS_ACCION } from '../../utils/historial'
 import ModalPesajeCrudo from '../pesaje/ModalPesajeCrudo'
+import { ModalAviso } from '../../ui/avisos'
 import CampanaNotificaciones from '../notificaciones/CampanaNotificaciones'
 import { TarjetaModulo, SeccionCategoria } from '../../ui/piezas'
 
@@ -83,6 +84,7 @@ function DashboardDelDia({
   const [cargando, setCargando] = useState(true)
   const [procesando, setProcesando] = useState(false)
   const [modalSinClase, setModalSinClase] = useState(null)
+  const [aviso, setAviso] = useState(null)
   const [razonSinClase, setRazonSinClase] = useState('')
   const [yaSePesoHoy, setYaSePesoHoy] = useState(false)
   const [modalPesajeAbierto, setModalPesajeAbierto] = useState(false)
@@ -300,7 +302,7 @@ function DashboardDelDia({
   async function confirmarSinClase() {
     if (!modalSinClase) return
     if (!razonSinClase.trim()) {
-      alert('Por favor indica la razón por la cual no hay clase')
+      setAviso({ tipo: 'advertencia', mensaje: 'Por favor indica la razón por la cual no hay clase' })
       return
     }
 
@@ -449,6 +451,8 @@ function DashboardDelDia({
           zIndex: 0,
         }}
       />
+
+      {aviso && <ModalAviso {...aviso} onCerrar={() => setAviso(null)} />}
 
       {modalSinClase && (
         <div style={{
