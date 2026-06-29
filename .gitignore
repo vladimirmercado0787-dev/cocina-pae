@@ -32,3 +32,4 @@ yarn-error.log*
 
 # Supabase (sensitive credentials)
 .supabase/
+*.bak*

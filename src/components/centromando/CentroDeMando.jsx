@@ -5,6 +5,7 @@ import GestionCocinas from './GestionCocinas'
 import ContabilidadAndamio from './ContabilidadAndamio'
 import SaludFlota from '../salud/SaludFlota'
 import LaboratorioRed from './LaboratorioRed'
+import IntroCentroMando from './IntroCentroMando'
 
 // ─── LOS 3 TEMAS DEL CENTRO DE MANDO ───
 const TEMAS = {
@@ -51,6 +52,7 @@ function CentroDeMando({ empresa, claveMando, onSalir }) {
   const [vista, setVista] = useState('panel') // panel | nueva_cocina | gestion_cocinas | contabilidad | salud_flota | inteligencia
   const [stats, setStats] = useState({ cocinas: 0, escuelas: 0, usuarios: 0 })
   const [cargandoStats, setCargandoStats] = useState(true)
+  const [introListo, setIntroListo] = useState(false)
 
   const t = TEMAS[temaKey] || TEMAS.oliva
 
@@ -81,6 +83,10 @@ function CentroDeMando({ empresa, claveMando, onSalir }) {
   const saludo = ahora.getHours() < 12 ? 'Buenos días' : ahora.getHours() < 19 ? 'Buenas tardes' : 'Buenas noches'
   const fechaTexto = ahora.toLocaleDateString('es-DO', { weekday: 'long', day: 'numeric', month: 'long' })
   const horaTexto = ahora.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit', hour12: true })
+
+  if (!introListo) {
+    return <IntroCentroMando onComplete={() => setIntroListo(true)} />
+  }
 
   if (vista === 'nueva_cocina') {
     return (
