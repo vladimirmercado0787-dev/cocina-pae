@@ -3,6 +3,7 @@ import { supabase } from '../../supabaseClient'
 import { registrar, TIPOS_ACCION } from '../../utils/historial'
 import ModalPesajeCrudo from '../pesaje/ModalPesajeCrudo'
 import CampanaNotificaciones from '../notificaciones/CampanaNotificaciones'
+import { TarjetaModulo, SeccionCategoria } from '../../ui/piezas'
 
 const CATEGORIAS = {
   finanzas: {
@@ -994,44 +995,44 @@ function DashboardDelDia({
         </div>
       )}
 
-      {/* MÓDULOS - 4 CATEGORÍAS */}
+      {/* MÓDULOS — categorías plegables (rediseño Paso B) */}
       <div style={{ position: 'relative', zIndex: 1, marginBottom: '24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '18px', opacity: 0, animation: 'dashFadeUp 0.5s ease 0.4s forwards' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '18px' }}>
           <span style={{ fontSize: '14px' }}>📂</span>
           <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', letterSpacing: '1.5px', fontWeight: 600 }}>
             MÓDULOS
           </span>
         </div>
 
-        <CategoriaBanner cat={CATEGORIAS.finanzas} icon="💰" count={4} tema={tema} delay={0.5}>
-          <Modulo emoji="🧾" label="Factura INABIE"   sublabel="Facturas mensuales" cat={CATEGORIAS.finanzas} tema={tema} onClick={onIrFactura ? () => onIrFactura() : () => mostrarProximamente('Factura INABIE')} />
-          <Modulo emoji="🚚" label="Conduces"         sublabel="Mes en curso"       cat={CATEGORIAS.finanzas} tema={tema} onClick={onIrConduces ? () => onIrConduces() : () => mostrarProximamente('Conduces')} />
-          <Modulo emoji="💸" label="Gastos"           sublabel="Categorías + RNC"   cat={CATEGORIAS.finanzas} tema={tema} onClick={onIrGastos ? onIrGastos : () => mostrarProximamente('Gastos')} />
-          <Modulo emoji="📊" label="Reportes DGII"    sublabel="606 · 607"          cat={CATEGORIAS.finanzas} tema={tema} onClick={onIrDGII ? onIrDGII : () => mostrarProximamente('Reportes DGII 606/607')} />
-        </CategoriaBanner>
+        <SeccionCategoria label={CATEGORIAS.finanzas.label} sublabel={CATEGORIAS.finanzas.sublabel} color={CATEGORIAS.finanzas.color} abiertaInicial={true}>
+          <TarjetaModulo icono="🧾" label="Factura INABIE" sublabel="Facturas mensuales" color={CATEGORIAS.finanzas.color} onClick={onIrFactura ? () => onIrFactura() : () => mostrarProximamente('Factura INABIE')} />
+          <TarjetaModulo icono="🚚" label="Conduces" sublabel="Mes en curso" color={CATEGORIAS.finanzas.color} onClick={onIrConduces ? () => onIrConduces() : () => mostrarProximamente('Conduces')} />
+          <TarjetaModulo icono="💸" label="Gastos" sublabel="Categorías + RNC" color={CATEGORIAS.finanzas.color} onClick={onIrGastos ? onIrGastos : () => mostrarProximamente('Gastos')} />
+          <TarjetaModulo icono="📊" label="Reportes DGII" sublabel="606 · 607" color={CATEGORIAS.finanzas.color} onClick={onIrDGII ? onIrDGII : () => mostrarProximamente('Reportes DGII 606/607')} />
+        </SeccionCategoria>
 
-        <CategoriaBanner cat={CATEGORIAS.inventario} icon="📦" count={4} tema={tema} delay={0.65}>
-          <Modulo emoji="🥕" label="Ingredientes" sublabel="Catálogo"    cat={CATEGORIAS.inventario} tema={tema} onClick={onIrIngredientes ? onIrIngredientes : () => mostrarProximamente('Ingredientes')} />
-          <Modulo emoji="🛒" label="Compras"       sublabel="Esta semana" cat={CATEGORIAS.inventario} tema={tema} onClick={onIrCompras ? onIrCompras : () => mostrarProximamente('Compras')} />
-          <Modulo emoji="🏪" label="Proveedores"   sublabel="Con RNC"     cat={CATEGORIAS.inventario} tema={tema} onClick={onIrProveedores ? onIrProveedores : () => mostrarProximamente('Proveedores')} />
-          <Modulo emoji="👨‍🍳" label="Recetas"      sublabel="Catálogo"    cat={CATEGORIAS.inventario} tema={tema} onClick={onIrCatalogo ? onIrCatalogo : () => mostrarProximamente('Recetas')} />
-        </CategoriaBanner>
+        <SeccionCategoria label={CATEGORIAS.inventario.label} sublabel={CATEGORIAS.inventario.sublabel} color={CATEGORIAS.inventario.color}>
+          <TarjetaModulo icono="🥕" label="Ingredientes" sublabel="Catálogo" color={CATEGORIAS.inventario.color} onClick={onIrIngredientes ? onIrIngredientes : () => mostrarProximamente('Ingredientes')} />
+          <TarjetaModulo icono="🛒" label="Compras" sublabel="Esta semana" color={CATEGORIAS.inventario.color} onClick={onIrCompras ? onIrCompras : () => mostrarProximamente('Compras')} />
+          <TarjetaModulo icono="🏪" label="Proveedores" sublabel="Con RNC" color={CATEGORIAS.inventario.color} onClick={onIrProveedores ? onIrProveedores : () => mostrarProximamente('Proveedores')} />
+          <TarjetaModulo icono="👨‍🍳" label="Recetas" sublabel="Catálogo" color={CATEGORIAS.inventario.color} onClick={onIrCatalogo ? onIrCatalogo : () => mostrarProximamente('Recetas')} />
+        </SeccionCategoria>
 
-        <CategoriaBanner cat={CATEGORIAS.personal} icon="👥" count={5} tema={tema} delay={0.8}>
-          <Modulo emoji="👤" label="Empleados"   sublabel="Equipo"       cat={CATEGORIAS.personal} tema={tema} onClick={onIrEmpleados ? onIrEmpleados : () => mostrarProximamente('Empleados')} />
-          <Modulo emoji="🕐" label="Asistencia"  sublabel="Quién vino"   cat={CATEGORIAS.personal} tema={tema} onClick={onIrAsistencia ? onIrAsistencia : () => mostrarProximamente('Asistencia')} />
-          <Modulo emoji="💵" label="Nómina"      sublabel="Pagos"        cat={CATEGORIAS.personal} tema={tema} onClick={onIrNomina ? onIrNomina : () => mostrarProximamente('Nómina')} />
-          <Modulo emoji="📄" label="Contratos"   sublabel="Por empleado" cat={CATEGORIAS.personal} tema={tema} onClick={onIrContratos ? onIrContratos : () => mostrarProximamente('Contratos')} />
-         <Modulo emoji="🧮" label="Calculadora" sublabel="Producción"  cat={CATEGORIAS.personal} tema={tema} onClick={onIrCalculadora ? onIrCalculadora : () => mostrarProximamente('Calculadora')} />
-        </CategoriaBanner>
+        <SeccionCategoria label={CATEGORIAS.personal.label} sublabel={CATEGORIAS.personal.sublabel} color={CATEGORIAS.personal.color}>
+          <TarjetaModulo icono="👤" label="Empleados" sublabel="Equipo" color={CATEGORIAS.personal.color} onClick={onIrEmpleados ? onIrEmpleados : () => mostrarProximamente('Empleados')} />
+          <TarjetaModulo icono="🕐" label="Asistencia" sublabel="Quién vino" color={CATEGORIAS.personal.color} onClick={onIrAsistencia ? onIrAsistencia : () => mostrarProximamente('Asistencia')} />
+          <TarjetaModulo icono="💵" label="Nómina" sublabel="Pagos" color={CATEGORIAS.personal.color} onClick={onIrNomina ? onIrNomina : () => mostrarProximamente('Nómina')} />
+          <TarjetaModulo icono="📄" label="Contratos" sublabel="Por empleado" color={CATEGORIAS.personal.color} onClick={onIrContratos ? onIrContratos : () => mostrarProximamente('Contratos')} />
+          <TarjetaModulo icono="🧮" label="Calculadora" sublabel="Producción" color={CATEGORIAS.personal.color} onClick={onIrCalculadora ? onIrCalculadora : () => mostrarProximamente('Calculadora')} />
+        </SeccionCategoria>
 
-        <CategoriaBanner cat={CATEGORIAS.operacion} icon="🧠" count={5} tema={tema} delay={0.95}>
-          <Modulo emoji="💡" label="Inteligencia"    sublabel="Análisis"  cat={CATEGORIAS.operacion} tema={tema} onClick={onIrInteligencia ? onIrInteligencia : () => mostrarProximamente('Inteligencia')} />
-          <Modulo emoji="📊" label="Estadísticas"    sublabel="En qué pie" cat={CATEGORIAS.operacion} tema={tema} onClick={onIrEstadisticas ? onIrEstadisticas : () => mostrarProximamente('Estadísticas')} />
-          <Modulo emoji="📜" label="Historial"       sublabel="Todas ops" cat={CATEGORIAS.operacion} tema={tema} onClick={onIrHistorial ? onIrHistorial : () => mostrarProximamente('Historial')} />
-          <Modulo emoji="🩺" label="Salud de mi Cocina"  sublabel="Cómo va tu cocina" cat={CATEGORIAS.operacion} tema={tema} onClick={onIrSalud ? onIrSalud : () => mostrarProximamente('Salud de mi Cocina')} />
-          <Modulo emoji="⚙️" label="Configuración"  sublabel="Empresa"   cat={CATEGORIAS.operacion} tema={tema} onClick={onIrConfiguracion ? onIrConfiguracion : () => mostrarProximamente('Configuración')} />
-        </CategoriaBanner>
+        <SeccionCategoria label={CATEGORIAS.operacion.label} sublabel={CATEGORIAS.operacion.sublabel} color={CATEGORIAS.operacion.color}>
+          <TarjetaModulo icono="💡" label="Inteligencia" sublabel="Análisis" color={CATEGORIAS.operacion.color} onClick={onIrInteligencia ? onIrInteligencia : () => mostrarProximamente('Inteligencia')} />
+          <TarjetaModulo icono="📊" label="Estadísticas" sublabel="En qué pie" color={CATEGORIAS.operacion.color} onClick={onIrEstadisticas ? onIrEstadisticas : () => mostrarProximamente('Estadísticas')} />
+          <TarjetaModulo icono="📜" label="Historial" sublabel="Todas ops" color={CATEGORIAS.operacion.color} onClick={onIrHistorial ? onIrHistorial : () => mostrarProximamente('Historial')} />
+          <TarjetaModulo icono="🩺" label="Salud de mi Cocina" sublabel="Cómo va tu cocina" color={CATEGORIAS.operacion.color} onClick={onIrSalud ? onIrSalud : () => mostrarProximamente('Salud de mi Cocina')} />
+          <TarjetaModulo icono="⚙️" label="Configuración" sublabel="Empresa" color={CATEGORIAS.operacion.color} onClick={onIrConfiguracion ? onIrConfiguracion : () => mostrarProximamente('Configuración')} />
+        </SeccionCategoria>
       </div>
 
       {/* FOOTER */}
